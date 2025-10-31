@@ -6,11 +6,40 @@ export default class extends Service<Env> {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // CORS helper function
+    const getCorsHeaders = (origin: string | null) => {
+      const headers: Record<string, string> = {
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Credentials': 'true',
+      };
+
+      // Allow requests from localhost for development and production URL
+      const allowedOrigins = ['http://localhost:3000', 'https://auditguardx.com'];
+      if (origin && allowedOrigins.includes(origin)) {
+        headers['Access-Control-Allow-Origin'] = origin;
+      }
+
+      return headers;
+    };
+
+    // Handle OPTIONS preflight requests
+    if (request.method === 'OPTIONS') {
+      const origin = request.headers.get('Origin');
+      return new Response(null, {
+        status: 204,
+        headers: getCorsHeaders(origin),
+      });
+    }
+
     try {
+      const origin = request.headers.get('Origin');
+      const corsHeaders = getCorsHeaders(origin);
+
       // Health check
       if (path === '/' && request.method === 'GET') {
         return new Response(JSON.stringify({ status: 'ok', service: 'AuditGuardX API' }), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -20,7 +49,7 @@ export default class extends Service<Env> {
         const result = await this.env.AUTH_SERVICE.register(body);
         return new Response(JSON.stringify(result), {
           status: 201,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -30,7 +59,7 @@ export default class extends Service<Env> {
 
         const response = new Response(JSON.stringify(result), {
           status: 200,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
         response.headers.set('Set-Cookie', `session=${result.sessionId}; Path=/; HttpOnly; Max-Age=604800`);
         return response;
@@ -43,7 +72,7 @@ export default class extends Service<Env> {
         }
 
         const response = new Response(JSON.stringify({ success: true }), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
         response.headers.set('Set-Cookie', 'session=; Path=/; HttpOnly; Max-Age=0');
         return response;
@@ -55,11 +84,11 @@ export default class extends Service<Env> {
         if (!userData) {
           return new Response(JSON.stringify({ error: 'User not found' }), {
             status: 404,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
         return new Response(JSON.stringify(userData), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -73,7 +102,7 @@ export default class extends Service<Env> {
         });
         return new Response(JSON.stringify(result), {
           status: 201,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -81,7 +110,7 @@ export default class extends Service<Env> {
         const user = await this.validateSession(request);
         const result = await this.env.WORKSPACE_SERVICE.getWorkspaces(user.userId);
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -94,7 +123,7 @@ export default class extends Service<Env> {
         if (request.method === 'GET') {
           const result = await this.env.WORKSPACE_SERVICE.getWorkspace(workspaceId, user.userId);
           return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
@@ -102,7 +131,7 @@ export default class extends Service<Env> {
           const body = (await request.json()) as { name?: string; description?: string };
           const result = await this.env.WORKSPACE_SERVICE.updateWorkspace(workspaceId, user.userId, body);
           return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
@@ -121,7 +150,7 @@ export default class extends Service<Env> {
         if (request.method === 'GET') {
           const result = await this.env.WORKSPACE_SERVICE.getMembers(workspaceId, user.userId);
           return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
@@ -130,7 +159,7 @@ export default class extends Service<Env> {
           const result = await this.env.WORKSPACE_SERVICE.addMember(workspaceId, user.userId, body);
           return new Response(JSON.stringify(result), {
             status: 201,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
       }
@@ -151,7 +180,7 @@ export default class extends Service<Env> {
             body.role
           );
           return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
@@ -171,7 +200,7 @@ export default class extends Service<Env> {
         if (request.method === 'GET') {
           const result = await this.env.DOCUMENT_SERVICE.listDocuments(workspaceId, user.userId);
           return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
@@ -188,7 +217,7 @@ export default class extends Service<Env> {
             if (!file) {
               return new Response(JSON.stringify({ error: 'No file provided' }), {
                 status: 400,
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
               });
             }
 
@@ -205,7 +234,7 @@ export default class extends Service<Env> {
 
             return new Response(JSON.stringify(result), {
               status: 201,
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
             });
           } else {
             // Handle JSON upload (base64 encoded file)
@@ -230,7 +259,7 @@ export default class extends Service<Env> {
 
             return new Response(JSON.stringify(result), {
               status: 201,
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
             });
           }
         }
@@ -263,7 +292,7 @@ export default class extends Service<Env> {
         if (request.method === 'GET') {
           const result = await this.env.DOCUMENT_SERVICE.getDocument(documentId, workspaceId, user.userId);
           return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
@@ -274,7 +303,7 @@ export default class extends Service<Env> {
           };
           const result = await this.env.DOCUMENT_SERVICE.updateMetadata(documentId, workspaceId, user.userId, body);
           return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
@@ -305,7 +334,7 @@ export default class extends Service<Env> {
 
         return new Response(JSON.stringify(result), {
           status: 201,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -318,7 +347,7 @@ export default class extends Service<Env> {
         const result = await this.env.COMPLIANCE_SERVICE.listComplianceChecks(workspaceId, user.userId);
 
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -332,7 +361,7 @@ export default class extends Service<Env> {
         const result = await this.env.COMPLIANCE_SERVICE.getComplianceCheck(checkId, workspaceId, user.userId);
 
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -346,7 +375,7 @@ export default class extends Service<Env> {
         const result = await this.env.COMPLIANCE_SERVICE.getComplianceIssues(checkId, workspaceId, user.userId);
 
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -361,7 +390,7 @@ export default class extends Service<Env> {
 
         return new Response(JSON.stringify(result), {
           status: 201,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -374,7 +403,7 @@ export default class extends Service<Env> {
         const result = await this.env.ANALYTICS_SERVICE.getWorkspaceDashboard(workspaceId, user.userId);
 
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -390,7 +419,7 @@ export default class extends Service<Env> {
         const result = await this.env.ANALYTICS_SERVICE.getTrendAnalysis(workspaceId, user.userId, days);
 
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -411,7 +440,7 @@ export default class extends Service<Env> {
         const result = await this.env.ANALYTICS_SERVICE.getIssuesByStatus(workspaceId, user.userId, status);
 
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -436,7 +465,7 @@ export default class extends Service<Env> {
         );
 
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -455,14 +484,14 @@ export default class extends Service<Env> {
         if (!body.message) {
           return new Response(JSON.stringify({ error: 'Message is required' }), {
             status: 400,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
         const result = await this.env.ASSISTANT_SERVICE.chat(workspaceId, user.userId, body);
 
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -475,7 +504,7 @@ export default class extends Service<Env> {
         const result = await this.env.ASSISTANT_SERVICE.listSessions(workspaceId, user.userId);
 
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -490,7 +519,7 @@ export default class extends Service<Env> {
           const result = await this.env.ASSISTANT_SERVICE.getSessionHistory(sessionId, workspaceId, user.userId);
 
           return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
@@ -498,7 +527,7 @@ export default class extends Service<Env> {
           const result = await this.env.ASSISTANT_SERVICE.deleteSession(sessionId, workspaceId, user.userId);
 
           return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
       }
@@ -508,7 +537,7 @@ export default class extends Service<Env> {
       if (path === '/api/billing/plans' && request.method === 'GET') {
         const result = await this.env.BILLING_SERVICE.getPlans();
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -521,7 +550,7 @@ export default class extends Service<Env> {
         if (request.method === 'GET') {
           const result = await this.env.BILLING_SERVICE.getWorkspaceSubscription(workspaceId, user.userId);
           return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
@@ -537,7 +566,7 @@ export default class extends Service<Env> {
           });
           return new Response(JSON.stringify(result), {
             status: 201,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
@@ -548,7 +577,7 @@ export default class extends Service<Env> {
             planId: body.planId,
           });
           return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
@@ -559,7 +588,7 @@ export default class extends Service<Env> {
             cancelAtPeriodEnd: body.cancelAtPeriodEnd ?? true,
           });
           return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
       }
@@ -576,7 +605,7 @@ export default class extends Service<Env> {
 
         const result = await this.env.USAGE_SERVICE.getUsage(workspaceId, user.userId, days);
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -588,7 +617,7 @@ export default class extends Service<Env> {
 
         const result = await this.env.USAGE_SERVICE.checkLimits(workspaceId);
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -600,7 +629,7 @@ export default class extends Service<Env> {
 
         const result = await this.env.USAGE_SERVICE.getWorkspaceStats(workspaceId, user.userId);
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -610,7 +639,7 @@ export default class extends Service<Env> {
         const user = await this.validateSession(request);
         const result = await this.env.ADMIN_SERVICE.getSystemStats(user.userId);
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -623,7 +652,7 @@ export default class extends Service<Env> {
 
         const result = await this.env.ADMIN_SERVICE.getAllUsers(user.userId, limit, offset);
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -632,7 +661,7 @@ export default class extends Service<Env> {
         const user = await this.validateSession(request);
         const result = await this.env.ADMIN_SERVICE.getSystemSettings(user.userId);
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -645,7 +674,7 @@ export default class extends Service<Env> {
 
         const result = await this.env.ADMIN_SERVICE.updateSystemSetting(user.userId, key, body.value);
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -657,7 +686,7 @@ export default class extends Service<Env> {
 
         const result = await this.env.ADMIN_SERVICE.getAuditLog(user.userId, limit);
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
@@ -669,21 +698,24 @@ export default class extends Service<Env> {
         if (!body.query) {
           return new Response(JSON.stringify({ error: 'Query is required' }), {
             status: 400,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
 
         const result = await this.env.ADMIN_SERVICE.queryAnalytics(user.userId, body.query);
         return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
 
       return new Response(JSON.stringify({ error: 'Not Found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     } catch (error) {
+      const origin = request.headers.get('Origin');
+      const corsHeaders = getCorsHeaders(origin);
+
       const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
       const status =
         error instanceof Error
@@ -696,7 +728,7 @@ export default class extends Service<Env> {
 
       return new Response(JSON.stringify({ error: errorMessage }), {
         status,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     }
   }
