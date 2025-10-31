@@ -1,0 +1,240 @@
+import type { ColumnType } from "kysely";
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
+export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+
+export type documents = {
+    id: string;
+    workspace_id: string;
+    filename: string;
+    file_size: number;
+    content_type: string;
+    category: string | null;
+    storage_key: string;
+    uploaded_by: string;
+    uploaded_at: number;
+    updated_at: number;
+    processing_status: string;
+    text_extracted: number;
+    chunk_count: number;
+};
+
+export type sessions = {
+    id: string;
+    user_id: string;
+    expires_at: number;
+    created_at: number;
+};
+
+export type users = {
+    id: string;
+    email: string;
+    password_hash: string;
+    created_at: number;
+    updated_at: number;
+};
+
+export type workspace_members = {
+    workspace_id: string;
+    user_id: string;
+    role: string;
+    added_at: number;
+    added_by: string;
+};
+
+export type workspaces = {
+    id: string;
+    name: string;
+    description: string | null;
+    owner_id: string;
+    created_at: number;
+    updated_at: number;
+};
+
+export type compliance_checks = {
+    id: string;
+    document_id: string;
+    workspace_id: string;
+    framework: string;
+    status: string;
+    overall_score: number | null;
+    issues_found: number;
+    created_at: number;
+    completed_at: number | null;
+    created_by: string;
+};
+
+export type compliance_issues = {
+    id: string;
+    check_id: string;
+    document_id: string;
+    severity: string;
+    category: string;
+    title: string;
+    description: string;
+    recommendation: string | null;
+    location: string | null;
+    created_at: number;
+    status: string;
+    assigned_to: string | null;
+    resolved_at: number | null;
+    resolved_by: string | null;
+};
+
+export type document_chunks = {
+    id: string;
+    document_id: string;
+    workspace_id: string;
+    chunk_index: number;
+    content: string;
+    chunk_size: number;
+    created_at: number;
+};
+
+export type workspace_scores = {
+    id: string;
+    workspace_id: string;
+    overall_score: number;
+    documents_checked: number;
+    total_documents: number;
+    critical_issues: number;
+    high_issues: number;
+    medium_issues: number;
+    low_issues: number;
+    info_issues: number;
+    risk_level: string;
+    frameworks_covered: string;
+    calculated_at: number;
+    calculated_by: string | null;
+};
+
+export type framework_scores = {
+    id: string;
+    workspace_id: string;
+    framework: string;
+    score: number;
+    checks_passed: number;
+    checks_failed: number;
+    total_checks: number;
+    last_check_at: number | null;
+    created_at: number;
+};
+
+export type conversation_sessions = {
+    id: string;
+    workspace_id: string;
+    user_id: string;
+    memory_session_id: string;
+    started_at: number;
+    last_activity_at: number;
+    message_count: number;
+};
+
+export type conversation_messages = {
+    id: string;
+    session_id: string;
+    role: string;
+    content: string;
+    created_at: number;
+};
+
+export type subscription_plans = {
+    id: string;
+    name: string;
+    display_name: string;
+    description: string | null;
+    price_monthly: number;
+    price_yearly: number;
+    features: string;
+    limits: string;
+    is_active: number;
+    created_at: number;
+};
+
+export type subscriptions = {
+    id: string;
+    workspace_id: string;
+    plan_id: string;
+    stripe_customer_id: string | null;
+    stripe_subscription_id: string | null;
+    status: string;
+    current_period_start: number;
+    current_period_end: number;
+    cancel_at_period_end: number;
+    created_at: number;
+    updated_at: number;
+};
+
+export type usage_tracking = {
+    id: string;
+    workspace_id: string;
+    resource_type: string;
+    resource_id: string | null;
+    user_id: string | null;
+    metadata: string | null;
+    tracked_at: number;
+};
+
+export type usage_summaries = {
+    id: string;
+    workspace_id: string;
+    date: string;
+    api_calls: number;
+    documents_uploaded: number;
+    compliance_checks: number;
+    assistant_messages: number;
+    storage_bytes: number;
+    created_at: number;
+    updated_at: number;
+};
+
+export type admin_users = {
+    user_id: string;
+    role: string;
+    permissions: string;
+    created_at: number;
+    created_by: string | null;
+};
+
+export type system_settings = {
+    key: string;
+    value: string;
+    value_type: string;
+    description: string | null;
+    updated_at: number;
+    updated_by: string | null;
+};
+
+export type admin_audit_log = {
+    id: string;
+    admin_user_id: string;
+    action: string;
+    resource_type: string;
+    resource_id: string | null;
+    changes: string | null;
+    ip_address: string | null;
+    created_at: number;
+};
+
+export type DB = {
+    documents: documents;
+    sessions: sessions;
+    users: users;
+    workspace_members: workspace_members;
+    workspaces: workspaces;
+    compliance_checks: compliance_checks;
+    compliance_issues: compliance_issues;
+    document_chunks: document_chunks;
+    workspace_scores: workspace_scores;
+    framework_scores: framework_scores;
+    conversation_sessions: conversation_sessions;
+    conversation_messages: conversation_messages;
+    subscription_plans: subscription_plans;
+    subscriptions: subscriptions;
+    usage_tracking: usage_tracking;
+    usage_summaries: usage_summaries;
+    admin_users: admin_users;
+    system_settings: system_settings;
+    admin_audit_log: admin_audit_log;
+};
