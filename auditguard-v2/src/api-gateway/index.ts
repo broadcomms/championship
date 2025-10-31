@@ -45,12 +45,23 @@ export default class extends Service<Env> {
 
       // ====== AUTH ENDPOINTS ======
       if (path === '/api/auth/register' && request.method === 'POST') {
-        const body = (await request.json()) as { email: string; password: string };
-        const result = await this.env.AUTH_SERVICE.register(body);
-        return new Response(JSON.stringify(result), {
+        const body = (await request.json()) as { email: string; password: string; name: string };
+        // Register the user
+        await this.env.AUTH_SERVICE.register(body);
+
+        // Immediately log them in to create a session
+        const loginResult = await this.env.AUTH_SERVICE.login({
+          email: body.email,
+          password: body.password,
+        });
+
+        // Return user data with session cookie
+        const response = new Response(JSON.stringify(loginResult), {
           status: 201,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
+        response.headers.set('Set-Cookie', `session=${loginResult.sessionId}; Path=/; HttpOnly; Max-Age=604800`);
+        return response;
       }
 
       if (path === '/api/auth/login' && request.method === 'POST') {
