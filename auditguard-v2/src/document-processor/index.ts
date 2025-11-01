@@ -22,6 +22,7 @@ export default class extends Each<Body, Env> {
     try {
       // Call the document service to process the document
       // SmartBucket has already indexed it, we just need to verify and update status
+      // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
       await this.env.DOCUMENT_SERVICE.processDocument(documentId, workspaceId, userId);
 
       this.env.logger.info('Observer: Document processing completed successfully', {

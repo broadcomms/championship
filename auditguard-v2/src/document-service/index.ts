@@ -19,7 +19,7 @@ interface UpdateMetadataInput {
   category?: 'policy' | 'procedure' | 'evidence' | 'other';
 }
 
-export default class extends Service<Env> {
+export class DocumentService extends Service<Env> {
   private getDb(): Kysely<DB> {
     return new Kysely<DB>({
       dialect: new D1Dialect({ database: this.env.AUDITGUARD_DB }),
@@ -535,3 +535,5 @@ export default class extends Service<Env> {
       .execute();
   }
 }
+
+export default DocumentService;

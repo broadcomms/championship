@@ -301,6 +301,7 @@ export default class extends Service<Env> {
         const user = await this.validateSession(request);
 
         this.env.logger.info('Processing document request', { documentId, workspaceId, userId: user.userId });
+        // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
         const result = await this.env.DOCUMENT_SERVICE.processDocument(documentId, workspaceId, user.userId);
         this.env.logger.info('Document processing completed', { documentId, result });
         return new Response(JSON.stringify(result), {
@@ -327,6 +328,7 @@ export default class extends Service<Env> {
           });
         }
 
+        // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
         const result = await this.env.DOCUMENT_SERVICE.searchDocuments(
           workspaceId,
           user.userId,
@@ -356,6 +358,7 @@ export default class extends Service<Env> {
           });
         }
 
+        // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
         const result = await this.env.DOCUMENT_SERVICE.chatWithDocument(
           documentId,
           workspaceId,
@@ -386,6 +389,7 @@ export default class extends Service<Env> {
           });
         }
 
+        // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
         const result = await this.env.DOCUMENT_SERVICE.getRelevantChunks(
           workspaceId,
           user.userId,
@@ -417,6 +421,7 @@ export default class extends Service<Env> {
           });
         }
 
+        // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
         const result = await this.env.DOCUMENT_SERVICE.getPaginatedSearchResults(
           workspaceId,
           user.userId,
@@ -449,6 +454,7 @@ export default class extends Service<Env> {
           });
         }
 
+        // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
         const result = await this.env.DOCUMENT_SERVICE.summarizeSearchPage(
           workspaceId,
           user.userId,
@@ -482,6 +488,7 @@ export default class extends Service<Env> {
           });
         }
 
+        // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
         const result = await this.env.DOCUMENT_SERVICE.multiModalSearch(
           workspaceId,
           user.userId,
@@ -500,6 +507,7 @@ export default class extends Service<Env> {
         const documentId = piiDetectionMatch[2];
         const user = await this.validateSession(request);
 
+        // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
         const result = await this.env.DOCUMENT_SERVICE.detectPII(
           documentId,
           workspaceId,
