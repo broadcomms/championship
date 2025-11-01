@@ -22,7 +22,6 @@ export default class extends Each<Body, Env> {
     try {
       // Call the document service to process the document
       // SmartBucket has already indexed it, we just need to verify and update status
-      // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
       await this.env.DOCUMENT_SERVICE.processDocument(documentId, workspaceId, userId);
 
       this.env.logger.info('Observer: Document processing completed successfully', {
@@ -39,13 +38,16 @@ export default class extends Each<Body, Env> {
         attempt: message.attempts,
       });
 
-      // Retry on failure (up to 3 attempts)
-      if (message.attempts < 3) {
+      // Retry on failure (up to 5 attempts with increasing delays)
+      if (message.attempts < 5) {
+        // Exponential backoff: 30s, 60s, 90s, 120s
+        const delaySeconds = Math.min(30 * message.attempts, 120);
         this.env.logger.info('Retrying document processing', {
           documentId,
           nextAttempt: message.attempts + 1,
+          delaySeconds,
         });
-        message.retry({ delaySeconds: 30 }); // Wait 30 seconds before retry
+        message.retry({ delaySeconds }); // Wait with exponential backoff
       } else {
         this.env.logger.error('Max retries exceeded for document processing', {
           documentId,

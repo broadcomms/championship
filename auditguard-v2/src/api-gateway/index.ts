@@ -300,13 +300,29 @@ export default class extends Service<Env> {
         const documentId = processMatch[2];
         const user = await this.validateSession(request);
 
-        this.env.logger.info('Processing document request', { documentId, workspaceId, userId: user.userId });
-        // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
-        const result = await this.env.DOCUMENT_SERVICE.processDocument(documentId, workspaceId, user.userId);
-        this.env.logger.info('Document processing completed', { documentId, result });
-        return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        // Get document to retrieve storage key
+        const document = await this.env.DOCUMENT_SERVICE.getDocument(documentId, workspaceId, user.userId);
+
+        this.env.logger.info('Enqueueing document for processing', { documentId, workspaceId, userId: user.userId });
+
+        // Enqueue the document for processing with retry support
+        await this.env.DOCUMENT_PROCESSING_QUEUE.send({
+          documentId,
+          workspaceId,
+          userId: user.userId,
+          storageKey: document.storageKey,
         });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: 'Document queued for processing',
+            documentId,
+          }),
+          {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          }
+        );
       }
 
       // Match /api/workspaces/:id/documents/search (semantic search)
