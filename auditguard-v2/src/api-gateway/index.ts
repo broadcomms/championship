@@ -535,6 +535,24 @@ export default class extends Service<Env> {
         });
       }
 
+      // Match /api/workspaces/:id/documents/:documentId/content
+      const contentMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/content$/);
+      if (contentMatch && contentMatch[1] && contentMatch[2] && request.method === 'GET') {
+        const workspaceId = contentMatch[1];
+        const documentId = contentMatch[2];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.DOCUMENT_SERVICE.getDocumentContent(
+          documentId,
+          workspaceId,
+          user.userId
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/workspaces/:id/documents/:documentId
       const documentMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)$/);
       if (documentMatch && documentMatch[1] && documentMatch[2]) {

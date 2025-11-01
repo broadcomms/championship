@@ -14,14 +14,14 @@ export interface Body {
 }
 
 /**
- * SmartBucket Observer - Triggers automatically AFTER SmartBucket completes indexing
+ * SmartBucket Observer - Triggers ON UPLOAD, retries until indexing completes
  *
  * This is the primary processing path for newly uploaded documents.
  * When a document is uploaded to the documents-bucket:
- * 1. SmartBucket automatically indexes the document (5-10+ minutes)
- * 2. This observer triggers AFTER indexing completes
- * 3. We extract AI-powered metadata (title, description) via documentChat
- * 4. Success is guaranteed because SmartBucket has finished indexing
+ * 1. This observer triggers IMMEDIATELY on PutObject
+ * 2. SmartBucket indexes the document in the background (5-10+ minutes)
+ * 3. We retry with increasing delays until indexing completes
+ * 4. Once indexing is done, we verify chunks exist and mark as completed
  */
 export default class extends Each<Body, Env> {
   async process(message: Message<Body>): Promise<void> {
@@ -75,20 +75,24 @@ export default class extends Each<Body, Env> {
         attempt: message.attempts,
       });
 
-      // Retry on failure (up to 3 attempts with short delays)
-      // SmartBucket indexing is already complete, so retries are for transient errors only
-      if (message.attempts < 3) {
-        const delaySeconds = 10; // Short delay for transient errors
-        this.env.logger.info('SmartBucket Observer: Retrying document processing', {
+      // Retry on failure - SmartBucket indexing takes 5-10 minutes
+      // Use exponential backoff to wait for indexing to complete
+      // Max 60 attempts over ~15 minutes to ensure indexing completes
+      if (message.attempts < 60) {
+        // Progressive delay: 10s -> 20s -> 30s -> 60s (max)
+        const delaySeconds = Math.min(10 + (message.attempts * 2), 60);
+        this.env.logger.info('SmartBucket Observer: Retrying document processing (waiting for indexing)', {
           documentId,
           nextAttempt: message.attempts + 1,
           delaySeconds,
+          totalAttemptsAllowed: 60,
         });
         message.retry({ delaySeconds });
       } else {
-        this.env.logger.error('SmartBucket Observer: Max retries exceeded', {
+        this.env.logger.error('SmartBucket Observer: Max retries exceeded - indexing did not complete', {
           documentId,
           workspaceId,
+          totalAttempts: message.attempts,
         });
 
         // Mark as failed in database

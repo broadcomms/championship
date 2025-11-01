@@ -6,6 +6,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/common/Button';
 import { CategoryBadge } from '@/components/documents/CategoryBadge';
 import { ProcessingIndicator } from '@/components/documents/ProcessingIndicator';
+import { DocumentContentViewer } from '@/components/documents/DocumentContentViewer';
 import { useDocumentPolling } from '@/hooks/useDocumentPolling';
 import { api } from '@/lib/api';
 import { Document, DocumentCategory } from '@/types';
@@ -355,6 +356,17 @@ export default function DocumentDetailsPage() {
                 </Button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Document Content Viewer */}
+        {document.processingStatus === 'completed' && (
+          <div className="mb-8">
+            <DocumentContentViewer
+              workspaceId={workspaceId}
+              documentId={documentId}
+              isCompleted={document.processingStatus === 'completed'}
+            />
           </div>
         )}
 
