@@ -3,6 +3,7 @@ import { Env } from './raindrop.gen';
 import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
+import { detectContentType } from './content-type-detector';
 
 interface UploadDocumentInput {
   workspaceId: string;
@@ -86,10 +87,14 @@ export default class extends Service<Env> {
     const storageKey = `${input.workspaceId}/${documentId}`;
     const now = Date.now();
 
-    // Upload to SmartBucket
+    // Detect proper content type from filename if needed
+    // This fixes cases where browsers send "application/octet-stream" for text files
+    const actualContentType = detectContentType(input.filename, input.contentType);
+
+    // Upload to SmartBucket with correct content type
     await this.env.DOCUMENTS_BUCKET.put(storageKey, input.file, {
       httpMetadata: {
-        contentType: input.contentType,
+        contentType: actualContentType,
       },
       customMetadata: {
         workspaceId: input.workspaceId,
@@ -106,7 +111,7 @@ export default class extends Service<Env> {
         workspace_id: input.workspaceId,
         filename: input.filename,
         file_size: fileSize,
-        content_type: input.contentType,
+        content_type: actualContentType,
         category: input.category || null,
         storage_key: storageKey,
         uploaded_by: input.userId,

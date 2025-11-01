@@ -5,7 +5,7 @@
 export interface User {
   userId: string;
   email: string;
-  name: string;
+  name?: string; // Optional - not always returned by API
   createdAt: number;
 }
 
@@ -56,6 +56,8 @@ export interface Document {
   id: string;
   workspaceId: string;
   filename: string;
+  title?: string; // AI-extracted title
+  description?: string; // AI-extracted description
   fileSize: number;
   contentType: string;
   category: DocumentCategory | null;
@@ -71,6 +73,8 @@ export interface Document {
 export interface DocumentListItem {
   id: string;
   filename: string;
+  title?: string; // AI-extracted title
+  description?: string; // AI-extracted description
   fileSize: number;
   contentType: string;
   category: DocumentCategory | null;

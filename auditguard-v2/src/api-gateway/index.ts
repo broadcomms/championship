@@ -293,6 +293,224 @@ export default class extends Service<Env> {
         });
       }
 
+      // Match /api/workspaces/:id/documents/:documentId/process
+      const processMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/process$/);
+      if (processMatch && processMatch[1] && processMatch[2] && request.method === 'POST') {
+        const workspaceId = processMatch[1];
+        const documentId = processMatch[2];
+        const user = await this.validateSession(request);
+
+        this.env.logger.info('Processing document request', { documentId, workspaceId, userId: user.userId });
+        const result = await this.env.DOCUMENT_SERVICE.processDocument(documentId, workspaceId, user.userId);
+        this.env.logger.info('Document processing completed', { documentId, result });
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/documents/search (semantic search)
+      const documentSearchMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/search$/);
+      if (documentSearchMatch && documentSearchMatch[1] && request.method === 'POST') {
+        const workspaceId = documentSearchMatch[1];
+        const user = await this.validateSession(request);
+
+        const body = (await request.json()) as {
+          query: string;
+          page?: number;
+          pageSize?: number;
+        };
+
+        if (!body.query) {
+          return new Response(JSON.stringify({ error: 'Query is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.DOCUMENT_SERVICE.searchDocuments(
+          workspaceId,
+          user.userId,
+          body.query,
+          body.page,
+          body.pageSize
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/documents/:documentId/chat
+      const documentChatMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/chat$/);
+      if (documentChatMatch && documentChatMatch[1] && documentChatMatch[2] && request.method === 'POST') {
+        const workspaceId = documentChatMatch[1];
+        const documentId = documentChatMatch[2];
+        const user = await this.validateSession(request);
+
+        const body = (await request.json()) as { question: string };
+
+        if (!body.question) {
+          return new Response(JSON.stringify({ error: 'Question is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.DOCUMENT_SERVICE.chatWithDocument(
+          documentId,
+          workspaceId,
+          user.userId,
+          body.question
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/documents/chunks
+      const documentChunksMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/chunks$/);
+      if (documentChunksMatch && documentChunksMatch[1] && request.method === 'POST') {
+        const workspaceId = documentChunksMatch[1];
+        const user = await this.validateSession(request);
+
+        const body = (await request.json()) as {
+          query: string;
+          documentId?: string;
+        };
+
+        if (!body.query) {
+          return new Response(JSON.stringify({ error: 'Query is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.DOCUMENT_SERVICE.getRelevantChunks(
+          workspaceId,
+          user.userId,
+          body.query,
+          body.documentId
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/documents/search/paginate
+      const searchPaginateMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/search\/paginate$/);
+      if (searchPaginateMatch && searchPaginateMatch[1] && request.method === 'POST') {
+        const workspaceId = searchPaginateMatch[1];
+        const user = await this.validateSession(request);
+
+        const body = (await request.json()) as {
+          requestId: string;
+          page: number;
+          pageSize?: number;
+        };
+
+        if (!body.requestId || body.page === undefined) {
+          return new Response(JSON.stringify({ error: 'RequestId and page are required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.DOCUMENT_SERVICE.getPaginatedSearchResults(
+          workspaceId,
+          user.userId,
+          body.requestId,
+          body.page,
+          body.pageSize
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/documents/search/summarize
+      const searchSummarizeMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/search\/summarize$/);
+      if (searchSummarizeMatch && searchSummarizeMatch[1] && request.method === 'POST') {
+        const workspaceId = searchSummarizeMatch[1];
+        const user = await this.validateSession(request);
+
+        const body = (await request.json()) as {
+          requestId: string;
+          page: number;
+          pageSize?: number;
+        };
+
+        if (!body.requestId || body.page === undefined) {
+          return new Response(JSON.stringify({ error: 'RequestId and page are required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.DOCUMENT_SERVICE.summarizeSearchPage(
+          workspaceId,
+          user.userId,
+          body.requestId,
+          body.page,
+          body.pageSize
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/documents/multimodal-search
+      const multimodalSearchMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/multimodal-search$/);
+      if (multimodalSearchMatch && multimodalSearchMatch[1] && request.method === 'POST') {
+        const workspaceId = multimodalSearchMatch[1];
+        const user = await this.validateSession(request);
+
+        const body = (await request.json()) as {
+          text?: string;
+          images?: string;
+          audio?: string;
+          contentTypes?: string[];
+        };
+
+        if (!body.text && !body.images && !body.audio) {
+          return new Response(JSON.stringify({ error: 'At least one search criterion is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.DOCUMENT_SERVICE.multiModalSearch(
+          workspaceId,
+          user.userId,
+          body
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/documents/:documentId/pii
+      const piiDetectionMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/pii$/);
+      if (piiDetectionMatch && piiDetectionMatch[1] && piiDetectionMatch[2] && request.method === 'POST') {
+        const workspaceId = piiDetectionMatch[1];
+        const documentId = piiDetectionMatch[2];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.DOCUMENT_SERVICE.detectPII(
+          documentId,
+          workspaceId,
+          user.userId
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/workspaces/:id/documents/:documentId
       const documentMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)$/);
       if (documentMatch && documentMatch[1] && documentMatch[2]) {
@@ -728,6 +946,15 @@ export default class extends Service<Env> {
       const corsHeaders = getCorsHeaders(origin);
 
       const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
+
+      // Log error details
+      this.env.logger.error('API Gateway error', {
+        path: url.pathname,
+        method: request.method,
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+
       const status =
         error instanceof Error
           ? errorMessage.includes('Access denied')

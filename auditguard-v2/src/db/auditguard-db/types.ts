@@ -8,6 +8,8 @@ export type documents = {
     id: string;
     workspace_id: string;
     filename: string;
+    title: string | null;
+    description: string | null;
     file_size: number;
     content_type: string;
     category: string | null;

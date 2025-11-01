@@ -1,66 +1,114 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/common/Button';
+import { WorkspaceCard } from '@/components/workspaces/WorkspaceCard';
+import { CreateWorkspaceDialog } from '@/components/workspaces/CreateWorkspaceDialog';
+import { api } from '@/lib/api';
+import { WorkspaceWithRole } from '@/types/workspace';
 
 export default function WorkspacesPage() {
   const { user } = useAuth();
+  const [workspaces, setWorkspaces] = useState<WorkspaceWithRole[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
+  const fetchWorkspaces = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const response = await api.get<{ workspaces: WorkspaceWithRole[] }>('/api/workspaces');
+      setWorkspaces(response.workspaces || []);
+    } catch (err: any) {
+      setError(err.error || 'Failed to load workspaces');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkspaces();
+  }, []);
+
+  const handleCreateSuccess = () => {
+    fetchWorkspaces();
+  };
 
   return (
     <AppLayout>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Your Workspaces</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Welcome back, {user?.name}! Manage your compliance workspaces here.
-          </p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Your Workspaces</h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Welcome back, {user?.name}! Manage your compliance workspaces here.
+            </p>
+          </div>
+          <Button variant="primary" onClick={() => setIsCreateDialogOpen(true)}>
+            + Create Workspace
+          </Button>
         </div>
 
-        {/* Empty State - Workspaces Coming Soon */}
-        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center">
-          <div className="mx-auto max-w-md">
-            <div className="text-6xl">🏢</div>
-            <h3 className="mt-6 text-lg font-medium text-gray-900">
-              No Workspaces Yet
-            </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Workspace management will be available in the next phase. You'll be able to create and manage compliance workspaces for your organization.
-            </p>
-            <div className="mt-6">
-              <Button variant="primary" disabled>
-                Create Workspace (Coming Soon)
-              </Button>
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+              <p className="mt-4 text-sm text-gray-600">Loading workspaces...</p>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Feature Preview */}
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-lg bg-white p-6 shadow">
-            <div className="text-3xl">📄</div>
-            <h4 className="mt-4 font-medium text-gray-900">Document Management</h4>
-            <p className="mt-2 text-sm text-gray-600">
-              Upload and organize compliance documents
-            </p>
+        {/* Error State */}
+        {error && !isLoading && (
+          <div className="rounded-md bg-red-50 p-4">
+            <p className="text-sm text-red-800">{error}</p>
+            <Button variant="outline" size="sm" onClick={fetchWorkspaces} className="mt-3">
+              Try Again
+            </Button>
           </div>
-          <div className="rounded-lg bg-white p-6 shadow">
-            <div className="text-3xl">✓</div>
-            <h4 className="mt-4 font-medium text-gray-900">Compliance Checks</h4>
-            <p className="mt-2 text-sm text-gray-600">
-              AI-powered compliance analysis across 13 frameworks
-            </p>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && workspaces.length === 0 && (
+          <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center">
+            <div className="mx-auto max-w-md">
+              <div className="text-6xl">🏢</div>
+              <h3 className="mt-6 text-lg font-medium text-gray-900">
+                No Workspaces Yet
+              </h3>
+              <p className="mt-2 text-sm text-gray-600">
+                Get started by creating your first workspace. Organize your compliance documents, team members, and stay on top of regulatory requirements.
+              </p>
+              <div className="mt-6">
+                <Button variant="primary" onClick={() => setIsCreateDialogOpen(true)}>
+                  Create Your First Workspace
+                </Button>
+              </div>
+            </div>
           </div>
-          <div className="rounded-lg bg-white p-6 shadow">
-            <div className="text-3xl">🤖</div>
-            <h4 className="mt-4 font-medium text-gray-900">AI Assistant</h4>
-            <p className="mt-2 text-sm text-gray-600">
-              Get compliance guidance and recommendations
-            </p>
+        )}
+
+        {/* Workspaces Grid */}
+        {!isLoading && !error && workspaces.length > 0 && (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {workspaces.map((workspace) => (
+              <WorkspaceCard key={workspace.id} workspace={workspace} />
+            ))}
           </div>
-        </div>
+        )}
       </div>
+
+      {/* Create Workspace Dialog */}
+      <CreateWorkspaceDialog
+        isOpen={isCreateDialogOpen}
+        onClose={() => setIsCreateDialogOpen(false)}
+        onSuccess={handleCreateSuccess}
+      />
     </AppLayout>
   );
 }
