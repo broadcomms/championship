@@ -103,7 +103,8 @@ export default class extends Service<Env> {
         uploadedBy: input.userId,
         filename: input.filename,
       },
-    });
+      partition: input.workspaceId, // ✅ Partition by workspace for multi-tenancy isolation
+    } as any);
 
     // Store metadata in database
     await db
@@ -544,6 +545,64 @@ export default class extends Service<Env> {
       .execute();
   }
 
+  /**
+   * Verify if SmartBucket has finished indexing a document
+   * Tests by attempting to retrieve chunks from the document
+   * @returns Object with isComplete flag and estimated progress percentage
+   */
+  async verifyIndexingComplete(
+    storageKey: string,
+    workspaceId: string
+  ): Promise<{ isComplete: boolean; progress: number; chunkCount: number }> {
+    try {
+      // Test if we can retrieve chunks from SmartBucket
+      // If chunks exist, indexing is complete
+      const testSearch = await this.env.DOCUMENTS_BUCKET.chunkSearch({
+        input: 'test',  // Any query will work
+        partition: workspaceId,
+        limit: 1000,  // Get all chunks to count them
+        requestId: `verify-${storageKey}-${Date.now()}`,
+      } as any);
+
+      // If we get chunks back, indexing is complete
+      if (testSearch.results && testSearch.results.length > 0) {
+        // Filter chunks to only those from this specific document
+        const documentChunks = testSearch.results.filter(
+          (chunk: any) => chunk.objectId === storageKey || chunk.source === storageKey
+        );
+
+        if (documentChunks.length > 0) {
+          this.env.logger.info('Indexing verification: Complete', {
+            storageKey,
+            chunkCount: documentChunks.length,
+          });
+
+          return { 
+            isComplete: true, 
+            progress: 100,
+            chunkCount: documentChunks.length
+          };
+        }
+      }
+
+      // No chunks found yet = still indexing
+      this.env.logger.info('Indexing verification: In progress', {
+        storageKey,
+        note: 'No chunks found yet, SmartBucket still indexing',
+      });
+
+      return { isComplete: false, progress: 50, chunkCount: 0 };
+    } catch (error) {
+      // Error might mean indexing hasn't started yet or document not found
+      this.env.logger.warn('Indexing verification: Not ready', {
+        storageKey,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      return { isComplete: false, progress: 0, chunkCount: 0 };
+    }
+  }
+
   async updateDocumentProcessing(
     documentId: string,
     data: {
@@ -569,7 +628,7 @@ export default class extends Service<Env> {
 
   /**
    * Process a document: verify indexing is complete and mark as ready
-   * SIMPLIFIED VERSION: Just checks if chunks exist, skips AI extraction
+   * NEW: Waits for SmartBucket indexing to complete before marking as "completed"
    */
   async processDocument(
     documentId: string,
@@ -595,7 +654,7 @@ export default class extends Service<Env> {
       throw new Error('Document not found');
     }
 
-    this.env.logger.info('Processing document (simplified mode - no AI extraction)', {
+    this.env.logger.info('Processing document with indexing verification', {
       documentId,
       workspaceId,
       storageKey: document.storage_key,
@@ -606,51 +665,101 @@ export default class extends Service<Env> {
     await this.updateProcessingStatus(documentId, 'processing');
 
     try {
-      // Use filename as title (no AI extraction)
-      let extractedTitle = document.filename;
-      let extractedDescription = ''; // Empty for now
-      let isIndexed = false;
-      let actualChunkCount = 0;
+      // ✅ Verify SmartBucket has finished indexing
+      const indexStatus = await this.verifyIndexingComplete(
+        document.storage_key,
+        workspaceId
+      );
 
-      // SKIP VERIFICATION ENTIRELY - SmartBucket indexing takes too long (20+ minutes)
-      // Just mark as indexed immediately and estimate chunks from file size
-      isIndexed = true;
-
-      // Estimate chunk count based on file size
-      // SmartBucket chunks documents: roughly 1 chunk per 750 bytes
-      if (document.file_size > 0) {
-        actualChunkCount = Math.max(1, Math.ceil(document.file_size / 750));
-      } else {
-        actualChunkCount = 1; // Default to 1 chunk for empty files
+      if (!indexStatus.isComplete) {
+        // Indexing not complete - throw error to trigger retry
+        const errorMsg = `Indexing in progress: ${indexStatus.progress}% (${indexStatus.chunkCount} chunks found)`;
+        this.env.logger.info('Document indexing not complete, will retry', {
+          documentId,
+          progress: indexStatus.progress,
+          chunkCount: indexStatus.chunkCount,
+        });
+        throw new Error(errorMsg);
       }
 
-      this.env.logger.info('Document marked as indexed (immediate, no verification)', {
+      // ✅ Indexing is complete! Get actual chunk count
+      const actualChunkCount = indexStatus.chunkCount;
+
+      this.env.logger.info('Document indexing verified complete', {
         documentId,
-        fileSize: document.file_size,
-        estimatedChunks: actualChunkCount,
-        note: 'SmartBucket will continue indexing in background for search functionality',
+        actualChunkCount,
+        storageKey: document.storage_key,
       });
 
-      // Update document with extracted information
+      // ✅ Extract title and description using AI
+      this.env.logger.info('Extracting title and description using AI', {
+        documentId,
+        storageKey: document.storage_key,
+      });
+
+      let extractedTitle = document.filename;  // Fallback to filename
+      let extractedDescription = '';           // Default empty
+
+      try {
+        // Extract title using documentChat
+        const titleResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
+          objectId: document.storage_key,
+          partition: workspaceId,
+          input: 'What is the title of this document? Respond with ONLY the title, no additional text or explanation.',
+          requestId: `title-${documentId}-${Date.now()}`,
+        } as any);
+
+        if (titleResponse.answer && titleResponse.answer.trim()) {
+          extractedTitle = titleResponse.answer.trim();
+          this.env.logger.info('AI title extraction successful', {
+            documentId,
+            extractedTitle,
+          });
+        }
+
+        // Extract description using documentChat
+        const descResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
+          objectId: document.storage_key,
+          partition: workspaceId,
+          input: 'Provide a brief 1-2 sentence summary of this document. Focus on the main topic and key points.',
+          requestId: `desc-${documentId}-${Date.now()}`,
+        } as any);
+
+        if (descResponse.answer && descResponse.answer.trim()) {
+          extractedDescription = descResponse.answer.trim();
+          this.env.logger.info('AI description extraction successful', {
+            documentId,
+            extractedDescription: extractedDescription.substring(0, 100) + '...',
+          });
+        }
+      } catch (aiError) {
+        // AI extraction failed - log but continue with filename as title
+        this.env.logger.warn('AI extraction failed, using filename as title', {
+          documentId,
+          error: aiError instanceof Error ? aiError.message : String(aiError),
+        });
+      }
+
+      // Update document with real chunk count and AI-extracted metadata
       const now = Date.now();
       await db
         .updateTable('documents')
         .set({
           title: extractedTitle,
           description: extractedDescription,
-          text_extracted: isIndexed ? 1 : 0,
-          chunk_count: actualChunkCount,
+          text_extracted: 1,  // Indexing confirmed complete
+          chunk_count: actualChunkCount,  // Real count, not estimated!
           processing_status: 'completed',
           updated_at: now,
         })
         .where('id', '=', documentId)
         .execute();
 
-      this.env.logger.info('Document processing completed', {
+      this.env.logger.info('Document processing completed successfully', {
         documentId,
         title: extractedTitle,
-        isIndexed,
         chunkCount: actualChunkCount,
+        processingStatus: 'completed',
       });
 
       return {
@@ -660,13 +769,26 @@ export default class extends Service<Env> {
         chunkCount: actualChunkCount,
       };
     } catch (error) {
-      this.env.logger.error('Document processing failed', {
+      // Check if this is an "indexing in progress" error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (errorMessage.includes('Indexing in progress')) {
+        // This is expected - indexing just isn't done yet
+        // The observer will retry this method
+        this.env.logger.info('Document processing deferred (indexing incomplete)', {
+          documentId,
+          error: errorMessage,
+        });
+        throw error;  // Re-throw to trigger observer retry
+      }
+
+      // This is an unexpected error - mark as failed
+      this.env.logger.error('Document processing failed with unexpected error', {
         documentId,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
 
       await this.updateProcessingStatus(documentId, 'failed');
-
       throw error;
     }
   }
@@ -717,12 +839,12 @@ export default class extends Service<Env> {
 
     try {
       // Use documentChat to extract the full text content
-      // NOTE: Not using partition since we don't set partition during upload
       const fullTextResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
         objectId: document.storage_key,
+        partition: workspaceId, // ✅ Partition by workspace for multi-tenancy isolation
         input: 'Please extract and return the complete text content of this document verbatim, preserving all formatting and structure.',
         requestId: `fulltext-${documentId}`,
-      });
+      } as any);
 
       const fullText = fullTextResponse.answer || '';
 
@@ -736,9 +858,10 @@ export default class extends Service<Env> {
       try {
         const summaryResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
           objectId: document.storage_key,
+          partition: workspaceId, // ✅ Partition by workspace for multi-tenancy isolation
           input: 'Provide a brief 2-3 sentence summary of this document.',
           requestId: `summary-${documentId}`,
-        });
+        } as any);
         summary = summaryResponse.answer || 'Summary not available';
       } catch (error) {
         this.env.logger.warn('Failed to generate summary', {
@@ -754,8 +877,9 @@ export default class extends Service<Env> {
         // Use the document's filename or content as search query to get relevant chunks
         const chunkResults = await this.env.DOCUMENTS_BUCKET.chunkSearch({
           input: document.filename.replace(/\.(pdf|docx|txt|md)$/i, ''),
+          partition: workspaceId, // ✅ Partition by workspace for multi-tenancy isolation
           requestId: `chunks-${documentId}`,
-        });
+        } as any);
 
         chunks = (chunkResults.results || []).map((result: any) => ({
           text: result.text || '',
