@@ -224,6 +224,7 @@ export default class extends Service<Env> {
             const file = formData.get('file') as File;
             const filename = (formData.get('filename') as string) || file?.name || 'unnamed';
             const category = formData.get('category') as 'policy' | 'procedure' | 'evidence' | 'other' | undefined;
+            const frameworkId = formData.get('frameworkId') ? parseInt(formData.get('frameworkId') as string, 10) : undefined;
 
             if (!file) {
               return new Response(JSON.stringify({ error: 'No file provided' }), {
@@ -241,6 +242,7 @@ export default class extends Service<Env> {
               filename,
               contentType: file.type || 'application/octet-stream',
               category,
+              frameworkId,  // Phase 4: Framework support
             });
 
             return new Response(JSON.stringify(result), {
@@ -254,6 +256,7 @@ export default class extends Service<Env> {
               filename: string;
               contentType: string;
               category?: 'policy' | 'procedure' | 'evidence' | 'other';
+              frameworkId?: number;
             };
 
             // Decode base64 file
@@ -266,6 +269,7 @@ export default class extends Service<Env> {
               filename: body.filename,
               contentType: body.contentType,
               category: body.category,
+              frameworkId: body.frameworkId,  // Phase 4: Framework support
             });
 
             return new Response(JSON.stringify(result), {
@@ -516,6 +520,49 @@ export default class extends Service<Env> {
         });
       }
 
+      // Match /api/workspaces/:id/documents/vector-search (Phase 3: Vector embeddings search)
+      const vectorSearchMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/vector-search$/);
+      if (vectorSearchMatch && vectorSearchMatch[1] && request.method === 'POST') {
+        const workspaceId = vectorSearchMatch[1];
+        const user = await this.validateSession(request);
+
+        const body = (await request.json()) as {
+          query: string;
+          frameworkId?: number;
+          topK?: number;
+          minScore?: number;
+          includeChunks?: boolean;
+          page?: number;
+          pageSize?: number;
+        };
+
+        if (!body.query) {
+          return new Response(JSON.stringify({ error: 'Query is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.DOCUMENT_SERVICE.vectorSearch(
+          workspaceId,
+          user.userId,
+          {
+            query: body.query,
+            workspaceId,
+            frameworkId: body.frameworkId,
+            topK: body.topK,
+            minScore: body.minScore,
+            includeChunks: body.includeChunks,
+            page: body.page,
+            pageSize: body.pageSize,
+          }
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/workspaces/:id/documents/:documentId/pii
       const piiDetectionMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/pii$/);
       if (piiDetectionMatch && piiDetectionMatch[1] && piiDetectionMatch[2] && request.method === 'POST') {
@@ -648,6 +695,121 @@ export default class extends Service<Env> {
         return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
+      }
+
+      // ====== COMPLIANCE FRAMEWORK ENDPOINTS ======
+      // Match /api/workspaces/:id/frameworks (list all frameworks)
+      const frameworksListMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/frameworks$/);
+      if (frameworksListMatch && frameworksListMatch[1] && request.method === 'GET') {
+        const workspaceId = frameworksListMatch[1];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.DOCUMENT_SERVICE.listFrameworks(workspaceId, user.userId);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/documents/:documentId/framework (assign framework to document)
+      const assignFrameworkMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/framework$/);
+      if (assignFrameworkMatch && assignFrameworkMatch[1] && assignFrameworkMatch[2] && request.method === 'PUT') {
+        const workspaceId = assignFrameworkMatch[1];
+        const documentId = assignFrameworkMatch[2];
+        const user = await this.validateSession(request);
+
+        const body = (await request.json()) as { frameworkId: number };
+
+        if (!body.frameworkId) {
+          return new Response(JSON.stringify({ error: 'Framework ID is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        await this.env.DOCUMENT_SERVICE.assignFrameworkToDocument(
+          documentId,
+          workspaceId,
+          user.userId,
+          body.frameworkId
+        );
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/frameworks/:frameworkId/chunks (get framework chunks)
+      const frameworkChunksMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/frameworks\/([^\/]+)\/chunks$/);
+      if (frameworkChunksMatch && frameworkChunksMatch[1] && frameworkChunksMatch[2] && request.method === 'GET') {
+        const workspaceId = frameworkChunksMatch[1];
+        const frameworkId = parseInt(frameworkChunksMatch[2], 10);
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const minRelevance = parseFloat(url.searchParams.get('minRelevance') || '0.6');
+
+        const result = await this.env.DOCUMENT_SERVICE.getFrameworkChunks(
+          workspaceId,
+          user.userId,
+          frameworkId,
+          minRelevance
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/chunks/:chunkId/tags (tag a chunk)
+      const tagChunkMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/chunks\/([^\/]+)\/tags$/);
+      if (tagChunkMatch && tagChunkMatch[1] && tagChunkMatch[2] && request.method === 'POST') {
+        const workspaceId = tagChunkMatch[1];
+        const chunkId = parseInt(tagChunkMatch[2], 10);
+        const user = await this.validateSession(request);
+
+        const body = (await request.json()) as {
+          frameworkId: number;
+          relevanceScore?: number;
+        };
+
+        if (!body.frameworkId) {
+          return new Response(JSON.stringify({ error: 'Framework ID is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        await this.env.DOCUMENT_SERVICE.tagChunk(
+          workspaceId,
+          user.userId,
+          chunkId,
+          body.frameworkId,
+          body.relevanceScore
+        );
+
+        return new Response(JSON.stringify({ success: true }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/chunks/:chunkId/tags/:frameworkId (untag a chunk)
+      const untagChunkMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/chunks\/([^\/]+)\/tags\/([^\/]+)$/);
+      if (untagChunkMatch && untagChunkMatch[1] && untagChunkMatch[2] && untagChunkMatch[3] && request.method === 'DELETE') {
+        const workspaceId = untagChunkMatch[1];
+        const chunkId = parseInt(untagChunkMatch[2], 10);
+        const frameworkId = parseInt(untagChunkMatch[3], 10);
+        const user = await this.validateSession(request);
+
+        await this.env.DOCUMENT_SERVICE.untagChunk(
+          workspaceId,
+          user.userId,
+          chunkId,
+          frameworkId
+        );
+
+        return new Response(null, { status: 204 });
       }
 
       // ====== ANALYTICS ENDPOINTS ======

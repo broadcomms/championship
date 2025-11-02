@@ -2,6 +2,9 @@ import { Each, Message } from '@liquidmetal-ai/raindrop-framework';
 import type { Env } from './raindrop.gen';
 import { VultrStorageService } from '../storage-service';
 import { TextExtractionService } from '../text-extraction-service';
+import { ChunkingService } from '../chunking-service';
+import { EmbeddingService } from '../embedding-service';
+import { ComplianceTaggingService } from '../compliance-tagging-service';
 
 export interface Body {
   documentId: string;
@@ -10,6 +13,7 @@ export interface Body {
   vultrKey?: string;  // NEW: Vultr S3 key for new documents
   storageKey?: string;  // OLD: SmartBucket key for legacy documents
   action?: string;  // NEW: 'extract_and_index' or undefined (legacy)
+  frameworkId?: number;  // Phase 4: Compliance framework for auto-tagging
 }
 
 export default class extends Each<Body, Env> {
@@ -140,7 +144,120 @@ export default class extends Each<Body, Env> {
         warnings: validation.warnings,
       });
 
-      // STEP 3: Upload ONLY clean text to SmartBucket (for all file types including PDF)
+      // STEP 3A: Chunk the text for vector embeddings
+      this.env.logger.info('Starting text chunking for vector embeddings', {
+        documentId,
+        textLength: text.length,
+        contentType: document.contentType,
+      });
+
+      const chunkingService = new ChunkingService(this.env);
+      const optimalConfig = chunkingService.getOptimalConfig(document.contentType);
+      const chunkingResult = await chunkingService.chunkText(
+        text,
+        document.contentType,
+        optimalConfig
+      );
+
+      // Validate chunking quality
+      const chunkValidation = chunkingService.validateChunking(chunkingResult);
+      if (!chunkValidation.isValid) {
+        this.env.logger.warn('Chunking quality warnings', {
+          documentId,
+          warnings: chunkValidation.warnings,
+        });
+      }
+
+      this.env.logger.info('Text chunking completed', {
+        documentId,
+        totalChunks: chunkingResult.totalChunks,
+        averageChunkSize: chunkingResult.averageChunkSize,
+        warnings: chunkValidation.warnings,
+      });
+
+      // STEP 3B: Store chunks in database
+      this.env.logger.info('Storing chunks in database', {
+        documentId,
+        chunkCount: chunkingResult.totalChunks,
+      });
+
+      const chunkIds: number[] = [];
+      for (const chunk of chunkingResult.chunks) {
+        const result = await (this.env.AUDITGUARD_DB as any).prepare(
+          `INSERT INTO document_chunks (
+            document_id, workspace_id, chunk_index, content, chunk_size,
+            start_char, end_char, token_count, has_header, section_title,
+            embedding_status, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+          RETURNING id`
+        ).bind(
+          documentId,
+          workspaceId,
+          chunk.index,
+          chunk.text,
+          chunk.text.length,
+          chunk.metadata.startChar,
+          chunk.metadata.endChar,
+          chunk.metadata.tokenCount,
+          chunk.metadata.hasHeader ? 1 : 0,
+          chunk.metadata.sectionTitle || null,
+          Date.now()
+        ).first();
+
+        // Get the inserted chunk ID from RETURNING clause
+        if (result && result.id) {
+          chunkIds.push(result.id);
+        }
+      }
+
+      this.env.logger.info('Chunks stored in database', {
+        documentId,
+        storedCount: chunkIds.length,
+      });
+
+      // STEP 3C: Generate and store embeddings (parallel with SmartBucket)
+      // This runs asynchronously - we don't wait for completion
+      this.generateEmbeddingsAsync(
+        documentId,
+        workspaceId,
+        chunkingResult.chunks,
+        chunkIds
+      ).catch(error => {
+        this.env.logger.error('Async embedding generation failed', {
+          documentId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+
+      this.env.logger.info('Started async embedding generation', {
+        documentId,
+        chunkCount: chunkingResult.totalChunks,
+      });
+
+      // STEP 3D: Auto-tag chunks with compliance frameworks (Phase 4)
+      // This runs asynchronously in parallel with embeddings
+      if (message.body.frameworkId || chunkingResult.totalChunks > 0) {
+        this.autoTagChunksAsync(
+          documentId,
+          workspaceId,
+          chunkingResult.chunks,
+          chunkIds,
+          message.body.frameworkId
+        ).catch(error => {
+          this.env.logger.error('Async auto-tagging failed', {
+            documentId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+
+        this.env.logger.info('Started async auto-tagging', {
+          documentId,
+          chunkCount: chunkingResult.totalChunks,
+          frameworkId: message.body.frameworkId,
+        });
+      }
+
+      // STEP 4: Upload ONLY clean text to SmartBucket (for all file types including PDF)
       const smartBucketKey = `${workspaceId}/${documentId}/extracted.txt`;
 
       this.env.logger.info('Uploading clean text to SmartBucket', {
@@ -169,11 +286,11 @@ export default class extends Each<Body, Env> {
         smartBucketKey,
       });
 
-      // STEP 4: Update database with extraction results (including full text)
+      // STEP 5: Update database with extraction results (including full text and chunks)
       await this.env.DOCUMENT_SERVICE.updateDocumentProcessing(documentId, {
         textExtracted: true,
-        chunkCount: 0,  // Will be updated after SmartBucket indexing completes
-        processingStatus: 'processing',  // SmartBucket now indexing
+        chunkCount: chunkingResult.totalChunks,  // Custom chunks created
+        processingStatus: 'processing',  // SmartBucket now indexing in parallel
         processedAt: Date.now(),
         extractedTextKey: smartBucketKey,
         extractedText: text,  // Store full text in database for immediate access
@@ -225,5 +342,150 @@ export default class extends Each<Body, Env> {
 
     // Acknowledge successful processing
     message.ack();
+  }
+
+  /**
+   * Generate embeddings asynchronously in parallel with SmartBucket indexing
+   * This allows immediate search capability while SmartBucket processes in background
+   */
+  private async generateEmbeddingsAsync(
+    documentId: string,
+    workspaceId: string,
+    chunks: any[],
+    chunkIds: number[]
+  ): Promise<void> {
+    try {
+      this.env.logger.info('Async embedding generation started', {
+        documentId,
+        workspaceId,
+        chunkCount: chunks.length,
+      });
+
+      // Update document status to indicate vector indexing is in progress
+      await (this.env.AUDITGUARD_DB as any).prepare(
+        `UPDATE documents
+         SET vector_indexing_status = 'processing',
+             chunks_created = ?
+         WHERE id = ?`
+      ).bind(chunks.length, documentId).run();
+
+      // Initialize embedding service
+      const embeddingService = new EmbeddingService(this.env);
+
+      // Generate and store embeddings (batch processing with retries)
+      const result = await embeddingService.generateAndStoreEmbeddings(
+        documentId,
+        workspaceId,
+        chunks,
+        chunkIds
+      );
+
+      this.env.logger.info('Async embedding generation completed', {
+        documentId,
+        totalChunks: result.totalChunks,
+        successCount: result.successCount,
+        failureCount: result.failureCount,
+        duration: result.duration,
+      });
+
+      // Update document with final embedding stats
+      await (this.env.AUDITGUARD_DB as any).prepare(
+        `UPDATE documents
+         SET embeddings_generated = ?,
+             vector_indexing_status = ?
+         WHERE id = ?`
+      ).bind(
+        result.successCount,
+        result.failureCount === 0 ? 'completed' : 'partial',
+        documentId
+      ).run();
+
+    } catch (error) {
+      this.env.logger.error('Async embedding generation failed critically', {
+        documentId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+
+      // Mark as failed in database
+      try {
+        await (this.env.AUDITGUARD_DB as any).prepare(
+          `UPDATE documents
+           SET vector_indexing_status = 'failed'
+           WHERE id = ?`
+        ).bind(documentId).run();
+      } catch (updateError) {
+        this.env.logger.error('Failed to update vector indexing status', {
+          documentId,
+          error: updateError instanceof Error ? updateError.message : String(updateError),
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Auto-tag chunks with compliance frameworks asynchronously (Phase 4)
+   * Runs in parallel with embedding generation
+   */
+  private async autoTagChunksAsync(
+    documentId: string,
+    workspaceId: string,
+    chunks: any[],
+    chunkIds: number[],
+    frameworkId?: number
+  ): Promise<void> {
+    try {
+      this.env.logger.info('Async auto-tagging started', {
+        documentId,
+        workspaceId,
+        chunkCount: chunks.length,
+        frameworkId,
+      });
+
+      // Initialize tagging service
+      const taggingService = new ComplianceTaggingService(this.env);
+
+      // Prepare chunks with IDs for batch tagging
+      const chunksWithIds = chunks.map((chunk, index) => ({
+        id: chunkIds[index],
+        text: chunk.text,
+      }));
+
+      // Perform batch auto-tagging
+      const result = await taggingService.tagDocumentChunks(documentId, chunksWithIds);
+
+      this.env.logger.info('Async auto-tagging completed', {
+        documentId,
+        totalChunks: result.totalChunks,
+        successCount: result.successCount,
+        failureCount: result.failureCount,
+        totalTags: result.tags.length,
+        duration: result.duration,
+      });
+
+      // Update document with tagging stats (optional)
+      try {
+        await (this.env.AUDITGUARD_DB as any).prepare(
+          `UPDATE documents
+           SET updated_at = ?
+           WHERE id = ?`
+        ).bind(Date.now(), documentId).run();
+      } catch (updateError) {
+        this.env.logger.warn('Failed to update document after auto-tagging', {
+          documentId,
+          error: updateError instanceof Error ? updateError.message : String(updateError),
+        });
+      }
+
+    } catch (error) {
+      this.env.logger.error('Async auto-tagging failed critically', {
+        documentId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      // Don't throw - auto-tagging is optional, don't fail the entire process
+    }
   }
 }

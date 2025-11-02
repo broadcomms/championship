@@ -5,6 +5,8 @@ import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 import { detectContentType } from './content-type-detector';
 import { VultrStorageService } from '../storage-service';
+import { VectorSearchService, VectorSearchRequest, VectorSearchResponse } from '../vector-search-service';
+import { ComplianceTaggingService } from '../compliance-tagging-service';
 
 interface UploadDocumentInput {
   workspaceId: string;
@@ -13,6 +15,7 @@ interface UploadDocumentInput {
   filename: string;
   contentType: string;
   category?: 'policy' | 'procedure' | 'evidence' | 'other';
+  frameworkId?: number;
 }
 
 interface UpdateMetadataInput {
@@ -121,6 +124,7 @@ export default class extends Service<Env> {
         file_size: fileSize,
         content_type: actualContentType,
         category: input.category || null,
+        compliance_framework_id: input.frameworkId || null,  // Phase 4: Framework support
         vultr_key: vultrKey,  // Vultr S3 key for original file
         storage_key: '',  // Will be set to extracted text key after processing
         extraction_status: 'pending',  // Text extraction pending
@@ -149,11 +153,13 @@ export default class extends Service<Env> {
         userId: input.userId,
         vultrKey: vultrKey,
         action: 'extract_and_index',  // NEW: Indicates full extraction flow
+        frameworkId: input.frameworkId,  // Phase 4: Pass framework for auto-tagging
       });
 
       this.env.logger.info('Document queued for text extraction and indexing', {
         documentId,
         workspaceId: input.workspaceId,
+        frameworkId: input.frameworkId,
       });
     } catch (error) {
       this.env.logger.error('Failed to queue document for processing', {
@@ -1071,5 +1077,394 @@ export default class extends Service<Env> {
       isPartial: isStillProcessing,
       processingStatus,
     };
+  }
+
+  /**
+   * Vector search across workspace documents with hybrid SmartBucket fallback
+   * @param workspaceId Workspace to search in
+   * @param userId User making the request
+   * @param request Search parameters
+   */
+  async vectorSearch(
+    workspaceId: string,
+    userId: string,
+    request: VectorSearchRequest
+  ): Promise<VectorSearchResponse> {
+    const db = this.getDb();
+
+    // Check workspace membership (any member can search, including viewer)
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    // Validate request parameters
+    if (!request.query || request.query.trim().length === 0) {
+      throw new Error('Search query is required');
+    }
+
+    if (request.query.length > 1000) {
+      throw new Error('Search query exceeds maximum length of 1000 characters');
+    }
+
+    // Validate and set reasonable limits
+    const topK = Math.min(request.topK || 10, 100); // Max 100 results
+    const pageSize = Math.min(request.pageSize || 10, 50); // Max 50 per page
+    const page = Math.max(request.page || 1, 1); // Min page 1
+    const minScore = Math.max(Math.min(request.minScore || 0.7, 1.0), 0.0); // 0.0-1.0 range
+
+    this.env.logger.info('Vector search request', {
+      workspaceId,
+      userId,
+      query: request.query.substring(0, 100),
+      frameworkId: request.frameworkId,
+      topK,
+      pageSize,
+      page,
+      minScore,
+    });
+
+    // Create vector search service
+    const vectorSearchService = new VectorSearchService(this.env);
+
+    // Perform search with hybrid SmartBucket fallback
+    const searchRequest: VectorSearchRequest = {
+      query: request.query,
+      workspaceId,
+      frameworkId: request.frameworkId,
+      topK,
+      minScore,
+      includeChunks: request.includeChunks !== false,
+      page,
+      pageSize,
+    };
+
+    // Enable hybrid search with SmartBucket fallback
+    const hybridOptions = {
+      useSmartBucket: true,          // Enable SmartBucket fallback
+      smartBucketThreshold: 3,       // Fall back if < 3 vector results
+      combineResults: true,          // Merge and deduplicate results
+    };
+
+    const results = await vectorSearchService.search(searchRequest, hybridOptions);
+
+    this.env.logger.info('Vector search completed', {
+      workspaceId,
+      userId,
+      query: request.query.substring(0, 50),
+      totalResults: results.totalResults,
+      returnedResults: results.results.length,
+      source: results.source,
+      searchTime: results.searchTime,
+    });
+
+    return results;
+  }
+
+  /**
+   * List all compliance frameworks
+   * @param workspaceId Workspace ID
+   * @param userId User ID making the request
+   */
+  async listFrameworks(workspaceId: string, userId: string): Promise<Array<{
+    id: number;
+    name: string;
+    displayName: string;
+    description: string;
+    isActive: boolean;
+  }>> {
+    const db = this.getDb();
+
+    // Check workspace membership
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    // Get all frameworks
+    const result = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT id, name, display_name, description, is_active
+       FROM compliance_frameworks
+       ORDER BY display_name`
+    ).all();
+
+    return result.results?.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      displayName: row.display_name,
+      description: row.description,
+      isActive: row.is_active === 1,
+    })) || [];
+  }
+
+  /**
+   * Assign a compliance framework to a document
+   * @param documentId Document ID
+   * @param workspaceId Workspace ID
+   * @param userId User ID making the request
+   * @param frameworkId Framework ID to assign
+   */
+  async assignFrameworkToDocument(
+    documentId: string,
+    workspaceId: string,
+    userId: string,
+    frameworkId: number
+  ): Promise<void> {
+    const db = this.getDb();
+
+    // Check workspace membership (requires member role or above)
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    const roleHierarchy: Record<string, number> = {
+      owner: 4,
+      admin: 3,
+      member: 2,
+      viewer: 1,
+    };
+
+    const userRoleLevel = roleHierarchy[membership.role] ?? 0;
+    const memberRoleLevel = roleHierarchy['member'] ?? 2;
+
+    if (userRoleLevel < memberRoleLevel) {
+      throw new Error('Access denied: Requires member role or above');
+    }
+
+    // Verify document exists and belongs to workspace
+    const document = await db
+      .selectFrom('documents')
+      .select(['id', 'workspace_id'])
+      .where('id', '=', documentId)
+      .where('workspace_id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!document) {
+      throw new Error('Document not found');
+    }
+
+    // Assign framework to document
+    await (this.env.AUDITGUARD_DB as any).prepare(
+      `UPDATE documents
+       SET compliance_framework_id = ?
+       WHERE id = ?`
+    ).bind(frameworkId, documentId).run();
+
+    this.env.logger.info('Framework assigned to document', {
+      documentId,
+      frameworkId,
+      userId,
+    });
+  }
+
+  /**
+   * Get chunks tagged with a specific framework
+   * @param workspaceId Workspace ID
+   * @param userId User ID making the request
+   * @param frameworkId Framework ID
+   * @param minRelevance Minimum relevance score (default: 0.6)
+   */
+  async getFrameworkChunks(
+    workspaceId: string,
+    userId: string,
+    frameworkId: number,
+    minRelevance: number = 0.6
+  ): Promise<Array<{
+    chunkId: number;
+    documentId: string;
+    documentTitle: string;
+    chunkText: string;
+    relevanceScore: number;
+    autoTagged: boolean;
+  }>> {
+    const db = this.getDb();
+
+    // Check workspace membership
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    // Get tagged chunks
+    const result = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT
+         dcf.chunk_id,
+         dc.document_id,
+         dc.content AS chunk_text,
+         d.title AS document_title,
+         dcf.relevance_score,
+         dcf.auto_tagged
+       FROM document_chunk_frameworks dcf
+       JOIN document_chunks dc ON dcf.chunk_id = dc.id
+       JOIN documents d ON dc.document_id = d.id
+       WHERE dcf.framework_id = ?
+         AND d.workspace_id = ?
+         AND dcf.relevance_score >= ?
+       ORDER BY dcf.relevance_score DESC
+       LIMIT 100`
+    ).bind(frameworkId, workspaceId, minRelevance).all();
+
+    return result.results?.map((row: any) => ({
+      chunkId: row.chunk_id,
+      documentId: row.document_id,
+      documentTitle: row.document_title,
+      chunkText: row.chunk_text,
+      relevanceScore: row.relevance_score,
+      autoTagged: row.auto_tagged === 1,
+    })) || [];
+  }
+
+  /**
+   * Manually tag a chunk with a framework
+   * @param workspaceId Workspace ID
+   * @param userId User ID making the request
+   * @param chunkId Chunk ID
+   * @param frameworkId Framework ID
+   * @param relevanceScore Relevance score (default: 1.0)
+   */
+  async tagChunk(
+    workspaceId: string,
+    userId: string,
+    chunkId: number,
+    frameworkId: number,
+    relevanceScore: number = 1.0
+  ): Promise<void> {
+    const db = this.getDb();
+
+    // Check workspace membership (requires member role or above)
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    const roleHierarchy: Record<string, number> = {
+      owner: 4,
+      admin: 3,
+      member: 2,
+      viewer: 1,
+    };
+
+    const userRoleLevel = roleHierarchy[membership.role] ?? 0;
+    const memberRoleLevel = roleHierarchy['member'] ?? 2;
+
+    if (userRoleLevel < memberRoleLevel) {
+      throw new Error('Access denied: Requires member role or above');
+    }
+
+    // Verify chunk belongs to workspace
+    const chunk = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT dc.id, dc.workspace_id
+       FROM document_chunks dc
+       WHERE dc.id = ? AND dc.workspace_id = ?`
+    ).bind(chunkId, workspaceId).first();
+
+    if (!chunk) {
+      throw new Error('Chunk not found');
+    }
+
+    // Tag the chunk
+    const taggingService = new ComplianceTaggingService(this.env);
+    await taggingService.manualTagChunk(chunkId, frameworkId, relevanceScore);
+
+    this.env.logger.info('Chunk tagged manually', {
+      chunkId,
+      frameworkId,
+      relevanceScore,
+      userId,
+    });
+  }
+
+  /**
+   * Remove a tag from a chunk
+   * @param workspaceId Workspace ID
+   * @param userId User ID making the request
+   * @param chunkId Chunk ID
+   * @param frameworkId Framework ID
+   */
+  async untagChunk(
+    workspaceId: string,
+    userId: string,
+    chunkId: number,
+    frameworkId: number
+  ): Promise<void> {
+    const db = this.getDb();
+
+    // Check workspace membership (requires member role or above)
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    const roleHierarchy: Record<string, number> = {
+      owner: 4,
+      admin: 3,
+      member: 2,
+      viewer: 1,
+    };
+
+    const userRoleLevel = roleHierarchy[membership.role] ?? 0;
+    const memberRoleLevel = roleHierarchy['member'] ?? 2;
+
+    if (userRoleLevel < memberRoleLevel) {
+      throw new Error('Access denied: Requires member role or above');
+    }
+
+    // Verify chunk belongs to workspace
+    const chunk = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT dc.id, dc.workspace_id
+       FROM document_chunks dc
+       WHERE dc.id = ? AND dc.workspace_id = ?`
+    ).bind(chunkId, workspaceId).first();
+
+    if (!chunk) {
+      throw new Error('Chunk not found');
+    }
+
+    // Remove the tag
+    const taggingService = new ComplianceTaggingService(this.env);
+    await taggingService.untagChunk(chunkId, frameworkId);
+
+    this.env.logger.info('Chunk tag removed', {
+      chunkId,
+      frameworkId,
+      userId,
+    });
   }
 }
