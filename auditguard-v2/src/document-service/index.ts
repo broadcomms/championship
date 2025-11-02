@@ -125,6 +125,34 @@ export default class extends Service<Env> {
       })
       .execute();
 
+    // ✅ AUTO-TRIGGER PROCESSING: Automatically start processing after upload
+    this.env.logger.info('Auto-triggering document processing after upload', {
+      documentId,
+      workspaceId: input.workspaceId,
+      storageKey,
+    });
+
+    try {
+      // Send to processing queue asynchronously (don't wait for completion)
+      await this.env.DOCUMENT_PROCESSING_QUEUE.send({
+        documentId: documentId,
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        storageKey: storageKey,
+      });
+
+      this.env.logger.info('Document queued for automatic processing', {
+        documentId,
+        workspaceId: input.workspaceId,
+      });
+    } catch (error) {
+      this.env.logger.error('Failed to auto-queue document for processing', {
+        documentId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Don't fail the upload - user can manually trigger processing
+    }
+
     return {
       id: documentId,
       workspaceId: input.workspaceId,
@@ -848,6 +876,13 @@ export default class extends Service<Env> {
     try {
       // Use documentChat to extract the full text content
       // This works even during processing as SmartBucket has already extracted text
+      this.env.logger.info('Requesting fullText from SmartBucket documentChat', {
+        documentId,
+        objectId: document.storage_key,
+        filename: document.filename,
+        requestId: `fulltext-${documentId}-${Date.now()}`,
+      });
+
       const fullTextResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
         objectId: document.storage_key,
         input: 'Please extract and return the complete text content of this document verbatim, preserving all formatting and structure.',
@@ -858,7 +893,9 @@ export default class extends Service<Env> {
 
       this.env.logger.info('Retrieved full text from SmartBucket', {
         documentId,
+        objectId: document.storage_key,
         textLength: fullText.length,
+        textPreview: fullText.substring(0, 150),
         isPartial: isStillProcessing,
       });
     } catch (error) {
@@ -874,6 +911,13 @@ export default class extends Service<Env> {
 
     // Get summary using documentChat
     try {
+      this.env.logger.info('Requesting summary from SmartBucket documentChat', {
+        documentId,
+        objectId: document.storage_key,
+        filename: document.filename,
+        requestId: `summary-${documentId}-${Date.now()}`,
+      });
+
       const summaryResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
         objectId: document.storage_key,
         input: 'Provide a brief 2-3 sentence summary of this document.',
@@ -883,7 +927,9 @@ export default class extends Service<Env> {
       
       this.env.logger.info('Retrieved summary from SmartBucket', {
         documentId,
+        objectId: document.storage_key,
         summaryLength: summary.length,
+        summaryPreview: summary.substring(0, 100),
         isPartial: isStillProcessing,
       });
     } catch (error) {
@@ -899,20 +945,41 @@ export default class extends Service<Env> {
 
     // Get relevant chunks using chunkSearch with a broad query
     try {
-      // Use the document's filename or content as search query to get relevant chunks
+      // ⚠️ CRITICAL: SmartBucket stores chunks for ALL documents together
+      // We MUST filter by objectId (storage_key) to get only THIS document's chunks
       const chunkResults = await this.env.DOCUMENTS_BUCKET.chunkSearch({
         input: document.filename.replace(/\.(pdf|docx|txt|md)$/i, ''),
         requestId: `chunks-${documentId}-${Date.now()}`,
       } as any);
 
-      chunks = (chunkResults.results || []).map((result: any) => ({
-        text: result.text || '',
-        score: result.score,
-      }));
+      // ✅ FILTER: Only include chunks that belong to THIS specific document
+      const documentStorageKey = document.storage_key;
+      chunks = (chunkResults.results || [])
+        .filter((result: any) => {
+          // Each chunk has an objectId that identifies which document it belongs to
+          const chunkObjectId = result.objectId || result.source || '';
+          const belongsToThisDocument = chunkObjectId === documentStorageKey;
+          
+          if (!belongsToThisDocument) {
+            this.env.logger.debug('Filtered out chunk from different document', {
+              thisDocumentId: documentId,
+              thisStorageKey: documentStorageKey,
+              chunkObjectId,
+            });
+          }
+          
+          return belongsToThisDocument;
+        })
+        .map((result: any) => ({
+          text: result.text || '',
+          score: result.score,
+        }));
 
       this.env.logger.info('Retrieved chunks from SmartBucket', {
         documentId,
+        storageKey: documentStorageKey,
         chunkCount: chunks.length,
+        totalResultsBeforeFilter: chunkResults.results?.length || 0,
         isPartial: isStillProcessing,
       });
     } catch (error) {
