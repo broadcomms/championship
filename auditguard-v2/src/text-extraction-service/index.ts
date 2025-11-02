@@ -3,7 +3,7 @@
  * Extracts and cleans text from various document formats (PDF, DOCX, MD, TXT)
  */
 
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf';
+import { extractText as unpdfExtractText, getDocumentProxy } from 'unpdf';
 import mammoth from 'mammoth';
 
 export interface ExtractedText {
@@ -44,34 +44,19 @@ export class TextExtractionService {
     const originalSize = file.length;
 
     try {
-      // PDF Extraction
+      // PDF Extraction with unpdf (Worker-compatible)
       if (contentType === 'application/pdf' || filename.endsWith('.pdf')) {
-        this.env.logger?.info('Extracting text from PDF', { filename });
-        
-        // Load PDF document
-        const loadingTask = pdfjsLib.getDocument({
-          data: new Uint8Array(file),
-          useSystemFonts: true,
-          standardFontDataUrl: undefined, // Don't load external fonts (not available in Workers)
-        });
-        
-        const pdf = await loadingTask.promise;
-        pageCount = pdf.numPages;
-        
-        // Extract text from all pages
-        const textPages: string[] = [];
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
-          const pageText = textContent.items
-            .map((item: any) => item.str)
-            .join(' ');
-          textPages.push(pageText);
-        }
-        
-        extractedText = textPages.join('\n\n');
-        
-        this.env.logger?.info('PDF text extracted', {
+        this.env.logger?.info('Extracting text from PDF with unpdf', { filename });
+
+        // Load PDF using unpdf (Worker-compatible PDF.js)
+        const pdf = await getDocumentProxy(new Uint8Array(file));
+
+        // Extract all text with mergePages option
+        const result = await unpdfExtractText(pdf, { mergePages: true });
+        extractedText = result.text;
+        pageCount = result.totalPages;
+
+        this.env.logger?.info('PDF text extracted successfully', {
           filename,
           pages: pageCount,
           textLength: extractedText.length,

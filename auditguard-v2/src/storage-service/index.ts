@@ -1,36 +1,127 @@
 /**
  * Vultr S3 Storage Service
  * Handles uploads, downloads, and pre-signed URLs for original document files
+ *
+ * Worker-Compatible Implementation:
+ * - Uses fetch() instead of AWS SDK (no DOMParser dependency)
+ * - AWS Signature V4 signing using Web Crypto API
+ * - No Node.js dependencies
  */
 
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-
 export class VultrStorageService {
-  private s3Client: S3Client;
   private bucketName: string;
+  private endpoint: string;
+  private region: string;
+  private accessKeyId: string;
+  private secretAccessKey: string;
   private env: any;
 
   constructor(env: any) {
     this.env = env;
     this.bucketName = env.VULTR_S3_BUCKET;
+    this.endpoint = env.VULTR_S3_ENDPOINT;
+    this.region = env.VULTR_S3_REGION;
+    this.accessKeyId = env.VULTR_S3_ACCESS_KEY;
+    this.secretAccessKey = env.VULTR_S3_SECRET_KEY;
 
-    // Initialize S3 client with Vultr endpoint
-    this.s3Client = new S3Client({
-      endpoint: env.VULTR_S3_ENDPOINT,
-      region: env.VULTR_S3_REGION,
-      credentials: {
-        accessKeyId: env.VULTR_S3_ACCESS_KEY,
-        secretAccessKey: env.VULTR_S3_SECRET_KEY,
-      },
-      forcePathStyle: true, // Required for some S3-compatible services
-    });
-
-    this.env.logger?.info('Vultr S3 Storage Service initialized', {
+    this.env.logger?.info('Vultr S3 Storage Service initialized (Worker-compatible)', {
       bucket: this.bucketName,
-      region: env.VULTR_S3_REGION,
-      endpoint: env.VULTR_S3_ENDPOINT,
+      region: this.region,
+      endpoint: this.endpoint,
     });
+  }
+
+  /**
+   * AWS Signature V4 signing using Web Crypto API
+   */
+  private async sign(key: ArrayBuffer, message: string): Promise<ArrayBuffer> {
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      key,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    return await crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(message));
+  }
+
+  private async sha256(message: string): Promise<string> {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  private async getSignatureKey(
+    dateStamp: string,
+    regionName: string,
+    serviceName: string
+  ): Promise<ArrayBuffer> {
+    const kDate = await this.sign(
+      new TextEncoder().encode('AWS4' + this.secretAccessKey).buffer,
+      dateStamp
+    );
+    const kRegion = await this.sign(kDate, regionName);
+    const kService = await this.sign(kRegion, serviceName);
+    const kSigning = await this.sign(kService, 'aws4_request');
+    return kSigning;
+  }
+
+  /**
+   * Generate AWS Signature V4 headers for S3 request
+   */
+  private async getSignedHeaders(
+    method: string,
+    path: string,
+    queryString: string,
+    headers: Record<string, string>,
+    payloadHash: string
+  ): Promise<Record<string, string>> {
+    const now = new Date();
+    const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+    const dateStamp = amzDate.slice(0, 8);
+
+    // Canonical request
+    const canonicalHeaders = Object.keys(headers)
+      .sort()
+      .map((key) => `${key.toLowerCase()}:${headers[key].trim()}`)
+      .join('\n');
+    const signedHeaders = Object.keys(headers)
+      .sort()
+      .map((key) => key.toLowerCase())
+      .join(';');
+
+    const canonicalRequest = [
+      method,
+      path,
+      queryString,
+      canonicalHeaders + '\n',
+      signedHeaders,
+      payloadHash,
+    ].join('\n');
+
+    // String to sign
+    const algorithm = 'AWS4-HMAC-SHA256';
+    const credentialScope = `${dateStamp}/${this.region}/s3/aws4_request`;
+    const canonicalRequestHash = await this.sha256(canonicalRequest);
+    const stringToSign = [algorithm, amzDate, credentialScope, canonicalRequestHash].join('\n');
+
+    // Signature
+    const signingKey = await this.getSignatureKey(dateStamp, this.region, 's3');
+    const signatureBuffer = await this.sign(signingKey, stringToSign);
+    const signature = Array.from(new Uint8Array(signatureBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    // Authorization header
+    const authorizationHeader = `${algorithm} Credential=${this.accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+    return {
+      ...headers,
+      'x-amz-date': amzDate,
+      Authorization: authorizationHeader,
+    };
   }
 
   /**
@@ -48,14 +139,35 @@ export class VultrStorageService {
     });
 
     try {
-      await this.s3Client.send(
-        new PutObjectCommand({
-          Bucket: this.bucketName,
-          Key: key,
-          Body: file,
-          ContentType: contentType,
-        })
-      );
+      // Calculate payload hash
+      const payloadHash = await this.sha256Hash(file);
+
+      // Build URL (path-style for S3-compatible services)
+      const host = new URL(this.endpoint).host;
+      const path = `/${this.bucketName}/${key}`;
+      const url = `${this.endpoint}/${this.bucketName}/${key}`;
+
+      // Build headers
+      const headers: Record<string, string> = {
+        host: host,
+        'content-type': contentType,
+        'x-amz-content-sha256': payloadHash,
+      };
+
+      // Sign request
+      const signedHeaders = await this.getSignedHeaders('PUT', path, '', headers, payloadHash);
+
+      // Upload using fetch
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: signedHeaders,
+        body: file,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`S3 upload failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
 
       this.env.logger?.info('Document uploaded successfully to Vultr S3', {
         key,
@@ -73,23 +185,76 @@ export class VultrStorageService {
   }
 
   /**
+   * Calculate SHA256 hash of buffer
+   */
+  private async sha256Hash(data: Buffer): Promise<string> {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  /**
    * Generate pre-signed download URL (expires in 1 hour)
    * @param key - S3 object key
    * @returns Pre-signed URL
    */
-  async getDownloadUrl(key: string): Promise<string> {
+  async getDownloadUrl(key: string, expiresIn: number = 3600): Promise<string> {
     this.env.logger?.info('Generating pre-signed download URL', {
       key,
-      expiresIn: 3600,
+      expiresIn,
     });
 
     try {
-      const command = new GetObjectCommand({
-        Bucket: this.bucketName,
-        Key: key,
+      const now = new Date();
+      const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+      const dateStamp = amzDate.slice(0, 8);
+      const expiresInSeconds = String(expiresIn);
+
+      // Build query string for pre-signed URL
+      const algorithm = 'AWS4-HMAC-SHA256';
+      const credentialScope = `${dateStamp}/${this.region}/s3/aws4_request`;
+      const credential = `${this.accessKeyId}/${credentialScope}`;
+
+      const queryParams = new URLSearchParams({
+        'X-Amz-Algorithm': algorithm,
+        'X-Amz-Credential': credential,
+        'X-Amz-Date': amzDate,
+        'X-Amz-Expires': expiresInSeconds,
+        'X-Amz-SignedHeaders': 'host',
       });
 
-      const url = await getSignedUrl(this.s3Client, command, { expiresIn: 3600 });
+      const queryString = queryParams.toString();
+      const host = new URL(this.endpoint).host;
+      const path = `/${this.bucketName}/${key}`;
+
+      // Canonical request for pre-signed URL
+      const canonicalHeaders = `host:${host}`;
+      const signedHeaders = 'host';
+      const payloadHash = 'UNSIGNED-PAYLOAD';
+
+      const canonicalRequest = [
+        'GET',
+        path,
+        queryString,
+        canonicalHeaders + '\n',
+        signedHeaders,
+        payloadHash,
+      ].join('\n');
+
+      // String to sign
+      const canonicalRequestHash = await this.sha256(canonicalRequest);
+      const stringToSign = [algorithm, amzDate, credentialScope, canonicalRequestHash].join('\n');
+
+      // Signature
+      const signingKey = await this.getSignatureKey(dateStamp, this.region, 's3');
+      const signatureBuffer = await this.sign(signingKey, stringToSign);
+      const signature = Array.from(new Uint8Array(signatureBuffer))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      // Build final URL
+      const url = `${this.endpoint}${path}?${queryString}&X-Amz-Signature=${signature}`;
 
       this.env.logger?.info('Pre-signed URL generated successfully', {
         key,
@@ -117,22 +282,34 @@ export class VultrStorageService {
     });
 
     try {
-      const response = await this.s3Client.send(
-        new GetObjectCommand({
-          Bucket: this.bucketName,
-          Key: key,
-        })
-      );
+      // Build URL
+      const host = new URL(this.endpoint).host;
+      const path = `/${this.bucketName}/${key}`;
+      const url = `${this.endpoint}/${this.bucketName}/${key}`;
 
-      // Stream to Buffer
-      const chunks: Uint8Array[] = [];
-      const stream = response.Body as any;
+      // Build headers
+      const payloadHash = 'UNSIGNED-PAYLOAD';
+      const headers: Record<string, string> = {
+        host: host,
+      };
 
-      for await (const chunk of stream) {
-        chunks.push(chunk);
+      // Sign request
+      const signedHeaders = await this.getSignedHeaders('GET', path, '', headers, payloadHash);
+
+      // Download using fetch
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: signedHeaders,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`S3 download failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
-      const buffer = Buffer.concat(chunks);
+      // Convert to Buffer
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
 
       this.env.logger?.info('Document downloaded successfully from Vultr S3', {
         key,
@@ -159,13 +336,30 @@ export class VultrStorageService {
     });
 
     try {
-      const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
-      await this.s3Client.send(
-        new DeleteObjectCommand({
-          Bucket: this.bucketName,
-          Key: key,
-        })
-      );
+      // Build URL
+      const host = new URL(this.endpoint).host;
+      const path = `/${this.bucketName}/${key}`;
+      const url = `${this.endpoint}/${this.bucketName}/${key}`;
+
+      // Build headers
+      const payloadHash = 'UNSIGNED-PAYLOAD';
+      const headers: Record<string, string> = {
+        host: host,
+      };
+
+      // Sign request
+      const signedHeaders = await this.getSignedHeaders('DELETE', path, '', headers, payloadHash);
+
+      // Delete using fetch
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: signedHeaders,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`S3 delete failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
 
       this.env.logger?.info('Document deleted successfully from Vultr S3', {
         key,

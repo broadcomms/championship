@@ -121,7 +121,8 @@ export default class extends Service<Env> {
         file_size: fileSize,
         content_type: actualContentType,
         category: input.category || null,
-        storage_key: vultrKey,  // NOW points to Vultr S3!
+        vultr_key: vultrKey,  // Vultr S3 key for original file
+        storage_key: '',  // Will be set to extracted text key after processing
         extraction_status: 'pending',  // Text extraction pending
         uploaded_by: input.userId,
         uploaded_at: now,
@@ -129,7 +130,7 @@ export default class extends Service<Env> {
         processing_status: 'pending',
         text_extracted: 0,
         chunk_count: 0,
-      })
+      } as any)
       .execute();
 
     // Queue for text extraction + SmartBucket indexing
@@ -360,16 +361,45 @@ export default class extends Service<Env> {
     // Get document metadata
     const document = await db
       .selectFrom('documents')
-      .select(['storage_key', 'filename', 'content_type'])
+      .select(['storage_key', 'filename', 'content_type', 'vultr_key' as any])
       .where('id', '=', documentId)
       .where('workspace_id', '=', workspaceId)
-      .executeTakeFirst();
+      .executeTakeFirst() as any;
 
     if (!document) {
       throw new Error('Document not found');
     }
 
-    // Download from SmartBucket
+    // NEW ARCHITECTURE: Download original from Vultr S3
+    if (document.vultr_key) {
+      this.env.logger?.info('Downloading original file from Vultr S3', {
+        documentId,
+        vultrKey: document.vultr_key,
+      });
+
+      const { VultrStorageService } = await import('../storage-service');
+      const vultrStorage = new VultrStorageService(this.env);
+      const fileBuffer = await vultrStorage.getDocument(document.vultr_key);
+
+      // Convert Buffer to ArrayBuffer
+      const arrayBuffer = fileBuffer.buffer.slice(
+        fileBuffer.byteOffset,
+        fileBuffer.byteOffset + fileBuffer.byteLength
+      ) as ArrayBuffer;
+
+      return {
+        file: arrayBuffer,
+        filename: document.filename,
+        contentType: document.content_type,
+      };
+    }
+
+    // LEGACY: Download from SmartBucket (for old documents)
+    this.env.logger?.info('Downloading legacy file from SmartBucket', {
+      documentId,
+      storageKey: document.storage_key,
+    });
+
     const file = await this.env.DOCUMENTS_BUCKET.get(document.storage_key);
 
     if (!file) {
@@ -588,7 +618,7 @@ export default class extends Service<Env> {
    */
   async verifyIndexingComplete(
     storageKey: string,
-    workspaceId: string
+    _workspaceId: string
   ): Promise<{ isComplete: boolean; progress: number; chunkCount: number }> {
     try {
       // Test if we can retrieve chunks from SmartBucket
@@ -646,6 +676,7 @@ export default class extends Service<Env> {
       processingStatus: string;
       processedAt: number;
       extractedTextKey?: string;
+      extractedText?: string;
       pageCount?: number;
       wordCount?: number;
     }
@@ -662,7 +693,11 @@ export default class extends Service<Env> {
     // Add optional fields if provided
     if (data.extractedTextKey !== undefined) {
       updateData.extracted_text_key = data.extractedTextKey;
+      updateData.storage_key = data.extractedTextKey;  // storage_key now points to SmartBucket extracted text
       updateData.extraction_status = 'completed';
+    }
+    if (data.extractedText !== undefined) {
+      updateData.extracted_text = data.extractedText;  // Store full text in database
     }
     if (data.pageCount !== undefined) {
       updateData.page_count = data.pageCount;
@@ -886,53 +921,63 @@ export default class extends Service<Env> {
     const processingStatus = document.processing_status;
     const isStillProcessing = processingStatus === 'pending' || processingStatus === 'processing';
 
-    this.env.logger.info('Retrieving document content from SmartBucket (progressive mode)', {
+    // Type assertion for new column (will be in schema after migration runs)
+    const docWithText = document as typeof document & { extracted_text?: string };
+
+    this.env.logger.info('Retrieving document content (database-first approach)', {
       documentId,
       workspaceId,
       storageKey: document.storage_key,
       processingStatus,
+      hasExtractedText: !!docWithText.extracted_text,
       isPartial: isStillProcessing,
     });
 
-    // ✅ PROGRESSIVE LOADING: Try to get whatever is available, even if still processing
+    // ✅ NEW APPROACH: Use extracted_text from database (immediate, reliable)
     let fullText = '';
     let summary = '';
     let chunks: Array<{ text: string; score?: number }> = [];
 
-    try {
-      // Use documentChat to extract the full text content
-      // This works even during processing as SmartBucket has already extracted text
-      this.env.logger.info('Requesting fullText from SmartBucket documentChat', {
+    // STEP 1: Get fullText from database (NEW!)
+    if (docWithText.extracted_text) {
+      fullText = docWithText.extracted_text;
+      this.env.logger.info('Retrieved full text from database', {
         documentId,
-        objectId: document.storage_key,
-        filename: document.filename,
-        requestId: `fulltext-${documentId}-${Date.now()}`,
-      });
-
-      const fullTextResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
-        objectId: document.storage_key,
-        input: 'Please extract and return the complete text content of this document verbatim, preserving all formatting and structure.',
-        requestId: `fulltext-${documentId}-${Date.now()}`,
-      } as any);
-
-      fullText = fullTextResponse.answer || '';
-
-      this.env.logger.info('Retrieved full text from SmartBucket', {
-        documentId,
-        objectId: document.storage_key,
         textLength: fullText.length,
         textPreview: fullText.substring(0, 150),
-        isPartial: isStillProcessing,
+        source: 'database',
       });
-    } catch (error) {
-      this.env.logger.warn('Failed to retrieve full text (may still be processing)', {
-        documentId,
-        error: error instanceof Error ? error.message : String(error),
-        isPartial: isStillProcessing,
-      });
-      fullText = isStillProcessing 
-        ? 'Text extraction in progress... Refresh to see updated content.'
-        : 'Text extraction failed';
+    } else {
+      // FALLBACK: Try SmartBucket for legacy documents
+      try {
+        this.env.logger.info('No extracted_text in database, trying SmartBucket (legacy)', {
+          documentId,
+          objectId: document.storage_key,
+        });
+
+        const fullTextResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
+          objectId: document.storage_key,
+          input: 'Please extract and return the complete text content of this document verbatim, preserving all formatting and structure.',
+          requestId: `fulltext-${documentId}-${Date.now()}`,
+        } as any);
+
+        fullText = fullTextResponse.answer || '';
+
+        this.env.logger.info('Retrieved full text from SmartBucket (legacy)', {
+          documentId,
+          textLength: fullText.length,
+          source: 'smartbucket',
+        });
+      } catch (error) {
+        this.env.logger.warn('Failed to retrieve full text', {
+          documentId,
+          error: error instanceof Error ? error.message : String(error),
+          isPartial: isStillProcessing,
+        });
+        fullText = isStillProcessing
+          ? 'Text extraction in progress... Refresh to see updated content.'
+          : 'Text extraction failed';
+      }
     }
 
     // Get summary using documentChat

@@ -107,7 +107,7 @@ INSERT INTO subscription_plans (id, name, display_name, description, price_month
     0,
     '["Basic compliance checks","Up to 10 documents","Community support","GDPR & SOC2 frameworks"]',
     '{"documents":10,"compliance_checks":20,"api_calls":1000,"assistant_messages":50,"storage_mb":100}',
-    strftime('%s', 'now') * 1000
+    (SELECT unixepoch() * 1000)
 ),
 (
     'plan_pro',
@@ -118,7 +118,7 @@ INSERT INTO subscription_plans (id, name, display_name, description, price_month
     49000,
     '["All compliance frameworks","Up to 1000 documents","Email support","AI assistant","Advanced analytics","Team collaboration"]',
     '{"documents":1000,"compliance_checks":500,"api_calls":50000,"assistant_messages":1000,"storage_mb":10000}',
-    strftime('%s', 'now') * 1000
+    (SELECT unixepoch() * 1000)
 ),
 (
     'plan_enterprise',
@@ -129,12 +129,12 @@ INSERT INTO subscription_plans (id, name, display_name, description, price_month
     199000,
     '["All Pro features","Unlimited documents","Priority support","Custom frameworks","SSO integration","Dedicated account manager","SLA guarantee"]',
     '{"documents":-1,"compliance_checks":-1,"api_calls":-1,"assistant_messages":-1,"storage_mb":-1}',
-    strftime('%s', 'now') * 1000
+    (SELECT unixepoch() * 1000)
 );
 
 -- Insert default system settings
 INSERT INTO system_settings (key, value, value_type, description, updated_at) VALUES
-('maintenance_mode', 'false', 'boolean', 'Enable maintenance mode to prevent access', strftime('%s', 'now') * 1000),
-('default_plan', 'plan_free', 'string', 'Default plan for new workspaces', strftime('%s', 'now') * 1000),
-('trial_period_days', '14', 'number', 'Trial period duration in days', strftime('%s', 'now') * 1000),
-('max_workspaces_per_user', '5', 'number', 'Maximum workspaces a user can own', strftime('%s', 'now') * 1000);
+('maintenance_mode', 'false', 'boolean', 'Enable maintenance mode to prevent access', (SELECT unixepoch() * 1000)),
+('default_plan', 'plan_free', 'string', 'Default plan for new workspaces', (SELECT unixepoch() * 1000)),
+('trial_period_days', '14', 'number', 'Trial period duration in days', (SELECT unixepoch() * 1000)),
+('max_workspaces_per_user', '5', 'number', 'Maximum workspaces a user can own', (SELECT unixepoch() * 1000));

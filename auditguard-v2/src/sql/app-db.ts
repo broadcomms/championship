@@ -44,23 +44,13 @@ CREATE TABLE IF NOT EXISTS documents (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
   filename TEXT NOT NULL,
-  title TEXT,
-  description TEXT,
   file_size INTEGER NOT NULL,
   content_type TEXT NOT NULL,
   category TEXT,
   storage_key TEXT NOT NULL,
-  extracted_text_key TEXT,
-  original_file_url TEXT,
-  extraction_status TEXT DEFAULT 'pending',
-  page_count INTEGER,
-  word_count INTEGER,
   uploaded_by TEXT NOT NULL,
   uploaded_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  processing_status TEXT NOT NULL DEFAULT 'pending',
-  text_extracted INTEGER NOT NULL DEFAULT 0,
-  chunk_count INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
   FOREIGN KEY (uploaded_by) REFERENCES users(id)
 );
@@ -71,6 +61,5 @@ CREATE INDEX IF NOT EXISTS idx_workspaces_owner_id ON workspaces(owner_id);
 CREATE INDEX IF NOT EXISTS idx_workspace_members_user_id ON workspace_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_documents_workspace_id ON documents(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_documents_uploaded_by ON documents(uploaded_by);
-CREATE INDEX IF NOT EXISTS idx_documents_extraction_status ON documents(extraction_status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
 `;

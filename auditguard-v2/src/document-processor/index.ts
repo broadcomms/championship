@@ -78,7 +78,7 @@ export default class extends Each<Body, Env> {
   private async processNewDocument(
     documentId: string,
     workspaceId: string,
-    _userId: string,
+    userId: string,
     vultrKey: string,
     message: Message<Body>
   ): Promise<void> {
@@ -92,8 +92,8 @@ export default class extends Each<Body, Env> {
 
     try {
       // STEP 1: Download original file from Vultr S3
-      await this.env.DOCUMENT_SERVICE.updateProcessingStatus(documentId, 'extracting');
-      
+      await this.env.DOCUMENT_SERVICE.updateProcessingStatus(documentId, 'processing');
+
       this.env.logger.info('Downloading original file from Vultr S3', {
         documentId,
         vultrKey,
@@ -134,15 +134,14 @@ export default class extends Each<Body, Env> {
       this.env.logger.info('Text extraction completed', {
         documentId,
         textLength: text.length,
+        textPreview: text.substring(0, 200) + '...',  // First 200 chars for debugging
         wordCount,
         pageCount,
         warnings: validation.warnings,
       });
 
-      // STEP 3: Upload ONLY clean text to SmartBucket
+      // STEP 3: Upload ONLY clean text to SmartBucket (for all file types including PDF)
       const smartBucketKey = `${workspaceId}/${documentId}/extracted.txt`;
-      
-      await this.env.DOCUMENT_SERVICE.updateProcessingStatus(documentId, 'indexing');
 
       this.env.logger.info('Uploading clean text to SmartBucket', {
         documentId,
@@ -157,6 +156,7 @@ export default class extends Each<Body, Env> {
         customMetadata: {
           workspaceId,
           documentId,
+          uploadedBy: userId,
           originalFilename: document.filename,
           extractedFrom: document.contentType,
           wordCount: String(wordCount),
@@ -169,13 +169,14 @@ export default class extends Each<Body, Env> {
         smartBucketKey,
       });
 
-      // STEP 4: Update database with extraction results
+      // STEP 4: Update database with extraction results (including full text)
       await this.env.DOCUMENT_SERVICE.updateDocumentProcessing(documentId, {
         textExtracted: true,
         chunkCount: 0,  // Will be updated after SmartBucket indexing completes
         processingStatus: 'processing',  // SmartBucket now indexing
         processedAt: Date.now(),
         extractedTextKey: smartBucketKey,
+        extractedText: text,  // Store full text in database for immediate access
         pageCount: pageCount,
         wordCount: wordCount,
       });
