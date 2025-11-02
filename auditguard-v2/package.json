@@ -29,11 +29,15 @@
     "zx": "^8.5.2"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.922.0",
+    "@aws-sdk/s3-request-presigner": "^3.922.0",
     "@liquidmetal-ai/raindrop-framework": "^0.9.1",
     "@modelcontextprotocol/sdk": "^1",
     "bcryptjs": "^3.0.2",
     "kysely": "^0.27.2",
     "kysely-d1": "^0.3.0",
+    "mammoth": "^1.11.0",
+    "pdfjs-dist": "^3.11.174",
     "zod": "^3"
   }
 }

@@ -14,6 +14,11 @@ export type documents = {
     content_type: string;
     category: string | null;
     storage_key: string;
+    extracted_text_key: string | null;
+    original_file_url: string | null;
+    extraction_status: string | null;
+    page_count: number | null;
+    word_count: number | null;
     uploaded_by: string;
     uploaded_at: number;
     updated_at: number;

@@ -4,6 +4,7 @@ import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 import { detectContentType } from './content-type-detector';
+import { VultrStorageService } from '../storage-service';
 
 interface UploadDocumentInput {
   workspaceId: string;
@@ -84,28 +85,33 @@ export default class extends Service<Env> {
 
     // Generate document ID
     const documentId = `doc_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    const storageKey = `${input.workspaceId}/${documentId}`;
     const now = Date.now();
 
     // Detect proper content type from filename if needed
     // This fixes cases where browsers send "application/octet-stream" for text files
     const actualContentType = detectContentType(input.filename, input.contentType);
 
-    // Upload to SmartBucket - SmartBucket automatically indexes files uploaded via .put()
-    // The indexing happens in the background and takes 20-60+ minutes for PDFs
-    await this.env.DOCUMENTS_BUCKET.put(storageKey, input.file, {
-      httpMetadata: {
-        contentType: actualContentType,
-      },
-      customMetadata: {
-        workspaceId: input.workspaceId,
-        documentId: documentId,
-        uploadedBy: input.userId,
-        filename: input.filename,
-      },
-    } as any);
+    // PHASE 2: Upload to Vultr S3 (original file storage)
+    const vultrKey = `${input.workspaceId}/${documentId}/${input.filename}`;
+    
+    this.env.logger.info('Uploading original file to Vultr S3', {
+      documentId,
+      filename: input.filename,
+      size: fileSize,
+      vultrKey,
+      contentType: actualContentType,
+    });
 
-    // Store metadata in database
+    const vultrStorage = new VultrStorageService(this.env);
+    const fileBuffer = Buffer.from(input.file);
+    await vultrStorage.uploadDocument(vultrKey, fileBuffer, actualContentType);
+
+    this.env.logger.info('Original file uploaded to Vultr S3 successfully', {
+      documentId,
+      vultrKey,
+    });
+
+    // Store metadata in database (extraction status: pending)
     await db
       .insertInto('documents')
       .values({
@@ -115,7 +121,8 @@ export default class extends Service<Env> {
         file_size: fileSize,
         content_type: actualContentType,
         category: input.category || null,
-        storage_key: storageKey,
+        storage_key: vultrKey,  // NOW points to Vultr S3!
+        extraction_status: 'pending',  // Text extraction pending
         uploaded_by: input.userId,
         uploaded_at: now,
         updated_at: now,
@@ -125,28 +132,30 @@ export default class extends Service<Env> {
       })
       .execute();
 
-    // ✅ AUTO-TRIGGER PROCESSING: Automatically start processing after upload
-    this.env.logger.info('Auto-triggering document processing after upload', {
+    // Queue for text extraction + SmartBucket indexing
+    this.env.logger.info('Queueing document for text extraction and indexing', {
       documentId,
       workspaceId: input.workspaceId,
-      storageKey,
+      vultrKey,
+      action: 'extract_and_index',
     });
 
     try {
-      // Send to processing queue asynchronously (don't wait for completion)
+      // Send to processing queue with new action type
       await this.env.DOCUMENT_PROCESSING_QUEUE.send({
         documentId: documentId,
         workspaceId: input.workspaceId,
         userId: input.userId,
-        storageKey: storageKey,
+        vultrKey: vultrKey,
+        action: 'extract_and_index',  // NEW: Indicates full extraction flow
       });
 
-      this.env.logger.info('Document queued for automatic processing', {
+      this.env.logger.info('Document queued for text extraction and indexing', {
         documentId,
         workspaceId: input.workspaceId,
       });
     } catch (error) {
-      this.env.logger.error('Failed to auto-queue document for processing', {
+      this.env.logger.error('Failed to queue document for processing', {
         documentId,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -158,9 +167,9 @@ export default class extends Service<Env> {
       workspaceId: input.workspaceId,
       filename: input.filename,
       fileSize: fileSize,
-      contentType: input.contentType,
+      contentType: actualContentType,
       category: input.category || null,
-      storageKey: storageKey,
+      storageKey: vultrKey,  // Return Vultr S3 key
       uploadedBy: input.userId,
       uploadedAt: now,
       updatedAt: now,
@@ -636,18 +645,35 @@ export default class extends Service<Env> {
       chunkCount: number;
       processingStatus: string;
       processedAt: number;
+      extractedTextKey?: string;
+      pageCount?: number;
+      wordCount?: number;
     }
   ): Promise<void> {
     const db = this.getDb();
 
+    const updateData: any = {
+      text_extracted: data.textExtracted ? 1 : 0,
+      chunk_count: data.chunkCount,
+      processing_status: data.processingStatus,
+      updated_at: data.processedAt,
+    };
+
+    // Add optional fields if provided
+    if (data.extractedTextKey !== undefined) {
+      updateData.extracted_text_key = data.extractedTextKey;
+      updateData.extraction_status = 'completed';
+    }
+    if (data.pageCount !== undefined) {
+      updateData.page_count = data.pageCount;
+    }
+    if (data.wordCount !== undefined) {
+      updateData.word_count = data.wordCount;
+    }
+
     await db
       .updateTable('documents')
-      .set({
-        text_extracted: data.textExtracted ? 1 : 0,
-        chunk_count: data.chunkCount,
-        processing_status: data.processingStatus,
-        updated_at: data.processedAt,
-      })
+      .set(updateData)
       .where('id', '=', documentId)
       .execute();
   }
