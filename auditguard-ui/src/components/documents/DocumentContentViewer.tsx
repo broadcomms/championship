@@ -39,18 +39,25 @@ export function DocumentContentViewer({
   }, [workspaceId, documentId]);
 
   useEffect(() => {
-    // ✅ PROGRESSIVE: Poll for updates if partial
-    if (content?.isPartial) {
+    // ✅ SMART POLLING: Stop when content is meaningfully complete
+    // Continue polling if:
+    // 1. isPartial flag is true AND
+    // 2. Content is actually missing (no summary, no text, or no chunks)
+    const contentIsMissing = !content?.summary || !content?.fullText || content?.chunks?.length === 0;
+    const shouldPoll = content?.isPartial && contentIsMissing;
+
+    if (shouldPoll) {
       const interval = setInterval(() => {
         fetchContent();
       }, 5000); // Poll every 5 seconds
       setPollingInterval(interval);
       return () => clearInterval(interval);
     } else if (pollingInterval) {
+      // Stop polling when content is available
       clearInterval(pollingInterval);
       setPollingInterval(null);
     }
-  }, [content?.isPartial]);
+  }, [content?.isPartial, content?.summary, content?.fullText, content?.chunks]);
 
   const fetchContent = async () => {
     setIsLoading(true);
@@ -103,16 +110,33 @@ export function DocumentContentViewer({
 
   return (
     <div className="rounded-lg bg-white shadow">
-      {/* ✅ PROGRESSIVE: Show processing banner if partial */}
-      {content?.isPartial && (
+      {/* ✅ SMART BANNER: Only show if content is actually missing */}
+      {content?.isPartial && (!content?.summary || !content?.fullText || content?.chunks?.length === 0) && (
         <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-yellow-600 border-t-transparent"></div>
             <p className="text-sm text-yellow-800">
-              <strong>Processing...</strong> Showing partial results. Content will update automatically.
+              <strong>Processing...</strong> Content is being extracted. Updates will appear automatically.
             </p>
           </div>
           <span className="text-xs text-yellow-600 font-medium">
+            Status: {content.processingStatus}
+          </span>
+        </div>
+      )}
+      
+      {/* ✅ INFO BANNER: Show when content is ready but AI extraction is ongoing */}
+      {content?.isPartial && content?.summary && content?.fullText && content?.chunks?.length > 0 && (
+        <div className="bg-blue-50 border-b border-blue-200 px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <svg className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-sm text-blue-800">
+              <strong>Content Ready!</strong> AI is extracting title and description in the background.
+            </p>
+          </div>
+          <span className="text-xs text-blue-600 font-medium">
             Status: {content.processingStatus}
           </span>
         </div>
