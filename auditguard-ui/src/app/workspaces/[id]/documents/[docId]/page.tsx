@@ -359,16 +359,14 @@ export default function DocumentDetailsPage() {
           </div>
         )}
 
-        {/* Document Content Viewer */}
-        {document.processingStatus === 'completed' && (
-          <div className="mb-8">
-            <DocumentContentViewer
-              workspaceId={workspaceId}
-              documentId={documentId}
-              isCompleted={document.processingStatus === 'completed'}
-            />
-          </div>
-        )}
+        {/* Document Content Viewer - ✅ PROGRESSIVE: Show always, not just when completed */}
+        <div className="mb-8">
+          <DocumentContentViewer
+            workspaceId={workspaceId}
+            documentId={documentId}
+            isCompleted={document.processingStatus === 'completed'}
+          />
+        </div>
 
         {/* Delete Section */}
         <div className="rounded-lg border-2 border-red-200 bg-red-50 p-6">

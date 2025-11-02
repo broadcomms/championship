@@ -12,6 +12,8 @@ interface DocumentContent {
   chunks: Chunk[];
   fullText: string;
   summary: string;
+  isPartial: boolean;         // NEW: Indicates if content is still processing
+  processingStatus: string;    // NEW: Current processing status
 }
 
 interface DocumentContentViewerProps {
@@ -29,12 +31,26 @@ export function DocumentContentViewer({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'summary' | 'fullText' | 'chunks'>('summary');
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (isCompleted) {
-      fetchContent();
+    // ✅ PROGRESSIVE: Always fetch content, even if not completed
+    fetchContent();
+  }, [workspaceId, documentId]);
+
+  useEffect(() => {
+    // ✅ PROGRESSIVE: Poll for updates if partial
+    if (content?.isPartial) {
+      const interval = setInterval(() => {
+        fetchContent();
+      }, 5000); // Poll every 5 seconds
+      setPollingInterval(interval);
+      return () => clearInterval(interval);
+    } else if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
     }
-  }, [isCompleted, workspaceId, documentId]);
+  }, [content?.isPartial]);
 
   const fetchContent = async () => {
     setIsLoading(true);
@@ -51,15 +67,8 @@ export function DocumentContentViewer({
     }
   };
 
-  if (!isCompleted) {
-    return (
-      <div className="rounded-lg bg-blue-50 p-6">
-        <p className="text-sm text-blue-800">
-          Document content will be available once processing is completed.
-        </p>
-      </div>
-    );
-  }
+  // ✅ REMOVED: No longer block on "not completed" status
+  // Progressive loading shows partial content immediately
 
   if (isLoading) {
     return (
@@ -94,6 +103,21 @@ export function DocumentContentViewer({
 
   return (
     <div className="rounded-lg bg-white shadow">
+      {/* ✅ PROGRESSIVE: Show processing banner if partial */}
+      {content?.isPartial && (
+        <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-yellow-600 border-t-transparent"></div>
+            <p className="text-sm text-yellow-800">
+              <strong>Processing...</strong> Showing partial results. Content will update automatically.
+            </p>
+          </div>
+          <span className="text-xs text-yellow-600 font-medium">
+            Status: {content.processingStatus}
+          </span>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="border-b border-gray-200">
         <nav className="flex" aria-label="Tabs">

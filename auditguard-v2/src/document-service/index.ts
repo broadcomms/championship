@@ -103,7 +103,6 @@ export default class extends Service<Env> {
         uploadedBy: input.userId,
         filename: input.filename,
       },
-      partition: input.workspaceId, // ✅ Partition by workspace for multi-tenancy isolation
     } as any);
 
     // Store metadata in database
@@ -559,7 +558,6 @@ export default class extends Service<Env> {
       // If chunks exist, indexing is complete
       const testSearch = await this.env.DOCUMENTS_BUCKET.chunkSearch({
         input: 'test',  // Any query will work
-        partition: workspaceId,
         limit: 1000,  // Get all chunks to count them
         requestId: `verify-${storageKey}-${Date.now()}`,
       } as any);
@@ -704,7 +702,6 @@ export default class extends Service<Env> {
         // Extract title using documentChat
         const titleResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
           objectId: document.storage_key,
-          partition: workspaceId,
           input: 'What is the title of this document? Respond with ONLY the title, no additional text or explanation.',
           requestId: `title-${documentId}-${Date.now()}`,
         } as any);
@@ -720,7 +717,6 @@ export default class extends Service<Env> {
         // Extract description using documentChat
         const descResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
           objectId: document.storage_key,
-          partition: workspaceId,
           input: 'Provide a brief 1-2 sentence summary of this document. Focus on the main topic and key points.',
           requestId: `desc-${documentId}-${Date.now()}`,
         } as any);
@@ -804,6 +800,8 @@ export default class extends Service<Env> {
     chunks: Array<{ text: string; score?: number }>;
     fullText: string;
     summary: string;
+    isPartial: boolean; // NEW: Indicates if this is partial data (still processing)
+    processingStatus: string; // NEW: Current processing status
   }> {
     const db = this.getDb();
 
@@ -831,88 +829,109 @@ export default class extends Service<Env> {
       throw new Error('Document not found');
     }
 
-    this.env.logger.info('Retrieving document content from SmartBucket', {
+    const processingStatus = document.processing_status;
+    const isStillProcessing = processingStatus === 'pending' || processingStatus === 'processing';
+
+    this.env.logger.info('Retrieving document content from SmartBucket (progressive mode)', {
       documentId,
       workspaceId,
       storageKey: document.storage_key,
+      processingStatus,
+      isPartial: isStillProcessing,
     });
+
+    // ✅ PROGRESSIVE LOADING: Try to get whatever is available, even if still processing
+    let fullText = '';
+    let summary = '';
+    let chunks: Array<{ text: string; score?: number }> = [];
 
     try {
       // Use documentChat to extract the full text content
+      // This works even during processing as SmartBucket has already extracted text
       const fullTextResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
         objectId: document.storage_key,
-        partition: workspaceId, // ✅ Partition by workspace for multi-tenancy isolation
         input: 'Please extract and return the complete text content of this document verbatim, preserving all formatting and structure.',
-        requestId: `fulltext-${documentId}`,
+        requestId: `fulltext-${documentId}-${Date.now()}`,
       } as any);
 
-      const fullText = fullTextResponse.answer || '';
+      fullText = fullTextResponse.answer || '';
 
       this.env.logger.info('Retrieved full text from SmartBucket', {
         documentId,
         textLength: fullText.length,
+        isPartial: isStillProcessing,
       });
-
-      // Get summary using documentChat
-      let summary = '';
-      try {
-        const summaryResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
-          objectId: document.storage_key,
-          partition: workspaceId, // ✅ Partition by workspace for multi-tenancy isolation
-          input: 'Provide a brief 2-3 sentence summary of this document.',
-          requestId: `summary-${documentId}`,
-        } as any);
-        summary = summaryResponse.answer || 'Summary not available';
-      } catch (error) {
-        this.env.logger.warn('Failed to generate summary', {
-          documentId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        summary = 'Summary not available - document may still be indexing';
-      }
-
-      // Get relevant chunks using chunkSearch with a broad query
-      let chunks: Array<{ text: string; score?: number }> = [];
-      try {
-        // Use the document's filename or content as search query to get relevant chunks
-        const chunkResults = await this.env.DOCUMENTS_BUCKET.chunkSearch({
-          input: document.filename.replace(/\.(pdf|docx|txt|md)$/i, ''),
-          partition: workspaceId, // ✅ Partition by workspace for multi-tenancy isolation
-          requestId: `chunks-${documentId}`,
-        } as any);
-
-        chunks = (chunkResults.results || []).map((result: any) => ({
-          text: result.text || '',
-          score: result.score,
-        }));
-
-        this.env.logger.info('Retrieved chunks from SmartBucket', {
-          documentId,
-          chunkCount: chunks.length,
-        });
-      } catch (error) {
-        this.env.logger.warn('Failed to retrieve chunks', {
-          documentId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        // Chunks are optional, continue without them
-      }
-
-      return {
-        chunks,
-        fullText,
-        summary,
-      };
     } catch (error) {
-      this.env.logger.error('Failed to retrieve document content', {
+      this.env.logger.warn('Failed to retrieve full text (may still be processing)', {
         documentId,
         error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
+        isPartial: isStillProcessing,
       });
-
-      throw new Error(
-        'Failed to retrieve document content. The document may still be indexing in SmartBucket.'
-      );
+      fullText = isStillProcessing 
+        ? 'Text extraction in progress... Refresh to see updated content.'
+        : 'Text extraction failed';
     }
+
+    // Get summary using documentChat
+    try {
+      const summaryResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
+        objectId: document.storage_key,
+        input: 'Provide a brief 2-3 sentence summary of this document.',
+        requestId: `summary-${documentId}-${Date.now()}`,
+      } as any);
+      summary = summaryResponse.answer || 'Summary not available';
+      
+      this.env.logger.info('Retrieved summary from SmartBucket', {
+        documentId,
+        summaryLength: summary.length,
+        isPartial: isStillProcessing,
+      });
+    } catch (error) {
+      this.env.logger.warn('Failed to generate summary (may still be processing)', {
+        documentId,
+        error: error instanceof Error ? error.message : String(error),
+        isPartial: isStillProcessing,
+      });
+      summary = isStillProcessing
+        ? 'Summary generation in progress... Refresh to see updated content.'
+        : 'Summary not available';
+    }
+
+    // Get relevant chunks using chunkSearch with a broad query
+    try {
+      // Use the document's filename or content as search query to get relevant chunks
+      const chunkResults = await this.env.DOCUMENTS_BUCKET.chunkSearch({
+        input: document.filename.replace(/\.(pdf|docx|txt|md)$/i, ''),
+        requestId: `chunks-${documentId}-${Date.now()}`,
+      } as any);
+
+      chunks = (chunkResults.results || []).map((result: any) => ({
+        text: result.text || '',
+        score: result.score,
+      }));
+
+      this.env.logger.info('Retrieved chunks from SmartBucket', {
+        documentId,
+        chunkCount: chunks.length,
+        isPartial: isStillProcessing,
+      });
+    } catch (error) {
+      this.env.logger.warn('Failed to retrieve chunks (may still be processing)', {
+        documentId,
+        error: error instanceof Error ? error.message : String(error),
+        isPartial: isStillProcessing,
+      });
+      // Chunks are optional, continue without them
+      chunks = [];
+    }
+
+    // ✅ PROGRESSIVE RESULT: Return whatever we have, mark as partial if still processing
+    return {
+      chunks,
+      fullText,
+      summary,
+      isPartial: isStillProcessing,
+      processingStatus,
+    };
   }
 }

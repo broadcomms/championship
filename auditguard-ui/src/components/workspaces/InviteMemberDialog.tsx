@@ -10,9 +10,7 @@ import { api } from '@/lib/api';
 
 const inviteMemberSchema = z.object({
   email: z.string().email('Invalid email address'),
-  role: z.enum(['admin', 'member', 'viewer'], {
-    required_error: 'Please select a role',
-  }),
+  role: z.enum(['admin', 'member', 'viewer']),
 });
 
 type InviteMemberForm = z.infer<typeof inviteMemberSchema>;
