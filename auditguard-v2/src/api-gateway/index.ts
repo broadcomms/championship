@@ -329,6 +329,24 @@ export default class extends Service<Env> {
         );
       }
 
+      // Phase 5: Match /api/workspaces/:id/documents/:documentId/chunks
+      const chunksMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/chunks$/);
+      if (chunksMatch && chunksMatch[1] && chunksMatch[2] && request.method === 'GET') {
+        const workspaceId = chunksMatch[1];
+        const documentId = chunksMatch[2];
+        const user = await this.validateSession(request);
+
+        const chunks = await this.env.DOCUMENT_SERVICE.getDocumentChunks(
+          workspaceId,
+          user.userId,
+          documentId
+        );
+
+        return new Response(JSON.stringify(chunks), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/workspaces/:id/documents/search (semantic search)
       const documentSearchMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/search$/);
       if (documentSearchMatch && documentSearchMatch[1] && request.method === 'POST') {

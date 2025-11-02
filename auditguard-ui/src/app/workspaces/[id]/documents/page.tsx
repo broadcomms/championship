@@ -7,11 +7,13 @@ import { Button } from '@/components/common/Button';
 import { CategoryBadge } from '@/components/documents/CategoryBadge';
 import { ProcessingIndicator } from '@/components/documents/ProcessingIndicator';
 import { DocumentUpload } from '@/components/documents/DocumentUpload';
+import { VectorSearch } from '@/components/documents/VectorSearch';
 import { useDocuments } from '@/hooks/useDocuments';
 import { DocumentCategory } from '@/types';
 
 type SortField = 'filename' | 'uploadedAt' | 'fileSize';
 type SortDirection = 'asc' | 'desc';
+type ViewMode = 'list' | 'search';
 
 export default function DocumentsPage() {
   const params = useParams();
@@ -21,6 +23,7 @@ export default function DocumentsPage() {
   const { documents, isLoading, error, refetch } = useDocuments(workspaceId);
 
   const [showUpload, setShowUpload] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [categoryFilter, setCategoryFilter] = useState<DocumentCategory | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('uploadedAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -142,25 +145,54 @@ export default function DocumentsPage() {
           </div>
         )}
 
-        {/* Filters */}
-        <div className="mb-6 flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">Category:</label>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value as DocumentCategory | 'all')}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        {/* Phase 5: View Mode Tabs */}
+        <div className="mb-6 border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
+                viewMode === 'list'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+              }`}
             >
-              <option value="all">All Categories</option>
-              <option value="policy">Policy</option>
-              <option value="procedure">Procedure</option>
-              <option value="evidence">Evidence</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
+              📄 All Documents ({documents.length})
+            </button>
+            <button
+              onClick={() => setViewMode('search')}
+              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
+                viewMode === 'search'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+              }`}
+            >
+              🔍 AI Search
+            </button>
+          </nav>
         </div>
 
-        {/* Documents Table */}
+        {/* List View */}
+        {viewMode === 'list' && (
+          <>
+            {/* Filters */}
+            <div className="mb-6 flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700">Category:</label>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value as DocumentCategory | 'all')}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="all">All Categories</option>
+                  <option value="policy">Policy</option>
+                  <option value="procedure">Procedure</option>
+                  <option value="evidence">Evidence</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Documents Table */}
         <div className="rounded-lg bg-white shadow overflow-hidden">
           {filteredAndSortedDocuments.length === 0 ? (
             <div className="p-12 text-center">
@@ -303,6 +335,13 @@ export default function DocumentsPage() {
             </div>
           )}
         </div>
+          </>
+        )}
+
+        {/* Search View - Phase 5 */}
+        {viewMode === 'search' && (
+          <VectorSearch workspaceId={workspaceId} />
+        )}
       </div>
     </AppLayout>
   );

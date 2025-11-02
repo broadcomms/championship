@@ -6,6 +6,7 @@ interface UploadOptions {
   file: File;
   category?: DocumentCategory;
   filename?: string;
+  frameworkId?: number; // Phase 5: Compliance framework selection
 }
 
 interface UseDocumentUploadReturn {
@@ -20,7 +21,7 @@ export function useDocumentUpload(workspaceId: string): UseDocumentUploadReturn 
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
 
-  const upload = async ({ file, category, filename }: UploadOptions): Promise<Document | null> => {
+  const upload = async ({ file, category, filename, frameworkId }: UploadOptions): Promise<Document | null> => {
     setIsUploading(true);
     setProgress(0);
     setError('');
@@ -37,6 +38,11 @@ export function useDocumentUpload(workspaceId: string): UseDocumentUploadReturn 
         formData.append('category', category);
       }
 
+      // Phase 5: Include framework ID
+      if (frameworkId) {
+        formData.append('frameworkId', String(frameworkId));
+      }
+
       // Note: For progress tracking, we would need XMLHttpRequest or a library
       // that supports progress events. For now, we'll just simulate progress.
       setProgress(50);
@@ -44,6 +50,7 @@ export function useDocumentUpload(workspaceId: string): UseDocumentUploadReturn 
       const metadata: Record<string, string> = {};
       if (filename) metadata.filename = filename;
       if (category) metadata.category = category;
+      if (frameworkId) metadata.frameworkId = String(frameworkId); // Phase 5
 
       const document = await api.uploadFile(
         `/api/workspaces/${workspaceId}/documents`,

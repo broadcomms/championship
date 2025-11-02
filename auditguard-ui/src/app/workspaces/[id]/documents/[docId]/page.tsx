@@ -6,7 +6,9 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/common/Button';
 import { CategoryBadge } from '@/components/documents/CategoryBadge';
 import { ProcessingIndicator } from '@/components/documents/ProcessingIndicator';
+import { ProcessingProgress } from '@/components/documents/ProcessingProgress';
 import { DocumentContentViewer } from '@/components/documents/DocumentContentViewer';
+import { DocumentChunksViewer } from '@/components/documents/DocumentChunksViewer';
 import { useDocumentPolling } from '@/hooks/useDocumentPolling';
 import { api } from '@/lib/api';
 import { Document, DocumentCategory } from '@/types';
@@ -302,10 +304,45 @@ export default function DocumentDetailsPage() {
                     <span className="text-gray-600">Text Extracted</span>
                     <span className="font-medium text-green-600">Yes</span>
                   </div>
+                  {document.wordCount && (
+                    <div className="flex justify-between border-b border-gray-100 pb-2">
+                      <span className="text-gray-600">Word Count</span>
+                      <span className="font-medium text-gray-900">{document.wordCount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {document.pageCount && (
+                    <div className="flex justify-between border-b border-gray-100 pb-2">
+                      <span className="text-gray-600">Page Count</span>
+                      <span className="font-medium text-gray-900">{document.pageCount}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between border-b border-gray-100 pb-2">
                     <span className="text-gray-600">Chunk Count</span>
                     <span className="font-medium text-gray-900">{document.chunkCount}</span>
                   </div>
+                  {document.vectorIndexingStatus && (
+                    <div className="flex justify-between border-b border-gray-100 pb-2">
+                      <span className="text-gray-600">Vector Indexing</span>
+                      <span className={`font-medium ${
+                        document.vectorIndexingStatus === 'completed' ? 'text-green-600' :
+                        document.vectorIndexingStatus === 'processing' ? 'text-blue-600' :
+                        document.vectorIndexingStatus === 'failed' ? 'text-red-600' :
+                        'text-gray-600'
+                      }`}>
+                        {document.vectorIndexingStatus === 'completed' && '✓ Completed'}
+                        {document.vectorIndexingStatus === 'processing' && '⚙ Processing'}
+                        {document.vectorIndexingStatus === 'failed' && '✗ Failed'}
+                        {document.vectorIndexingStatus === 'pending' && '⏳ Pending'}
+                        {document.vectorIndexingStatus === 'partial' && '⚠ Partial'}
+                      </span>
+                    </div>
+                  )}
+                  {document.embeddingsGenerated !== undefined && document.embeddingsGenerated > 0 && (
+                    <div className="flex justify-between border-b border-gray-100 pb-2">
+                      <span className="text-gray-600">Embeddings Generated</span>
+                      <span className="font-medium text-gray-900">{document.embeddingsGenerated}</span>
+                    </div>
+                  )}
                 </>
               )}
               <div className="flex justify-between border-b border-gray-100 pb-2">
@@ -359,6 +396,22 @@ export default function DocumentDetailsPage() {
           </div>
         )}
 
+        {/* Phase 5: Enhanced Processing Progress */}
+        {(document.processingStatus === 'processing' || document.processingStatus === 'pending') && (
+          <div className="mb-8 rounded-lg bg-white p-6 shadow">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">Processing Status</h2>
+            <ProcessingProgress
+              processingStatus={document.processingStatus}
+              textExtracted={document.textExtracted}
+              chunkCount={document.chunkCount}
+              embeddingsGenerated={document.embeddingsGenerated}
+              vectorIndexingStatus={document.vectorIndexingStatus}
+              pageCount={document.pageCount}
+              wordCount={document.wordCount}
+            />
+          </div>
+        )}
+
         {/* Document Content Viewer - ✅ PROGRESSIVE: Show always, not just when completed */}
         <div className="mb-8">
           <DocumentContentViewer
@@ -367,6 +420,17 @@ export default function DocumentDetailsPage() {
             isCompleted={document.processingStatus === 'completed'}
           />
         </div>
+
+        {/* Document Chunks Viewer - Phase 5: Display chunks with framework tags */}
+        {document.textExtracted && document.chunkCount > 0 && (
+          <div className="mb-8">
+            <DocumentChunksViewer
+              workspaceId={workspaceId}
+              documentId={documentId}
+              chunkCount={document.chunkCount}
+            />
+          </div>
+        )}
 
         {/* Delete Section */}
         <div className="rounded-lg border-2 border-red-200 bg-red-50 p-6">

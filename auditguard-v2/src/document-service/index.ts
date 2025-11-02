@@ -1467,4 +1467,127 @@ export default class extends Service<Env> {
       userId,
     });
   }
+
+  /**
+   * Phase 5: Get document chunks with framework tags for UI display
+   */
+  async getDocumentChunks(
+    workspaceId: string,
+    userId: string,
+    documentId: string
+  ): Promise<Array<{
+    id: number;
+    documentId: string;
+    chunkIndex: number;
+    content: string;
+    chunkSize: number;
+    startChar: number;
+    endChar: number;
+    tokenCount: number;
+    hasHeader: boolean;
+    sectionTitle: string | null;
+    embeddingStatus: string;
+    createdAt: number;
+    tags: Array<{
+      frameworkId: number;
+      frameworkName: string;
+      frameworkDisplayName: string;
+      relevanceScore: number;
+      autoTagged: boolean;
+    }>;
+  }>> {
+    this.env.logger.info('Getting document chunks', {
+      workspaceId,
+      documentId,
+      userId,
+    });
+
+    // Check workspace membership
+    const membership = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?`
+    ).bind(workspaceId, userId).first();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    // Verify document belongs to workspace
+    const document = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT id FROM documents WHERE id = ? AND workspace_id = ?`
+    ).bind(documentId, workspaceId).first();
+
+    if (!document) {
+      throw new Error('Document not found');
+    }
+
+    // Get chunks with their framework tags
+    const result = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT
+        dc.id,
+        dc.document_id,
+        dc.chunk_index,
+        dc.content,
+        dc.chunk_size,
+        dc.start_char,
+        dc.end_char,
+        dc.token_count,
+        dc.has_header,
+        dc.section_title,
+        dc.embedding_status,
+        dc.created_at,
+        dcf.framework_id,
+        cf.name as framework_name,
+        cf.display_name as framework_display_name,
+        dcf.relevance_score,
+        dcf.auto_tagged
+      FROM document_chunks dc
+      LEFT JOIN document_chunk_frameworks dcf ON dc.id = dcf.chunk_id
+      LEFT JOIN compliance_frameworks cf ON dcf.framework_id = cf.id
+      WHERE dc.document_id = ?
+      ORDER BY dc.chunk_index ASC, dcf.relevance_score DESC`
+    ).bind(documentId).all();
+
+    // Group chunks with their tags
+    const chunksMap = new Map<number, any>();
+
+    for (const row of result.results || []) {
+      if (!chunksMap.has(row.id)) {
+        chunksMap.set(row.id, {
+          id: row.id,
+          documentId: row.document_id,
+          chunkIndex: row.chunk_index,
+          content: row.content,
+          chunkSize: row.chunk_size,
+          startChar: row.start_char,
+          endChar: row.end_char,
+          tokenCount: row.token_count,
+          hasHeader: row.has_header === 1,
+          sectionTitle: row.section_title,
+          embeddingStatus: row.embedding_status,
+          createdAt: row.created_at,
+          tags: [],
+        });
+      }
+
+      // Add framework tag if exists
+      if (row.framework_id) {
+        chunksMap.get(row.id).tags.push({
+          frameworkId: row.framework_id,
+          frameworkName: row.framework_name,
+          frameworkDisplayName: row.framework_display_name,
+          relevanceScore: row.relevance_score,
+          autoTagged: row.auto_tagged === 1,
+        });
+      }
+    }
+
+    const chunks = Array.from(chunksMap.values());
+
+    this.env.logger.info('Document chunks retrieved', {
+      documentId,
+      chunkCount: chunks.length,
+    });
+
+    return chunks;
+  }
 }

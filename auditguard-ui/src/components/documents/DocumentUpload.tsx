@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Button } from '@/components/common/Button';
-import { DocumentCategory } from '@/types';
+import { DocumentCategory, ComplianceFrameworkInfo } from '@/types';
 import { useDocumentUpload } from '@/hooks/useDocumentUpload';
+import { api } from '@/lib/api';
 
 interface DocumentUploadProps {
   workspaceId: string;
@@ -23,8 +24,29 @@ export function DocumentUpload({ workspaceId, onSuccess, onClose }: DocumentUplo
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [category, setCategory] = useState<DocumentCategory>('other');
   const [filename, setFilename] = useState('');
+  const [frameworkId, setFrameworkId] = useState<number | undefined>(undefined);
+  const [frameworks, setFrameworks] = useState<ComplianceFrameworkInfo[]>([]);
+  const [loadingFrameworks, setLoadingFrameworks] = useState(true);
 
   const { upload, isUploading, progress, error } = useDocumentUpload(workspaceId);
+
+  // Phase 5: Load available compliance frameworks
+  useEffect(() => {
+    const fetchFrameworks = async () => {
+      try {
+        const data = await api.get<ComplianceFrameworkInfo[]>(
+          `/api/workspaces/${workspaceId}/frameworks`
+        );
+        setFrameworks(data);
+      } catch (err) {
+        console.error('Failed to load frameworks:', err);
+      } finally {
+        setLoadingFrameworks(false);
+      }
+    };
+
+    fetchFrameworks();
+  }, [workspaceId]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (acceptedFiles) => {
@@ -51,11 +73,13 @@ export function DocumentUpload({ workspaceId, onSuccess, onClose }: DocumentUplo
       file: selectedFile,
       category,
       filename: filename || selectedFile.name,
+      frameworkId, // Phase 5: Include selected framework
     });
 
     if (document) {
       setSelectedFile(null);
       setFilename('');
+      setFrameworkId(undefined);
       onSuccess?.();
     }
   };
@@ -134,7 +158,7 @@ export function DocumentUpload({ workspaceId, onSuccess, onClose }: DocumentUplo
             </div>
 
             {/* Category Selector */}
-            <div>
+            <div className="mb-3">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Category
               </label>
@@ -149,6 +173,34 @@ export function DocumentUpload({ workspaceId, onSuccess, onClose }: DocumentUplo
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Phase 5: Compliance Framework Selector */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Compliance Framework (Optional)
+                {loadingFrameworks && <span className="ml-2 text-xs text-gray-500">Loading...</span>}
+              </label>
+              <select
+                value={frameworkId || ''}
+                onChange={(e) => setFrameworkId(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                disabled={loadingFrameworks}
+              >
+                <option value="">None (general document)</option>
+                {frameworks
+                  .filter((fw) => fw.isActive)
+                  .map((framework) => (
+                    <option key={framework.id} value={framework.id}>
+                      {framework.displayName}
+                    </option>
+                  ))}
+              </select>
+              {frameworkId && (
+                <p className="mt-1 text-xs text-gray-600">
+                  Document chunks will be auto-tagged with {frameworks.find(f => f.id === frameworkId)?.displayName} relevance scores
+                </p>
+              )}
             </div>
           </div>
 

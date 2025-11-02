@@ -68,6 +68,45 @@ export interface Document {
   processingStatus: ProcessingStatus;
   textExtracted: boolean;
   chunkCount: number;
+  pageCount?: number;
+  wordCount?: number;
+  embeddingsGenerated?: number;
+  vectorIndexingStatus?: 'pending' | 'processing' | 'completed' | 'partial' | 'failed';
+  complianceFrameworkId?: number;
+}
+
+// Phase 4 & 5: Compliance Framework Types
+export interface ComplianceFrameworkInfo {
+  id: number;
+  name: string;
+  displayName: string;
+  description: string;
+  isActive: boolean;
+}
+
+// Phase 4 & 5: Document Chunk Types
+export interface DocumentChunk {
+  id: number;
+  documentId: string;
+  chunkIndex: number;
+  content: string;
+  chunkSize: number;
+  startChar: number;
+  endChar: number;
+  tokenCount: number;
+  hasHeader: boolean;
+  sectionTitle?: string;
+  embeddingStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  createdAt: number;
+  tags?: ChunkFrameworkTag[];
+}
+
+export interface ChunkFrameworkTag {
+  frameworkId: number;
+  frameworkName: string;
+  frameworkDisplayName: string;
+  relevanceScore: number;
+  autoTagged: boolean;
 }
 
 export interface DocumentListItem {
