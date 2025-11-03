@@ -16,7 +16,7 @@ export interface EmbeddingConfig {
 export interface EmbeddingResult {
   chunkId: number;          // Database chunk ID
   vectorId: string;         // Vector index ID
-  embedding: number[];      // 1024-dimensional vector
+  embedding: number[];      // 384-dimensional vector (all-MiniLM-L6-v2)
   success: boolean;
   error?: string;
 }
@@ -252,7 +252,8 @@ export class EmbeddingService {
   }
 
   /**
-   * Generate embeddings using Raindrop AI with retry logic
+   * Generate embeddings using LOCAL sentence-transformers service (384-dim)
+   * Model: all-MiniLM-L6-v2
    */
   private async generateEmbeddings(
     texts: string[],
@@ -262,40 +263,57 @@ export class EmbeddingService {
 
     for (let attempt = 1; attempt <= config.maxRetries; attempt++) {
       try {
-        this.env.logger.info('Generating embeddings', {
+        this.env.logger.info('Generating LOCAL embeddings', {
           textCount: texts.length,
           attempt,
           maxRetries: config.maxRetries,
+          service: 'local-sentence-transformers',
         });
 
-        // Call Raindrop AI inference
-        const response = await this.env.AI.run('embeddings', {
-          input: texts,
+        // Call local embedding service
+        const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'http://localhost:8080';
+        const response = await fetch(`${embeddingServiceUrl}/embed`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            texts: texts,
+            batch_size: Math.min(texts.length, 32),
+            normalize: true,
+          }),
         });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Embedding service error: ${response.statusText} - ${errorText}`);
+        }
+
+        const data = await response.json() as {
+          embeddings: number[][];
+          dimensions: number;
+          count: number;
+          latency_ms: number;
+        };
 
         // Validate response structure
-        if (!response || !response.data || !Array.isArray(response.data)) {
-          throw new Error('Invalid embedding response from AI service: missing data array');
+        if (!data || !Array.isArray(data.embeddings)) {
+          throw new Error('Invalid embedding response from local service: missing embeddings array');
         }
 
-        if (response.data.length !== texts.length) {
-          throw new Error(`Expected ${texts.length} embeddings, got ${response.data.length}`);
+        if (data.embeddings.length !== texts.length) {
+          throw new Error(`Expected ${texts.length} embeddings, got ${data.embeddings.length}`);
         }
 
-        // Extract embeddings from response.data[].embedding
-        const embeddings: number[][] = [];
-        for (let i = 0; i < response.data.length; i++) {
-          const item = response.data[i];
-          if (!item || !Array.isArray(item.embedding)) {
-            throw new Error(`Invalid embedding at index ${i}: missing embedding array`);
+        // Validate dimensions (should be 384 for all-MiniLM-L6-v2)
+        const embeddings: number[][] = data.embeddings;
+        for (let i = 0; i < embeddings.length; i++) {
+          if (!Array.isArray(embeddings[i]) || embeddings[i].length !== 384) {
+            throw new Error(`Invalid embedding at index ${i}: expected 384 dimensions, got ${embeddings[i]?.length}`);
           }
-          if (item.embedding.length !== 1024) {
-            throw new Error(`Invalid embedding at index ${i}: expected 1024 dimensions, got ${item.embedding.length}`);
-          }
-          embeddings.push(item.embedding);
         }
 
-        this.env.logger.info('Embeddings generated successfully', {
+        this.env.logger.info('LOCAL embeddings generated successfully', {
           count: embeddings.length,
           dimensions: embeddings[0]?.length,
           attempt,
