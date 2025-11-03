@@ -3,7 +3,6 @@ import type { Env } from './raindrop.gen';
 import { VultrStorageService } from '../storage-service';
 import { TextExtractionService } from '../text-extraction-service';
 import { ChunkingService } from '../chunking-service';
-import { EmbeddingService } from '../embedding-service';
 import { ComplianceTaggingService } from '../compliance-tagging-service';
 
 export interface Body {
@@ -182,63 +181,84 @@ export default class extends Each<Body, Env> {
         warnings: chunkValidation.warnings,
       });
 
-      // STEP 3B: Store chunks in database
+      // STEP 3B: Store chunks in database (check for existing chunks first to handle retries)
       this.env.logger.info('Storing chunks in database', {
         documentId,
         chunkCount: chunkingResult.totalChunks,
       });
 
+      // Check if chunks already exist for this document (retry scenario)
+      const existingChunksResult = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT id, chunk_index FROM document_chunks WHERE document_id = ? ORDER BY chunk_index`
+      ).bind(documentId).all();
+
+      const existingChunks = existingChunksResult.results || [];
       const chunkIds: number[] = [];
-      for (const chunk of chunkingResult.chunks) {
-        try {
-          const result = await (this.env.AUDITGUARD_DB as any).prepare(
-            `INSERT INTO document_chunks (
-              document_id, workspace_id, chunk_index, content, chunk_size,
-              start_char, end_char, token_count, has_header, section_title,
-              embedding_status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-            RETURNING id`
-          ).bind(
-            documentId,
-            workspaceId,
-            chunk.index,
-            chunk.text,
-            chunk.text.length,
-            chunk.metadata.startChar,
-            chunk.metadata.endChar,
-            chunk.metadata.tokenCount,
-            chunk.metadata.hasHeader ? 1 : 0,
-            chunk.metadata.sectionTitle || null,
-            Date.now()
-          ).first();
 
-          this.env.logger.info('Chunk insert result', {
-            documentId,
-            chunkIndex: chunk.index,
-            hasResult: !!result,
-            resultKeys: result ? Object.keys(result) : [],
-            resultId: result?.id,
-            resultIdType: result?.id ? typeof result.id : 'undefined',
-          });
+      if (existingChunks.length > 0) {
+        this.env.logger.info('Found existing chunks for document (retry scenario)', {
+          documentId,
+          existingCount: existingChunks.length,
+          expectedCount: chunkingResult.totalChunks,
+        });
 
-          // Get the inserted chunk ID from RETURNING clause
-          if (result && result.id) {
-            chunkIds.push(result.id);
-          } else {
-            this.env.logger.error('Chunk insert did not return ID', {
+        // Reuse existing chunk IDs
+        for (const existingChunk of existingChunks) {
+          chunkIds.push(existingChunk.id);
+        }
+      } else {
+        // First time - insert new chunks
+        for (const chunk of chunkingResult.chunks) {
+          try {
+            const result = await (this.env.AUDITGUARD_DB as any).prepare(
+              `INSERT INTO document_chunks (
+                document_id, workspace_id, chunk_index, content, chunk_size,
+                start_char, end_char, token_count, has_header, section_title,
+                embedding_status, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+              RETURNING id`
+            ).bind(
+              documentId,
+              workspaceId,
+              chunk.index,
+              chunk.text,
+              chunk.text.length,
+              chunk.metadata.startChar,
+              chunk.metadata.endChar,
+              chunk.metadata.tokenCount,
+              chunk.metadata.hasHeader ? 1 : 0,
+              chunk.metadata.sectionTitle || null,
+              Date.now()
+            ).first();
+
+            this.env.logger.info('Chunk insert result', {
               documentId,
               chunkIndex: chunk.index,
-              result,
+              hasResult: !!result,
+              resultKeys: result ? Object.keys(result) : [],
+              resultId: result?.id,
+              resultIdType: result?.id ? typeof result.id : 'undefined',
             });
+
+            // Get the inserted chunk ID from RETURNING clause
+            if (result && result.id) {
+              chunkIds.push(result.id);
+            } else {
+              this.env.logger.error('Chunk insert did not return ID', {
+                documentId,
+                chunkIndex: chunk.index,
+                result,
+              });
+            }
+          } catch (error) {
+            this.env.logger.error('Failed to insert chunk', {
+              documentId,
+              chunkIndex: chunk.index,
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            });
+            throw error;
           }
-        } catch (error) {
-          this.env.logger.error('Failed to insert chunk', {
-            documentId,
-            chunkIndex: chunk.index,
-            error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          });
-          throw error;
         }
       }
 
@@ -415,36 +435,45 @@ export default class extends Each<Body, Env> {
          WHERE id = ?`
       ).bind(chunks.length, documentId).run();
 
-      // Initialize embedding service
-      const embeddingService = new EmbeddingService(this.env);
+      // Queue each chunk for embedding generation via message queue
+      // This is the correct way to process embeddings in distributed architecture
+      let queuedCount = 0;
 
-      // Generate and store embeddings (batch processing with retries)
-      const result = await embeddingService.generateAndStoreEmbeddings(
-        documentId,
-        workspaceId,
-        chunks,
-        chunkIds
-      );
+      for (let i = 0; i < chunks.length; i++) {
+        try {
+          await (this.env as any).DOCUMENT_PROCESSING_QUEUE.send({
+            type: 'generate_embedding',
+            chunkId: chunkIds[i],
+            documentId: documentId,
+            workspaceId: workspaceId,
+            chunkText: chunks[i].text,
+            chunkIndex: chunks[i].metadata.chunkIndex,
+          });
 
-      this.env.logger.info('Async embedding generation completed', {
+          queuedCount++;
+
+          this.env.logger.info('Queued chunk for embedding generation', {
+            documentId,
+            chunkId: chunkIds[i],
+            chunkIndex: chunks[i].metadata.chunkIndex,
+            queuedSoFar: queuedCount,
+            totalChunks: chunks.length,
+          });
+        } catch (queueError) {
+          this.env.logger.error('Failed to queue chunk for embedding', {
+            documentId,
+            chunkId: chunkIds[i],
+            chunkIndex: chunks[i].metadata.chunkIndex,
+            error: queueError instanceof Error ? queueError.message : String(queueError),
+          });
+        }
+      }
+
+      this.env.logger.info('Successfully queued all chunks for embedding generation', {
         documentId,
-        totalChunks: result.totalChunks,
-        successCount: result.successCount,
-        failureCount: result.failureCount,
-        duration: result.duration,
+        totalChunks: chunks.length,
+        queuedCount: queuedCount,
       });
-
-      // Update document with final embedding stats
-      await (this.env.AUDITGUARD_DB as any).prepare(
-        `UPDATE documents
-         SET embeddings_generated = ?,
-             vector_indexing_status = ?
-         WHERE id = ?`
-      ).bind(
-        result.successCount,
-        result.failureCount === 0 ? 'completed' : 'partial',
-        documentId
-      ).run();
 
     } catch (error) {
       this.env.logger.error('Async embedding generation failed critically', {
@@ -532,6 +561,109 @@ export default class extends Each<Body, Env> {
         stack: error instanceof Error ? error.stack : undefined,
       });
       // Don't throw - auto-tagging is optional, don't fail the entire process
+    }
+  }
+
+  /**
+   * Manually trigger embeddings for pending chunks
+   * Useful for recovering from stuck/failed embedding generation
+   */
+  async triggerPendingEmbeddings(): Promise<{
+    success: boolean;
+    message: string;
+    totalPending: number;
+    chunksQueued: number;
+    errors?: number;
+  }> {
+    this.env.logger.info('Manually triggering embeddings for pending chunks');
+
+    try {
+      // Find all pending chunks
+      const pendingChunks = await (this.env.AUDITGUARD_DB as any).prepare(`
+        SELECT
+          dc.id as chunk_id,
+          dc.document_id,
+          dc.chunk_index,
+          dc.chunk_text,
+          d.workspace_id
+        FROM document_chunks dc
+        JOIN documents d ON d.id = dc.document_id
+        WHERE dc.embedding_status = 'pending'
+        ORDER BY dc.created_at DESC
+      `).all();
+
+      const chunks = pendingChunks.results || [];
+
+      if (chunks.length === 0) {
+        this.env.logger.info('No pending chunks found');
+        return {
+          success: true,
+          message: 'No pending chunks found',
+          totalPending: 0,
+          chunksQueued: 0,
+        };
+      }
+
+      this.env.logger.info(`Found ${chunks.length} pending chunks, queuing for embedding generation`);
+
+      // Queue each chunk via EMBEDDING_QUEUE
+      let queuedCount = 0;
+      let errors = 0;
+
+      for (const chunk of chunks) {
+        try {
+          // Update status to processing
+          await (this.env.AUDITGUARD_DB as any).prepare(
+            `UPDATE document_chunks SET embedding_status = 'processing' WHERE id = ?`
+          ).bind(chunk.chunk_id).run();
+
+          // Queue the embedding job
+          await (this.env as any).EMBEDDING_QUEUE.send({
+            chunkId: chunk.chunk_id,
+            documentId: chunk.document_id,
+            workspaceId: chunk.workspace_id,
+            chunkText: chunk.chunk_text,
+            chunkIndex: chunk.chunk_index,
+          });
+
+          queuedCount++;
+          this.env.logger.info(`Queued chunk ${chunk.chunk_index} from document ${chunk.document_id}`, {
+            chunkId: chunk.chunk_id,
+          });
+
+        } catch (error) {
+          errors++;
+          this.env.logger.error(`Failed to queue chunk ${chunk.chunk_id}`, {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      this.env.logger.info(`Successfully queued ${queuedCount} chunks for embedding generation`, {
+        totalPending: chunks.length,
+        queuedCount,
+        errors,
+      });
+
+      return {
+        success: true,
+        message: `Queued ${queuedCount} chunks for embedding generation`,
+        totalPending: chunks.length,
+        chunksQueued: queuedCount,
+        errors: errors > 0 ? errors : undefined,
+      };
+
+    } catch (error) {
+      this.env.logger.error('Failed to trigger embeddings', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        totalPending: 0,
+        chunksQueued: 0,
+      };
     }
   }
 }

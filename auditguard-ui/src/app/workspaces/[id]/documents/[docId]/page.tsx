@@ -8,6 +8,7 @@ import { CategoryBadge } from '@/components/documents/CategoryBadge';
 import { ProcessingIndicator } from '@/components/documents/ProcessingIndicator';
 import { ProcessingProgress } from '@/components/documents/ProcessingProgress';
 import { DocumentContentViewer } from '@/components/documents/DocumentContentViewer';
+import { useDocumentPolling } from '@/hooks/useDocumentPolling';
 import { api } from '@/lib/api';
 import { Document, DocumentCategory } from '@/types';
 
@@ -16,6 +17,14 @@ export default function DocumentDetailsPage() {
   const router = useRouter();
   const workspaceId = params.id as string;
   const documentId = params.docId as string;
+
+  // Use polling hook for real-time status updates
+  const {
+    document: polledDocument,
+    isPolling,
+    error: pollingError,
+    startPolling
+  } = useDocumentPolling(workspaceId, documentId);
 
   const [document, setDocument] = useState<Document | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -29,8 +38,27 @@ export default function DocumentDetailsPage() {
   const [editFilename, setEditFilename] = useState('');
   const [editCategory, setEditCategory] = useState<DocumentCategory>('other');
 
+  // Update document state from polling
   useEffect(() => {
-    fetchDocument();
+    if (polledDocument) {
+      setDocument(polledDocument);
+      setEditFilename(polledDocument.filename);
+      setEditCategory(polledDocument.category || 'other');
+      setIsLoading(false);
+    }
+  }, [polledDocument]);
+
+  // Update error state from polling
+  useEffect(() => {
+    if (pollingError) {
+      setError(pollingError);
+      setIsLoading(false);
+    }
+  }, [pollingError]);
+
+  // Start polling when component mounts
+  useEffect(() => {
+    startPolling();
   }, [workspaceId, documentId]);
 
   const fetchDocument = async () => {
@@ -179,8 +207,8 @@ export default function DocumentDetailsPage() {
     <AppLayout>
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8 flex items-start justify-between">
-          <div className="flex items-center gap-3 flex-1">
+        <div className="mb-8 flex flex-col gap-4">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => router.push(`/workspaces/${workspaceId}/documents`)}
               className="text-gray-400 hover:text-gray-600"
@@ -192,41 +220,43 @@ export default function DocumentDetailsPage() {
               {document.description && (
                 <p className="mt-2 text-lg text-gray-600">{document.description}</p>
               )}
-              <div className="mt-2 flex items-center gap-3">
-                <CategoryBadge category={document.category} />
-                <ProcessingIndicator status={document.processingStatus} />
-              </div>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleDownload}>
-              ⬇ Download
-            </Button>
-            {!isEditing && (
-              <Button variant="outline" onClick={() => setIsEditing(true)}>
-                ✎ Edit
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <CategoryBadge category={document.category} />
+              <ProcessingIndicator status={document.processingStatus} />
+            </div>
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <Button variant="outline" onClick={handleDownload}>
+                ⬇ Download
               </Button>
-            )}
-            {document.processingStatus === 'completed' && (
-              <Button
-                variant="outline"
-                onClick={handleProcess}
-                loading={isProcessing}
-                disabled={isProcessing}
-              >
-                {isProcessing ? 'Reprocessing...' : '↻ Reprocess'}
-              </Button>
-            )}
-            {document.processingStatus !== 'completed' && (
-              <Button
-                variant="primary"
-                onClick={handleProcess}
-                loading={isProcessing}
-                disabled={isProcessing}
-              >
-                {isProcessing ? 'Processing...' : document.processingStatus === 'processing' ? '⚙ Retry Processing' : '⚙ Process Document'}
-              </Button>
-            )}
+              {!isEditing && (
+                <Button variant="outline" onClick={() => setIsEditing(true)}>
+                  ✎ Edit
+                </Button>
+              )}
+              {document.processingStatus === 'completed' && (
+                <Button
+                  variant="outline"
+                  onClick={handleProcess}
+                  loading={isProcessing}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? 'Reprocessing...' : '↻ Reprocess'}
+                </Button>
+              )}
+              {document.processingStatus !== 'completed' && (
+                <Button
+                  variant="primary"
+                  onClick={handleProcess}
+                  loading={isProcessing}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? 'Processing...' : document.processingStatus === 'processing' ? '⚙ Retry Processing' : '⚙ Process Document'}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 

@@ -29,6 +29,7 @@ export function DocumentContentViewer({
   const [content, setContent] = useState<DocumentContent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isContentUnavailable, setIsContentUnavailable] = useState(false);
   const [activeTab, setActiveTab] = useState<'summary' | 'fullText' | 'chunks'>('summary');
 
   const totalChunks = chunkCount ?? content?.chunks?.length ?? 0;
@@ -49,12 +50,18 @@ export function DocumentContentViewer({
   const fetchContent = async () => {
     setIsLoading(true);
     setError('');
+    setIsContentUnavailable(false);
     try {
       const data = await api.get<DocumentContent>(
         `/api/workspaces/${workspaceId}/documents/${documentId}/content`
       );
       setContent(data);
     } catch (err: any) {
+      if (err?.status === 404) {
+        setContent(null);
+        setIsContentUnavailable(true);
+        return;
+      }
       setError(err.error || err.message || 'Failed to load document content');
     } finally {
       setIsLoading(false);
@@ -103,6 +110,28 @@ export function DocumentContentViewer({
         >
           Try Again
         </button>
+      </div>
+    );
+  }
+
+  if (isContentUnavailable) {
+    return (
+      <div className="rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <h3 className="mt-2 text-sm font-semibold text-gray-900">Document content not available yet</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          We couldn&rsquo;t find extracted content for this document. Try again in a moment or reprocess the file.
+        </p>
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={fetchContent}
+            className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:border-blue-300 hover:text-blue-600"
+          >
+            Retry loading
+          </button>
+        </div>
       </div>
     );
   }

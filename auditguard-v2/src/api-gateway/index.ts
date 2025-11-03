@@ -1179,6 +1179,106 @@ export default class extends Service<Env> {
         });
       }
 
+      // POST /api/admin/trigger-embeddings - Manually trigger embeddings for pending chunks
+      if (path === '/api/admin/trigger-embeddings' && request.method === 'POST') {
+        this.env.logger.info('Manually triggering embeddings for pending chunks');
+
+        try {
+          // Find all pending chunks
+          const pendingChunks = await (this.env.AUDITGUARD_DB as any).prepare(`
+            SELECT
+              dc.id as chunk_id,
+              dc.document_id,
+              dc.chunk_index,
+              dc.content as chunk_text,
+              d.workspace_id
+            FROM document_chunks dc
+            JOIN documents d ON d.id = dc.document_id
+            WHERE dc.embedding_status = 'pending'
+            ORDER BY dc.created_at DESC
+          `).all();
+
+          const chunks = pendingChunks.results || [];
+
+          if (chunks.length === 0) {
+            this.env.logger.info('No pending chunks found');
+            return new Response(JSON.stringify({
+              success: true,
+              message: 'No pending chunks found',
+              totalPending: 0,
+              chunksQueued: 0,
+            }), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+
+          this.env.logger.info(`Found ${chunks.length} pending chunks, queuing for embedding generation`);
+
+          // Queue each chunk via document processing queue
+          let queuedCount = 0;
+          let errors = 0;
+
+          for (const chunk of chunks) {
+            try {
+              // Update status to processing
+              await (this.env.AUDITGUARD_DB as any).prepare(
+                `UPDATE document_chunks SET embedding_status = 'processing' WHERE id = ?`
+              ).bind(chunk.chunk_id).run();
+
+              // Send to document processing queue which will trigger embedding generation
+              await (this.env as any).DOCUMENT_PROCESSING_QUEUE.send({
+                type: 'generate_embedding',
+                chunkId: chunk.chunk_id,
+                documentId: chunk.document_id,
+                workspaceId: chunk.workspace_id,
+                chunkText: chunk.chunk_text,
+                chunkIndex: chunk.chunk_index,
+              });
+
+              queuedCount++;
+              this.env.logger.info(`Queued chunk ${chunk.chunk_index} from document ${chunk.document_id}`, {
+                chunkId: chunk.chunk_id,
+              });
+
+            } catch (error) {
+              errors++;
+              this.env.logger.error(`Failed to queue chunk ${chunk.chunk_id}`, {
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+
+          this.env.logger.info(`Successfully queued ${queuedCount} chunks for embedding generation`, {
+            totalPending: chunks.length,
+            queuedCount,
+            errors,
+          });
+
+          return new Response(JSON.stringify({
+            success: true,
+            message: `Queued ${queuedCount} chunks for embedding generation`,
+            totalPending: chunks.length,
+            chunksQueued: queuedCount,
+            errors: errors > 0 ? errors : undefined,
+          }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+
+        } catch (error) {
+          this.env.logger.error('Failed to trigger embeddings', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+
+          return new Response(JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
       // POST /api/admin/analytics/query
       if (path === '/api/admin/analytics/query' && request.method === 'POST') {
         const user = await this.validateSession(request);
@@ -1192,6 +1292,247 @@ export default class extends Service<Env> {
         }
 
         const result = await this.env.ADMIN_SERVICE.queryAnalytics(user.userId, body.query);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // POST /api/admin/create - Create new admin user (super_admin only)
+      if (path === '/api/admin/create' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+        const body = (await request.json()) as {
+          userId: string;
+          role: 'super_admin' | 'support' | 'billing_admin';
+          permissions: string[];
+        };
+
+        if (!body.userId || !body.role) {
+          return new Response(JSON.stringify({ error: 'userId and role are required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.ADMIN_SERVICE.createAdmin(user.userId, {
+          userId: body.userId,
+          role: body.role,
+          permissions: body.permissions || ['*'],
+          createdBy: user.userId,
+        });
+        return new Response(JSON.stringify(result), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // ====== PHASE 1: DATABASE VISUALIZATION ENDPOINTS ======
+
+      // GET /api/admin/database/schema - View all database tables
+      if (path === '/api/admin/database/schema' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+        const result = await this.env.ADMIN_SERVICE.getDatabaseSchema(user.userId);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // POST /api/admin/database/query - Execute SQL SELECT query
+      if (path === '/api/admin/database/query' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+        const body = (await request.json()) as { sql: string };
+
+        if (!body.sql) {
+          return new Response(JSON.stringify({ error: 'SQL query is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.ADMIN_SERVICE.executeQuery(user.userId, body.sql);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/admin/database/tables/:tableName - View table data with pagination
+      const tableDataMatch = path.match(/^\/api\/admin\/database\/tables\/([^\/]+)$/);
+      if (tableDataMatch && tableDataMatch[1] && request.method === 'GET') {
+        const tableName = tableDataMatch[1];
+        const user = await this.validateSession(request);
+
+        // Parse query parameters
+        const params = new URL(request.url).searchParams;
+        const page = parseInt(params.get('page') || '1');
+        const pageSize = parseInt(params.get('pageSize') || '50');
+        const orderBy = params.get('orderBy') || undefined;
+        const orderDir = (params.get('orderDir') as 'ASC' | 'DESC') || 'ASC';
+
+        const result = await this.env.ADMIN_SERVICE.getTableData(user.userId, tableName, {
+          page,
+          pageSize,
+          orderBy,
+          orderDir,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // ====== PHASE 2: VECTOR & EMBEDDING VERIFICATION ENDPOINTS ======
+
+      // GET /api/admin/vectors/stats - Get vector index statistics
+      if (path === '/api/admin/vectors/stats' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+        const result = await this.env.ADMIN_SERVICE.getVectorIndexStats(user.userId);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/admin/vectors/embedding-status - Get embedding generation status
+      if (path === '/api/admin/vectors/embedding-status' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+        const result = await this.env.ADMIN_SERVICE.getEmbeddingStatus(user.userId);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // POST /api/admin/vectors/search-test - Test vector search functionality
+      if (path === '/api/admin/vectors/search-test' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+        const body = (await request.json()) as { query: string; topK?: number };
+
+        if (!body.query) {
+          return new Response(JSON.stringify({ error: 'Query text is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.ADMIN_SERVICE.testVectorSearch(
+          user.userId,
+          body.query,
+          body.topK || 5
+        );
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/admin/vectors/service-health - Check embedding service health
+      if (path === '/api/admin/vectors/service-health' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+        const result = await this.env.ADMIN_SERVICE.getEmbeddingServiceHealth(user.userId);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // ====== PHASE 3: SMARTBUCKET MANAGEMENT ENDPOINTS ======
+
+      // GET /api/admin/buckets/:name/objects - List bucket objects
+      const listObjectsMatch = path.match(/^\/api\/admin\/buckets\/([^\/]+)\/objects$/);
+      if (listObjectsMatch && listObjectsMatch[1] && request.method === 'GET') {
+        const bucketName = listObjectsMatch[1];
+        const user = await this.validateSession(request);
+
+        // Parse query parameters
+        const params = new URL(request.url).searchParams;
+        const prefix = params.get('prefix') || undefined;
+        const limit = parseInt(params.get('limit') || '100');
+        const continuationToken = params.get('continuationToken') || undefined;
+
+        const result = await this.env.ADMIN_SERVICE.listBucketObjects(user.userId, bucketName, {
+          prefix,
+          limit,
+          continuationToken,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/admin/buckets/:name/objects/:key - Get specific bucket object
+      const getObjectMatch = path.match(/^\/api\/admin\/buckets\/([^\/]+)\/objects\/(.+)$/);
+      if (getObjectMatch && getObjectMatch[1] && getObjectMatch[2] && request.method === 'GET') {
+        const bucketName = getObjectMatch[1];
+        const key = decodeURIComponent(getObjectMatch[2]);
+        const user = await this.validateSession(request);
+
+        const result = await this.env.ADMIN_SERVICE.getBucketObject(user.userId, bucketName, key);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // DELETE /api/admin/buckets/:name/objects - Delete bucket objects
+      const deleteObjectsMatch = path.match(/^\/api\/admin\/buckets\/([^\/]+)\/objects$/);
+      if (deleteObjectsMatch && deleteObjectsMatch[1] && request.method === 'DELETE') {
+        const bucketName = deleteObjectsMatch[1];
+        const user = await this.validateSession(request);
+        const body = (await request.json()) as { keys: string[] };
+
+        if (!body.keys || !Array.isArray(body.keys)) {
+          return new Response(JSON.stringify({ error: 'keys array is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.ADMIN_SERVICE.deleteBucketObjects(
+          user.userId,
+          bucketName,
+          body.keys
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // POST /api/admin/buckets/:name/search - Search bucket content
+      const searchBucketMatch = path.match(/^\/api\/admin\/buckets\/([^\/]+)\/search$/);
+      if (searchBucketMatch && searchBucketMatch[1] && request.method === 'POST') {
+        const bucketName = searchBucketMatch[1];
+        const user = await this.validateSession(request);
+        const body = (await request.json()) as { query: string; limit?: number };
+
+        if (!body.query) {
+          return new Response(JSON.stringify({ error: 'query is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.ADMIN_SERVICE.searchBucket(
+          user.userId,
+          bucketName,
+          body.query,
+          body.limit || 10
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // POST /api/admin/buckets/:name/cleanup - Clean up orphaned objects
+      const cleanupBucketMatch = path.match(/^\/api\/admin\/buckets\/([^\/]+)\/cleanup$/);
+      if (cleanupBucketMatch && cleanupBucketMatch[1] && request.method === 'POST') {
+        const bucketName = cleanupBucketMatch[1];
+        const user = await this.validateSession(request);
+        const body = (await request.json().catch(() => ({}))) as { dryRun?: boolean };
+
+        const result = await this.env.ADMIN_SERVICE.cleanupOrphanedObjects(
+          user.userId,
+          bucketName,
+          body.dryRun !== false // Default to true (dry run)
+        );
+
         return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });

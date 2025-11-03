@@ -1062,39 +1062,18 @@ export default class extends Service<Env> {
       }
     }
 
-    // Get summary using documentChat
-    try {
-      this.env.logger.info('Requesting summary from SmartBucket documentChat', {
-        documentId,
-        objectId: document.storage_key,
-        filename: document.filename,
-        requestId: `summary-${documentId}-${Date.now()}`,
-      });
+    // REMOVED: SmartBucket summary query (was blocking/timing out)
+    // Summary generation requires full SmartBucket indexing to complete
+    // We'll show processing status instead of blocking the page load
+    this.env.logger.info('Skipping summary generation - requires SmartBucket indexing', {
+      documentId,
+      processingStatus,
+      isStillProcessing,
+    });
 
-      const summaryResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
-        objectId: document.storage_key,
-        input: 'Provide a brief 2-3 sentence summary of this document.',
-        requestId: `summary-${documentId}-${Date.now()}`,
-      } as any);
-      summary = summaryResponse.answer || 'Summary not available';
-      
-      this.env.logger.info('Retrieved summary from SmartBucket', {
-        documentId,
-        objectId: document.storage_key,
-        summaryLength: summary.length,
-        summaryPreview: summary.substring(0, 100),
-        isPartial: isStillProcessing,
-      });
-    } catch (error) {
-      this.env.logger.warn('Failed to generate summary (may still be processing)', {
-        documentId,
-        error: error instanceof Error ? error.message : String(error),
-        isPartial: isStillProcessing,
-      });
-      summary = isStillProcessing
-        ? 'Summary generation in progress... Refresh to see updated content.'
-        : 'Summary not available';
-    }
+    summary = isStillProcessing
+      ? 'Processing... Summary will be available after indexing completes.'
+      : 'Document indexed. Summary generation can be added later if needed.';
 
     // Get relevant chunks using chunkSearch with a broad query
     try {
