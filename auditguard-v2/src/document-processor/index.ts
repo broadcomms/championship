@@ -18,6 +18,13 @@ export interface Body {
 
 export default class extends Each<Body, Env> {
   async process(message: Message<Body>): Promise<void> {
+    // CRITICAL DEBUG LOG - First thing that runs
+    this.env.logger.info('⚡ DOCUMENT PROCESSOR OBSERVER TRIGGERED ⚡', {
+      messageBody: message.body,
+      attempt: message.attempts,
+      timestamp: Date.now(),
+    });
+
     const { documentId, workspaceId, userId, vultrKey, storageKey, action } = message.body;
 
     this.env.logger.info('Observer: Processing document from queue', {

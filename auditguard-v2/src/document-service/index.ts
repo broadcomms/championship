@@ -852,6 +852,57 @@ export default class extends Service<Env> {
         });
       }
 
+      // WORKAROUND: Generate embeddings synchronously since queue observer isn't working
+      this.env.logger.info('Starting embedding generation (synchronous workaround)', {
+        documentId,
+        workspaceId,
+        chunkCount: actualChunkCount,
+      });
+
+      try {
+        // Get all chunks for this document
+        const chunksResult = await (this.env.AUDITGUARD_DB as any).prepare(
+          `SELECT id, document_id, chunk_index, content, token_count, embedding_status
+           FROM document_chunks
+           WHERE document_id = ?
+           ORDER BY chunk_index`
+        ).bind(documentId).all();
+
+        const chunks = chunksResult.results || [];
+        const chunkIds = chunks.map((c: any) => c.id);
+
+        if (chunks.length > 0) {
+          // Import embedding service dynamically
+          const { EmbeddingService } = await import('../embedding-service');
+          const embeddingService = new EmbeddingService(this.env);
+
+          // Generate embeddings for all chunks
+          const embeddingResult = await embeddingService.generateAndStoreEmbeddings(
+            documentId,
+            workspaceId,
+            chunks,
+            chunkIds
+          );
+
+          this.env.logger.info('Embedding generation completed successfully', {
+            documentId,
+            successCount: embeddingResult.successCount,
+            failureCount: embeddingResult.failureCount,
+            totalChunks: embeddingResult.totalChunks,
+          });
+        } else {
+          this.env.logger.warn('No chunks found for embedding generation', {
+            documentId,
+          });
+        }
+      } catch (embeddingError) {
+        this.env.logger.error('Embedding generation failed, but continuing with document processing', {
+          documentId,
+          error: embeddingError instanceof Error ? embeddingError.message : String(embeddingError),
+        });
+        // Don't throw - we still want to mark the document as processed
+      }
+
       // Update document with real chunk count and AI-extracted metadata
       const now = Date.now();
       await db
