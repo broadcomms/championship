@@ -367,6 +367,24 @@ export default class extends Service<Env> {
         });
       }
 
+      // Match /api/workspaces/:id/documents/:documentId/embedding-stats (diagnostic endpoint)
+      const embeddingStatsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/embedding-stats$/);
+      if (embeddingStatsMatch && embeddingStatsMatch[1] && embeddingStatsMatch[2] && request.method === 'GET') {
+        const workspaceId = embeddingStatsMatch[1];
+        const documentId = embeddingStatsMatch[2];
+        const user = await this.validateSession(request);
+
+        const stats = await this.env.DOCUMENT_SERVICE.getEmbeddingStats(
+          documentId,
+          workspaceId,
+          user.userId
+        );
+
+        return new Response(JSON.stringify(stats), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/workspaces/:id/documents/search (semantic search)
       const documentSearchMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/search$/);
       if (documentSearchMatch && documentSearchMatch[1] && request.method === 'POST') {

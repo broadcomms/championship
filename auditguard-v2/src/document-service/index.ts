@@ -1672,4 +1672,105 @@ export default class extends Service<Env> {
 
     return chunks;
   }
+
+  /**
+   * Get embedding statistics for a document (diagnostic endpoint)
+   */
+  async getEmbeddingStats(
+    documentId: string,
+    workspaceId: string,
+    userId: string
+  ): Promise<{
+    documentId: string;
+    totalChunks: number;
+    completed: number;
+    pending: number;
+    failed: number;
+    percentage: number;
+    chunks: Array<{
+      chunkId: number;
+      chunkIndex: number;
+      embeddingStatus: string;
+      vectorId: string | null;
+      hasEmbedding: boolean;
+    }>;
+  }> {
+    this.env.logger.info('Getting embedding statistics', {
+      documentId,
+      workspaceId,
+      userId,
+    });
+
+    // Check workspace membership
+    const membership = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?`
+    ).bind(workspaceId, userId).first();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    // Verify document belongs to workspace
+    const document = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT id FROM documents WHERE id = ? AND workspace_id = ?`
+    ).bind(documentId, workspaceId).first();
+
+    if (!document) {
+      throw new Error('Document not found');
+    }
+
+    // Get embedding statistics
+    const statsResult = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT
+         COUNT(*) as total,
+         SUM(CASE WHEN embedding_status = 'completed' THEN 1 ELSE 0 END) as completed,
+         SUM(CASE WHEN embedding_status = 'pending' THEN 1 ELSE 0 END) as pending,
+         SUM(CASE WHEN embedding_status = 'failed' THEN 1 ELSE 0 END) as failed
+       FROM document_chunks
+       WHERE document_id = ?`
+    ).bind(documentId).first();
+
+    const stats = statsResult || { total: 0, completed: 0, pending: 0, failed: 0 };
+    const percentage = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+
+    // Get chunk details
+    const chunksResult = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT
+         id,
+         chunk_index,
+         embedding_status,
+         vector_id,
+         CASE WHEN vector_embedding IS NOT NULL THEN 1 ELSE 0 END as has_embedding
+       FROM document_chunks
+       WHERE document_id = ?
+       ORDER BY chunk_index ASC`
+    ).bind(documentId).all();
+
+    const chunks = (chunksResult.results || []).map((row: any) => ({
+      chunkId: row.id,
+      chunkIndex: row.chunk_index,
+      embeddingStatus: row.embedding_status,
+      vectorId: row.vector_id,
+      hasEmbedding: row.has_embedding === 1,
+    }));
+
+    this.env.logger.info('Embedding statistics retrieved', {
+      documentId,
+      totalChunks: stats.total,
+      completed: stats.completed,
+      pending: stats.pending,
+      failed: stats.failed,
+      percentage,
+    });
+
+    return {
+      documentId,
+      totalChunks: stats.total,
+      completed: stats.completed,
+      pending: stats.pending,
+      failed: stats.failed,
+      percentage,
+      chunks,
+    };
+  }
 }
