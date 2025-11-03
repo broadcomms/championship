@@ -1,6 +1,7 @@
 /**
  * Embedding Service
- * Generates vector embeddings using Raindrop AI and stores them in Vector Index
+ * Generates vector embeddings using local sentence-transformers service (all-MiniLM-L6-v2)
+ * Calls Python FastAPI service via Cloudflare Tunnel
  * Supports batch processing, error handling, and progress tracking
  */
 
@@ -252,8 +253,8 @@ export class EmbeddingService {
   }
 
   /**
-   * Generate embeddings using LOCAL sentence-transformers service (384-dim)
-   * Model: all-MiniLM-L6-v2
+   * Generate embeddings using local Python service (384-dim)
+   * Model: all-MiniLM-L6-v2 via FastAPI + Cloudflare Tunnel
    */
   private async generateEmbeddings(
     texts: string[],
@@ -263,16 +264,18 @@ export class EmbeddingService {
 
     for (let attempt = 1; attempt <= config.maxRetries; attempt++) {
       try {
-        this.env.logger.info('Generating LOCAL embeddings', {
+        const serviceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'http://localhost:8080';
+
+        this.env.logger.info('Generating embeddings via Python service', {
           textCount: texts.length,
           attempt,
           maxRetries: config.maxRetries,
-          service: 'local-sentence-transformers',
+          serviceUrl,
+          model: 'all-MiniLM-L6-v2',
         });
 
-        // Call local embedding service
-        const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'http://localhost:8080';
-        const response = await fetch(`${embeddingServiceUrl}/embed`, {
+        // Call Python embedding service
+        const response = await fetch(`${serviceUrl}/embed`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -286,7 +289,7 @@ export class EmbeddingService {
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`Embedding service error: ${response.statusText} - ${errorText}`);
+          throw new Error(`Embedding service error (${response.status}): ${errorText}`);
         }
 
         const data = await response.json() as {
@@ -296,16 +299,16 @@ export class EmbeddingService {
           latency_ms: number;
         };
 
-        // Validate response structure
+        // Validate response
         if (!data || !Array.isArray(data.embeddings)) {
-          throw new Error('Invalid embedding response from local service: missing embeddings array');
+          throw new Error('Invalid response from embedding service: missing embeddings array');
         }
 
         if (data.embeddings.length !== texts.length) {
           throw new Error(`Expected ${texts.length} embeddings, got ${data.embeddings.length}`);
         }
 
-        // Validate dimensions (should be 384 for all-MiniLM-L6-v2)
+        // Validate dimensions (should be 384)
         const embeddings: number[][] = data.embeddings;
         for (let i = 0; i < embeddings.length; i++) {
           if (!Array.isArray(embeddings[i]) || embeddings[i].length !== 384) {
@@ -313,9 +316,10 @@ export class EmbeddingService {
           }
         }
 
-        this.env.logger.info('LOCAL embeddings generated successfully', {
+        this.env.logger.info('Embeddings generated successfully via Python service', {
           count: embeddings.length,
           dimensions: embeddings[0]?.length,
+          latency_ms: data.latency_ms,
           attempt,
         });
 
@@ -324,11 +328,13 @@ export class EmbeddingService {
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        this.env.logger.warn('Embedding generation failed', {
+        this.env.logger.error('Embedding generation failed', {
           attempt,
           maxRetries: config.maxRetries,
           error: lastError.message,
+          errorStack: lastError.stack,
           willRetry: attempt < config.maxRetries,
+          model: 'Transformers.js',
         });
 
         if (attempt < config.maxRetries) {
