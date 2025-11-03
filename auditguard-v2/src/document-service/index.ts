@@ -796,12 +796,13 @@ export default class extends Service<Env> {
         throw new Error(errorMsg);
       }
 
-      // ✅ Indexing is complete! Get actual chunk count
-      const actualChunkCount = indexStatus.chunkCount;
-
+      // ✅ Indexing is complete!
+      // NOTE: We do NOT use SmartBucket's chunk count here
+      // We keep the LOCAL chunk count that was set by document-processor
       this.env.logger.info('Document indexing verified complete', {
         documentId,
-        actualChunkCount,
+        smartBucketChunkCount: indexStatus.chunkCount,
+        localChunkCount: document.chunk_count,
         storageKey: document.storage_key,
       });
 
@@ -814,49 +815,18 @@ export default class extends Service<Env> {
       let extractedTitle = document.filename;  // Fallback to filename
       let extractedDescription = '';           // Default empty
 
-      try {
-        // Extract title using documentChat
-        const titleResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
-          objectId: document.storage_key,
-          input: 'What is the title of this document? Respond with ONLY the title, no additional text or explanation.',
-          requestId: `title-${documentId}-${Date.now()}`,
-        } as any);
-
-        if (titleResponse.answer && titleResponse.answer.trim()) {
-          extractedTitle = titleResponse.answer.trim();
-          this.env.logger.info('AI title extraction successful', {
-            documentId,
-            extractedTitle,
-          });
-        }
-
-        // Extract description using documentChat
-        const descResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
-          objectId: document.storage_key,
-          input: 'Provide a brief 1-2 sentence summary of this document. Focus on the main topic and key points.',
-          requestId: `desc-${documentId}-${Date.now()}`,
-        } as any);
-
-        if (descResponse.answer && descResponse.answer.trim()) {
-          extractedDescription = descResponse.answer.trim();
-          this.env.logger.info('AI description extraction successful', {
-            documentId,
-            extractedDescription: extractedDescription.substring(0, 100) + '...',
-          });
-        }
-      } catch (aiError) {
-        // AI extraction failed - log but continue with filename as title
-        this.env.logger.warn('AI extraction failed, using filename as title', {
-          documentId,
-          error: aiError instanceof Error ? aiError.message : String(aiError),
-        });
-      }
+      // REMOVED: SmartBucket AI title/description extraction
+      // We'll focus on local embeddings first, then add AI extraction later
+      this.env.logger.info('Skipping AI title/description extraction - using filename', {
+        documentId,
+        filename: document.filename,
+      });
 
       // WORKAROUND: Generate embeddings synchronously since queue observer isn't working
       this.env.logger.info('Starting embedding generation (synchronous workaround)', {
         documentId,
         workspaceId,
-        chunkCount: actualChunkCount,
+        chunkCount: document.chunk_count,
       });
 
       try {
@@ -907,7 +877,7 @@ export default class extends Service<Env> {
         // But log prominently so we can debug
       }
 
-      // Update document with real chunk count and AI-extracted metadata
+      // Update document status (keep LOCAL chunk count, don't overwrite with SmartBucket data)
       const now = Date.now();
       await db
         .updateTable('documents')
@@ -915,7 +885,7 @@ export default class extends Service<Env> {
           title: extractedTitle,
           description: extractedDescription,
           text_extracted: 1,  // Indexing confirmed complete
-          chunk_count: actualChunkCount,  // Real count, not estimated!
+          // NOTE: We do NOT update chunk_count here - keep the LOCAL value set by document-processor
           processing_status: 'completed',
           updated_at: now,
         })
@@ -925,7 +895,8 @@ export default class extends Service<Env> {
       this.env.logger.info('Document processing completed successfully', {
         documentId,
         title: extractedTitle,
-        chunkCount: actualChunkCount,
+        localChunkCount: document.chunk_count,
+        smartBucketChunkCount: indexStatus.chunkCount,
         processingStatus: 'completed',
       });
 
@@ -933,7 +904,7 @@ export default class extends Service<Env> {
         success: true,
         title: extractedTitle,
         description: extractedDescription,
-        chunkCount: actualChunkCount,
+        chunkCount: document.chunk_count,  // Return LOCAL chunk count
       };
     } catch (error) {
       // Check if this is an "indexing in progress" error
@@ -1075,52 +1046,35 @@ export default class extends Service<Env> {
       ? 'Processing... Summary will be available after indexing completes.'
       : 'Document indexed. Summary generation can be added later if needed.';
 
-    // Get relevant chunks using chunkSearch with a broad query
+    // Get chunks from LOCAL database (not SmartBucket)
     try {
-      // ⚠️ CRITICAL: SmartBucket stores chunks for ALL documents together
-      // We MUST filter by objectId (storage_key) to get only THIS document's chunks
-      const chunkResults = await this.env.DOCUMENTS_BUCKET.chunkSearch({
-        input: document.filename.replace(/\.(pdf|docx|txt|md)$/i, ''),
-        requestId: `chunks-${documentId}-${Date.now()}`,
-      } as any);
+      const dbChunks = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT
+          id,
+          chunk_index,
+          content as text,
+          embedding_status
+         FROM document_chunks
+         WHERE document_id = ?
+         ORDER BY chunk_index ASC`
+      ).bind(documentId).all();
 
-      // ✅ FILTER: Only include chunks that belong to THIS specific document
-      const documentStorageKey = document.storage_key;
-      chunks = (chunkResults.results || [])
-        .filter((result: any) => {
-          // Each chunk has an objectId that identifies which document it belongs to
-          const chunkObjectId = result.objectId || result.source || '';
-          const belongsToThisDocument = chunkObjectId === documentStorageKey;
-          
-          if (!belongsToThisDocument) {
-            this.env.logger.debug('Filtered out chunk from different document', {
-              thisDocumentId: documentId,
-              thisStorageKey: documentStorageKey,
-              chunkObjectId,
-            });
-          }
-          
-          return belongsToThisDocument;
-        })
-        .map((result: any) => ({
-          text: result.text || '',
-          score: result.score,
-        }));
+      chunks = (dbChunks.results || []).map((chunk: any) => ({
+        text: chunk.text || '',
+        chunkIndex: chunk.chunk_index,
+        embeddingStatus: chunk.embedding_status,
+      }));
 
-      this.env.logger.info('Retrieved chunks from SmartBucket', {
+      this.env.logger.info('Retrieved chunks from LOCAL database', {
         documentId,
-        storageKey: documentStorageKey,
         chunkCount: chunks.length,
-        totalResultsBeforeFilter: chunkResults.results?.length || 0,
-        isPartial: isStillProcessing,
+        source: 'local_database',
       });
     } catch (error) {
-      this.env.logger.warn('Failed to retrieve chunks (may still be processing)', {
+      this.env.logger.error('Failed to retrieve chunks from database', {
         documentId,
         error: error instanceof Error ? error.message : String(error),
-        isPartial: isStillProcessing,
       });
-      // Chunks are optional, continue without them
       chunks = [];
     }
 
