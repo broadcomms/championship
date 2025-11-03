@@ -2,62 +2,49 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-
-interface Chunk {
-  text: string;
-  score?: number;
-}
+import { DocumentChunksViewer } from './DocumentChunksViewer';
 
 interface DocumentContent {
-  chunks: Chunk[];
   fullText: string;
   summary: string;
-  isPartial: boolean;         // NEW: Indicates if content is still processing
-  processingStatus: string;    // NEW: Current processing status
+  chunks?: Array<{
+    text: string;
+    score?: number;
+  }>;
 }
 
 interface DocumentContentViewerProps {
   workspaceId: string;
   documentId: string;
-  isCompleted: boolean;
+  hasExtractedText: boolean;
+  chunkCount?: number;
 }
 
 export function DocumentContentViewer({
   workspaceId,
   documentId,
-  isCompleted,
+  hasExtractedText,
+  chunkCount,
 }: DocumentContentViewerProps) {
   const [content, setContent] = useState<DocumentContent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'summary' | 'fullText' | 'chunks'>('summary');
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+
+  const totalChunks = chunkCount ?? content?.chunks?.length ?? 0;
+  const hasChunks = totalChunks > 0;
 
   useEffect(() => {
-    // ✅ PROGRESSIVE: Always fetch content, even if not completed
-    fetchContent();
-  }, [workspaceId, documentId]);
-
-  useEffect(() => {
-    // ✅ SMART POLLING: Stop when content is meaningfully complete
-    // Continue polling if:
-    // 1. isPartial flag is true AND
-    // 2. Content is actually missing (no summary, no text, or no chunks)
-    const contentIsMissing = !content?.summary || !content?.fullText || content?.chunks?.length === 0;
-    const shouldPoll = content?.isPartial && contentIsMissing;
-
-    if (shouldPoll) {
-      const interval = setInterval(() => {
-        fetchContent();
-      }, 5000); // Poll every 5 seconds
-      setPollingInterval(interval);
-      return () => clearInterval(interval);
-    } else if (pollingInterval) {
-      // Stop polling when content is available
-      clearInterval(pollingInterval);
-      setPollingInterval(null);
+    if (hasExtractedText) {
+      fetchContent();
     }
-  }, [content?.isPartial, content?.summary, content?.fullText, content?.chunks]);
+  }, [workspaceId, documentId, hasExtractedText]);
+
+  useEffect(() => {
+    if (!hasChunks && activeTab === 'chunks') {
+      setActiveTab('summary');
+    }
+  }, [hasChunks, activeTab]);
 
   const fetchContent = async () => {
     setIsLoading(true);
@@ -74,8 +61,19 @@ export function DocumentContentViewer({
     }
   };
 
-  // ✅ REMOVED: No longer block on "not completed" status
-  // Progressive loading shows partial content immediately
+  if (!hasExtractedText) {
+    return (
+      <div className="rounded-lg bg-gray-50 border-2 border-dashed border-gray-300 p-8">
+        <div className="text-center">
+          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <h3 className="mt-2 text-sm font-medium text-gray-900">Text extraction in progress</h3>
+          <p className="mt-1 text-sm text-gray-500">Content will appear here once extraction completes</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -92,11 +90,16 @@ export function DocumentContentViewer({
 
   if (error) {
     return (
-      <div className="rounded-lg bg-red-50 p-6">
-        <p className="text-sm text-red-800">{error}</p>
+      <div className="rounded-lg bg-red-50 border border-red-200 p-6">
+        <div className="flex items-center gap-3">
+          <svg className="h-5 w-5 text-red-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-sm text-red-800">{error}</p>
+        </div>
         <button
           onClick={fetchContent}
-          className="mt-3 text-sm font-medium text-red-600 hover:text-red-700"
+          className="mt-3 text-sm font-medium text-red-600 hover:text-red-700 underline"
         >
           Try Again
         </button>
@@ -110,135 +113,127 @@ export function DocumentContentViewer({
 
   return (
     <div className="rounded-lg bg-white shadow">
-      {/* ✅ SMART BANNER: Only show if content is actually missing */}
-      {content?.isPartial && (!content?.summary || !content?.fullText || content?.chunks?.length === 0) && (
-        <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-yellow-600 border-t-transparent"></div>
-            <p className="text-sm text-yellow-800">
-              <strong>Processing...</strong> Content is being extracted. Updates will appear automatically.
-            </p>
-          </div>
-          <span className="text-xs text-yellow-600 font-medium">
-            Status: {content.processingStatus}
-          </span>
-        </div>
-      )}
+      {/* Clean Header - No polling banners */}
       
-      {/* ✅ INFO BANNER: Show when content is ready but AI extraction is ongoing */}
-      {content?.isPartial && content?.summary && content?.fullText && content?.chunks?.length > 0 && (
-        <div className="bg-blue-50 border-b border-blue-200 px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <svg className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-sm text-blue-800">
-              <strong>Content Ready!</strong> AI is extracting title and description in the background.
-            </p>
-          </div>
-          <span className="text-xs text-blue-600 font-medium">
-            Status: {content.processingStatus}
-          </span>
-        </div>
-      )}
-
-      {/* Tabs */}
+      {/* Tab Navigation */}
       <div className="border-b border-gray-200">
         <nav className="flex" aria-label="Tabs">
-          <button
+          <TabButton
+            active={activeTab === 'summary'}
             onClick={() => setActiveTab('summary')}
-            className={`px-6 py-4 text-sm font-medium ${
-              activeTab === 'summary'
-                ? 'border-b-2 border-blue-500 text-blue-600'
-                : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Summary
-          </button>
-          <button
+            label="Summary"
+          />
+          <TabButton
+            active={activeTab === 'fullText'}
             onClick={() => setActiveTab('fullText')}
-            className={`px-6 py-4 text-sm font-medium ${
-              activeTab === 'fullText'
-                ? 'border-b-2 border-blue-500 text-blue-600'
-                : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Full Text
-          </button>
-          <button
-            onClick={() => setActiveTab('chunks')}
-            className={`px-6 py-4 text-sm font-medium ${
-              activeTab === 'chunks'
-                ? 'border-b-2 border-blue-500 text-blue-600'
-                : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Chunks ({content.chunks.length})
-          </button>
+            label="Full Text"
+          />
+          {hasChunks && (
+            <TabButton
+              active={activeTab === 'chunks'}
+              onClick={() => setActiveTab('chunks')}
+              label={`Document Chunks (${totalChunks})`}
+            />
+          )}
         </nav>
       </div>
 
-      {/* Content Area */}
+      {/* Content Display */}
       <div className="p-6">
-        {activeTab === 'summary' && (
-          <div>
-            <h3 className="mb-4 text-lg font-semibold text-gray-900">Document Summary</h3>
-            <div className="prose prose-sm max-w-none">
-              <p className="text-gray-700 leading-relaxed">{content.summary}</p>
-            </div>
+        {activeTab === 'summary' && <SummaryTab summary={content.summary} />}
+        {activeTab === 'fullText' && <FullTextTab fullText={content.fullText} />}
+        {activeTab === 'chunks' && hasChunks && (
+          <div className="-mx-6">
+            <DocumentChunksViewer
+              workspaceId={workspaceId}
+              documentId={documentId}
+              chunkCount={totalChunks}
+              embedded
+            />
           </div>
         )}
+      </div>
+    </div>
+  );
+}
 
-        {activeTab === 'fullText' && (
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Extracted Text</h3>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(content.fullText);
-                }}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                📋 Copy
-              </button>
-            </div>
-            <div className="max-h-[600px] overflow-y-auto rounded-md bg-gray-50 p-4">
-              <pre className="whitespace-pre-wrap font-mono text-xs text-gray-800">
-                {content.fullText}
-              </pre>
-            </div>
-          </div>
-        )}
+// ============================================================================
+// Sub-Components for Clean Modularity
+// ============================================================================
 
-        {activeTab === 'chunks' && (
-          <div>
-            <h3 className="mb-4 text-lg font-semibold text-gray-900">
-              Document Chunks ({content.chunks.length})
-            </h3>
-            <div className="space-y-4 max-h-[600px] overflow-y-auto">
-              {content.chunks.map((chunk, index) => (
-                <div
-                  key={index}
-                  className="rounded-lg border border-gray-200 bg-gray-50 p-4 hover:border-blue-300 transition-colors"
-                >
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-500">
-                      Chunk {index + 1}
-                    </span>
-                    {chunk.score !== undefined && (
-                      <span className="text-xs text-gray-400">
-                        Score: {(chunk.score * 100).toFixed(1)}%
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
-                    {chunk.text}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+interface TabButtonProps {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}
+
+function TabButton({ active, onClick, label }: TabButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-6 py-4 text-sm font-medium transition-colors ${
+        active
+          ? 'border-b-2 border-blue-500 text-blue-600'
+          : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+interface SummaryTabProps {
+  summary: string;
+}
+
+function SummaryTab({ summary }: SummaryTabProps) {
+  return (
+    <div>
+      <h3 className="mb-4 text-lg font-semibold text-gray-900">Document Summary</h3>
+      <div className="prose prose-sm max-w-none">
+        <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{summary}</p>
+      </div>
+    </div>
+  );
+}
+
+interface FullTextTabProps {
+  fullText: string;
+}
+
+function FullTextTab({ fullText }: FullTextTabProps) {
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(fullText);
+    } catch (err) {
+      console.error('Failed to copy text:', err);
+    }
+  };
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">Extracted Text</h3>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+          Copy text
+        </button>
+      </div>
+      <div className="max-h-[600px] overflow-y-auto rounded-md bg-gray-50 border border-gray-200 p-4">
+        <pre className="whitespace-pre-wrap font-mono text-xs text-gray-800 leading-relaxed">
+          {fullText}
+        </pre>
       </div>
     </div>
   );

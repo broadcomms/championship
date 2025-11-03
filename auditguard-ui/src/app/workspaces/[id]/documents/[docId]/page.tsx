@@ -8,8 +8,6 @@ import { CategoryBadge } from '@/components/documents/CategoryBadge';
 import { ProcessingIndicator } from '@/components/documents/ProcessingIndicator';
 import { ProcessingProgress } from '@/components/documents/ProcessingProgress';
 import { DocumentContentViewer } from '@/components/documents/DocumentContentViewer';
-import { DocumentChunksViewer } from '@/components/documents/DocumentChunksViewer';
-import { useDocumentPolling } from '@/hooks/useDocumentPolling';
 import { api } from '@/lib/api';
 import { Document, DocumentCategory } from '@/types';
 
@@ -31,29 +29,9 @@ export default function DocumentDetailsPage() {
   const [editFilename, setEditFilename] = useState('');
   const [editCategory, setEditCategory] = useState<DocumentCategory>('other');
 
-  // Use polling hook for processing status
-  const { status, document: polledDocument, startPolling } = useDocumentPolling(
-    workspaceId,
-    documentId
-  );
-
   useEffect(() => {
     fetchDocument();
   }, [workspaceId, documentId]);
-
-  useEffect(() => {
-    // Update document if polling returns new data
-    if (polledDocument) {
-      setDocument(polledDocument);
-    }
-  }, [polledDocument]);
-
-  useEffect(() => {
-    // Start polling if document is being processed
-    if (document && (document.processingStatus === 'pending' || document.processingStatus === 'processing')) {
-      startPolling();
-    }
-  }, [document?.processingStatus]);
 
   const fetchDocument = async () => {
     setIsLoading(true);
@@ -121,8 +99,6 @@ export default function DocumentDetailsPage() {
     setError('');
     try {
       await api.post(`/api/workspaces/${workspaceId}/documents/${documentId}/process`, {});
-      // Start polling to watch for status changes
-      startPolling();
       // Refresh document to get updated status
       await fetchDocument();
     } catch (err: any) {
@@ -412,25 +388,15 @@ export default function DocumentDetailsPage() {
           </div>
         )}
 
-        {/* Document Content Viewer - ✅ PROGRESSIVE: Show always, not just when completed */}
+        {/* Document Content Viewer - Show extracted content when available */}
         <div className="mb-8">
           <DocumentContentViewer
             workspaceId={workspaceId}
             documentId={documentId}
-            isCompleted={document.processingStatus === 'completed'}
+            hasExtractedText={document.textExtracted || false}
+            chunkCount={document.chunkCount}
           />
         </div>
-
-        {/* Document Chunks Viewer - Phase 5: Display chunks with framework tags */}
-        {document.textExtracted && document.chunkCount > 0 && (
-          <div className="mb-8">
-            <DocumentChunksViewer
-              workspaceId={workspaceId}
-              documentId={documentId}
-              chunkCount={document.chunkCount}
-            />
-          </div>
-        )}
 
         {/* Delete Section */}
         <div className="rounded-lg border-2 border-red-200 bg-red-50 p-6">

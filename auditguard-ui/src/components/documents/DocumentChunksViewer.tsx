@@ -8,12 +8,14 @@ interface DocumentChunksViewerProps {
   workspaceId: string;
   documentId: string;
   chunkCount?: number;
+  embedded?: boolean;
 }
 
 export function DocumentChunksViewer({
   workspaceId,
   documentId,
   chunkCount = 0,
+  embedded = false,
 }: DocumentChunksViewerProps) {
   const [chunks, setChunks] = useState<DocumentChunk[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -58,7 +60,13 @@ export function DocumentChunksViewer({
   };
 
   if (chunkCount === 0) {
-    return (
+    return embedded ? (
+      <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-6 text-center">
+        <p className="text-sm text-gray-600">
+          No chunks available. Document may still be processing.
+        </p>
+      </div>
+    ) : (
       <div className="rounded-lg bg-gray-50 p-6 text-center">
         <p className="text-sm text-gray-600">
           No chunks available. Document may still be processing.
@@ -68,7 +76,12 @@ export function DocumentChunksViewer({
   }
 
   if (isLoading) {
-    return (
+    return embedded ? (
+      <div className="flex items-center justify-center rounded-md border border-gray-200 bg-white py-8">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        <p className="ml-3 text-sm text-gray-600">Loading chunks...</p>
+      </div>
+    ) : (
       <div className="rounded-lg bg-white p-6 shadow">
         <div className="flex items-center justify-center py-8">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
@@ -79,7 +92,11 @@ export function DocumentChunksViewer({
   }
 
   if (error) {
-    return (
+    return embedded ? (
+      <div className="rounded-md border border-red-200 bg-red-50 p-6">
+        <p className="text-sm text-red-800">{error}</p>
+      </div>
+    ) : (
       <div className="rounded-lg bg-red-50 p-6">
         <p className="text-sm text-red-800">{error}</p>
       </div>
@@ -87,21 +104,27 @@ export function DocumentChunksViewer({
   }
 
   if (chunks.length === 0) {
-    return (
+    return embedded ? (
+      <div className="rounded-md border border-gray-200 bg-gray-50 p-6 text-center">
+        <p className="text-sm text-gray-600">No chunks found</p>
+      </div>
+    ) : (
       <div className="rounded-lg bg-gray-50 p-6 text-center">
         <p className="text-sm text-gray-600">No chunks found</p>
       </div>
     );
   }
 
-  return (
-    <div className="rounded-lg bg-white p-6 shadow">
+  const indexedCount = chunks.filter((c) => c.embeddingStatus === 'completed').length;
+
+  const content = (
+    <><div className="p-6">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">
           Document Chunks ({chunks.length})
         </h2>
         <div className="text-sm text-gray-600">
-          {chunks.filter((c) => c.embeddingStatus === 'completed').length} / {chunks.length} indexed
+          {indexedCount} / {chunks.length} indexed
         </div>
       </div>
 
@@ -189,6 +212,17 @@ export function DocumentChunksViewer({
           );
         })}
       </div>
+    </div>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="space-y-4">{content}</div>;
+  }
+
+  return (
+    <div className="rounded-lg bg-white p-6 shadow">
+      {content}
     </div>
   );
 }
