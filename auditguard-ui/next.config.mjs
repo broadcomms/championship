@@ -1,10 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async rewrites() {
+    // Use environment variable for API URL with fallback
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8787';
+
     return [
       {
         source: '/api/:path*',
-        destination: 'https://svc-01k91gnrcx1vyq8fb1w0wfveg9.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/:path*',
+        destination: `${apiUrl}/api/:path*`,
       },
     ];
   },

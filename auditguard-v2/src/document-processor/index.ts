@@ -217,15 +217,22 @@ export default class extends Each<Body, Env> {
 
       // STEP 3C: Generate and store embeddings (parallel with SmartBucket)
       // This runs asynchronously - we don't wait for completion
+      this.env.logger.info('About to start async embedding generation', {
+        documentId,
+        chunkCount: chunkingResult.chunks.length,
+        chunkIdCount: chunkIds.length,
+      });
+
       this.generateEmbeddingsAsync(
         documentId,
         workspaceId,
         chunkingResult.chunks,
         chunkIds
       ).catch(error => {
-        this.env.logger.error('Async embedding generation failed', {
+        this.env.logger.error('Async embedding generation failed in catch block', {
           documentId,
           error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
         });
       });
 
@@ -354,8 +361,15 @@ export default class extends Each<Body, Env> {
     chunks: any[],
     chunkIds: number[]
   ): Promise<void> {
+    this.env.logger.info('generateEmbeddingsAsync called', {
+      documentId,
+      workspaceId,
+      chunkCount: chunks.length,
+      chunkIdCount: chunkIds.length,
+    });
+
     try {
-      this.env.logger.info('Async embedding generation started', {
+      this.env.logger.info('Async embedding generation started - inside try block', {
         documentId,
         workspaceId,
         chunkCount: chunks.length,

@@ -71,14 +71,23 @@ export class EmbeddingService {
     frameworkId?: number,
     config: Partial<EmbeddingConfig> = {}
   ): Promise<BatchEmbeddingResult> {
+    this.env.logger.info('generateAndStoreEmbeddings called', {
+      documentId,
+      workspaceId,
+      chunkCount: chunks.length,
+      chunkIdCount: chunkIds.length,
+    });
+
     const fullConfig: EmbeddingConfig = { ...this.DEFAULT_CONFIG, ...config };
     const startTime = Date.now();
 
-    this.env.logger.info('Starting embedding generation', {
+    this.env.logger.info('Starting embedding generation with config', {
       documentId,
       workspaceId,
       totalChunks: chunks.length,
       batchSize: fullConfig.batchSize,
+      hasAI: !!this.env.AI,
+      hasVectorIndex: !!this.env.DOCUMENT_EMBEDDINGS,
     });
 
     if (chunks.length !== chunkIds.length) {
@@ -262,32 +271,37 @@ export class EmbeddingService {
         // Call Raindrop AI inference
         const response = await this.env.AI.run('embeddings', {
           input: texts,
-          model: config.model,
         });
 
-        // Validate response
-        if (!response || !Array.isArray(response)) {
-          throw new Error('Invalid embedding response from AI service');
+        // Validate response structure
+        if (!response || !response.data || !Array.isArray(response.data)) {
+          throw new Error('Invalid embedding response from AI service: missing data array');
         }
 
-        if (response.length !== texts.length) {
-          throw new Error(`Expected ${texts.length} embeddings, got ${response.length}`);
+        if (response.data.length !== texts.length) {
+          throw new Error(`Expected ${texts.length} embeddings, got ${response.data.length}`);
         }
 
-        // Validate each embedding has 1024 dimensions
-        for (let i = 0; i < response.length; i++) {
-          if (!Array.isArray(response[i]) || response[i].length !== 1024) {
-            throw new Error(`Invalid embedding at index ${i}: expected 1024 dimensions`);
+        // Extract embeddings from response.data[].embedding
+        const embeddings: number[][] = [];
+        for (let i = 0; i < response.data.length; i++) {
+          const item = response.data[i];
+          if (!item || !Array.isArray(item.embedding)) {
+            throw new Error(`Invalid embedding at index ${i}: missing embedding array`);
           }
+          if (item.embedding.length !== 1024) {
+            throw new Error(`Invalid embedding at index ${i}: expected 1024 dimensions, got ${item.embedding.length}`);
+          }
+          embeddings.push(item.embedding);
         }
 
         this.env.logger.info('Embeddings generated successfully', {
-          count: response.length,
-          dimensions: response[0]?.length,
+          count: embeddings.length,
+          dimensions: embeddings[0]?.length,
           attempt,
         });
 
-        return response;
+        return embeddings;
 
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -319,11 +333,12 @@ export class EmbeddingService {
     metadata: VectorMetadata
   ): Promise<void> {
     try {
-      await this.env.DOCUMENT_EMBEDDINGS.upsert({
+      // VectorIndex.upsert expects an array of vectors with 'values' property
+      await this.env.DOCUMENT_EMBEDDINGS.upsert([{
         id: vectorId,
-        vector: embedding,
-        metadata: metadata as any, // Cloudflare vector metadata
-      });
+        values: embedding,
+        metadata: metadata as any,
+      }]);
 
       this.env.logger.info('Vector stored in index', {
         vectorId,
@@ -353,15 +368,14 @@ export class EmbeddingService {
       const embeddingBuffer = new Float32Array(embedding);
       const embeddingBlob = Buffer.from(embeddingBuffer.buffer);
 
-      // Update chunk with embedding data
-      await this.env.AUDITGUARD_DB.run(
+      // Update chunk with embedding data using Raindrop D1 API
+      await (this.env.AUDITGUARD_DB as any).prepare(
         `UPDATE document_chunks
          SET vector_embedding = ?,
              vector_id = ?,
              embedding_status = 'completed'
-         WHERE id = ?`,
-        [embeddingBlob, vectorId, chunkId]
-      );
+         WHERE id = ?`
+      ).bind(embeddingBlob, vectorId, chunkId).run();
 
       this.env.logger.info('Embedding stored in database', {
         chunkId,
@@ -405,25 +419,37 @@ export class EmbeddingService {
         filter.frameworkId = frameworkId;
       }
 
-      // Query vector index
-      const results = await this.env.DOCUMENT_EMBEDDINGS.query({
-        vector: queryEmbedding[0],
-        topK,
-        filter: Object.keys(filter).length > 0 ? filter : undefined,
-      });
+      // Query vector index - query() expects vector as first param, options as second
+      const results = await this.env.DOCUMENT_EMBEDDINGS.query(
+        queryEmbedding[0],
+        {
+          topK,
+          returnMetadata: 'all',
+          // Note: Raindrop VectorIndex uses namespace filtering, not direct metadata filtering
+          // You may need to adjust filtering strategy based on your use case
+        }
+      );
 
       this.env.logger.info('Vector search completed', {
         queryText: queryText.substring(0, 100),
         topK,
-        resultsCount: results.length,
+        resultsCount: results.matches?.length || 0,
         workspaceId,
         frameworkId,
       });
 
-      return results.map((r: any) => ({
-        id: r.id,
-        score: r.score,
-        metadata: r.metadata as VectorMetadata,
+      // Filter by workspaceId and frameworkId in application layer
+      const filteredMatches = (results.matches || []).filter((match: any) => {
+        const meta = match.metadata || {};
+        if (workspaceId && meta.workspaceId !== workspaceId) return false;
+        if (frameworkId && meta.frameworkId !== frameworkId) return false;
+        return true;
+      });
+
+      return filteredMatches.map((match: any) => ({
+        id: match.id,
+        score: match.score,
+        metadata: match.metadata as VectorMetadata,
       }));
 
     } catch (error) {
@@ -440,20 +466,24 @@ export class EmbeddingService {
    */
   async deleteDocumentEmbeddings(documentId: string): Promise<void> {
     try {
-      // Query all vectors for this document
-      const vectors = await this.env.DOCUMENT_EMBEDDINGS.query({
-        filter: { documentId },
-        topK: 10000, // High limit to get all
-      });
+      // Get all chunk IDs from database for this document
+      const chunks = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT vector_id FROM document_chunks WHERE document_id = ? AND vector_id IS NOT NULL`
+      ).bind(documentId).all();
 
-      // Delete each vector
-      for (const vector of vectors) {
-        await this.env.DOCUMENT_EMBEDDINGS.delete(vector.id);
+      const vectorIds = chunks.results?.map((c: any) => c.vector_id).filter(Boolean) || [];
+
+      if (vectorIds.length === 0) {
+        this.env.logger.info('No vectors to delete for document', { documentId });
+        return;
       }
+
+      // Delete vectors by IDs
+      await this.env.DOCUMENT_EMBEDDINGS.deleteByIds(vectorIds);
 
       this.env.logger.info('Document embeddings deleted', {
         documentId,
-        deletedCount: vectors.length,
+        deletedCount: vectorIds.length,
       });
 
     } catch (error) {
@@ -476,16 +506,15 @@ export class EmbeddingService {
     percentage: number;
   }> {
     try {
-      const result = await this.env.AUDITGUARD_DB.query(
+      const result = await (this.env.AUDITGUARD_DB as any).prepare(
         `SELECT
            COUNT(*) as total,
            SUM(CASE WHEN embedding_status = 'completed' THEN 1 ELSE 0 END) as completed,
            SUM(CASE WHEN embedding_status = 'pending' THEN 1 ELSE 0 END) as pending,
            SUM(CASE WHEN embedding_status = 'failed' THEN 1 ELSE 0 END) as failed
          FROM document_chunks
-         WHERE document_id = ?`,
-        [documentId]
-      );
+         WHERE document_id = ?`
+      ).bind(documentId).all();
 
       const stats = result.results[0] || { total: 0, completed: 0, pending: 0, failed: 0 };
       const percentage = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;

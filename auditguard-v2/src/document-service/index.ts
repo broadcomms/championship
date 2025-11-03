@@ -269,6 +269,7 @@ export default class extends Service<Env> {
     contentType: string;
     category: string | null;
     storageKey: string;
+    vultrKey?: string;
     uploadedBy: string;
     uploaderEmail: string;
     uploadedAt: number;
@@ -276,6 +277,12 @@ export default class extends Service<Env> {
     processingStatus: string;
     textExtracted: boolean;
     chunkCount: number;
+    wordCount?: number;
+    pageCount?: number;
+    chunksCreated?: number;
+    embeddingsGenerated?: number;
+    vectorIndexingStatus?: string;
+    complianceFrameworkId?: number;
   }> {
     const db = this.getDb();
 
@@ -305,6 +312,7 @@ export default class extends Service<Env> {
         'documents.content_type',
         'documents.category',
         'documents.storage_key',
+        'documents.vultr_key' as any,
         'documents.uploaded_by',
         'users.email as uploader_email',
         'documents.uploaded_at',
@@ -312,6 +320,12 @@ export default class extends Service<Env> {
         'documents.processing_status',
         'documents.text_extracted',
         'documents.chunk_count',
+        'documents.word_count' as any,
+        'documents.page_count' as any,
+        'documents.chunks_created' as any,
+        'documents.embeddings_generated' as any,
+        'documents.vector_indexing_status' as any,
+        'documents.compliance_framework_id' as any,
       ])
       .where('documents.id', '=', documentId)
       .where('documents.workspace_id', '=', workspaceId)
@@ -331,6 +345,7 @@ export default class extends Service<Env> {
       contentType: document.content_type,
       category: document.category,
       storageKey: document.storage_key,
+      vultrKey: document.vultr_key,
       uploadedBy: document.uploaded_by,
       uploaderEmail: document.uploader_email,
       uploadedAt: document.uploaded_at,
@@ -338,6 +353,12 @@ export default class extends Service<Env> {
       processingStatus: document.processing_status,
       textExtracted: document.text_extracted === 1,
       chunkCount: document.chunk_count,
+      wordCount: document.word_count,
+      pageCount: document.page_count,
+      chunksCreated: document.chunks_created,
+      embeddingsGenerated: document.embeddings_generated,
+      vectorIndexingStatus: document.vector_indexing_status,
+      complianceFrameworkId: document.compliance_framework_id,
     };
   }
 
@@ -1546,6 +1567,12 @@ export default class extends Service<Env> {
       WHERE dc.document_id = ?
       ORDER BY dc.chunk_index ASC, dcf.relevance_score DESC`
     ).bind(documentId).all();
+
+    this.env.logger.info('Raw SQL results for chunks', {
+      documentId,
+      rowCount: result.results?.length || 0,
+      success: result.success,
+    });
 
     // Group chunks with their tags
     const chunksMap = new Map<number, any>();

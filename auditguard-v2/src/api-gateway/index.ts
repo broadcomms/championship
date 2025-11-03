@@ -304,23 +304,43 @@ export default class extends Service<Env> {
         const documentId = processMatch[2];
         const user = await this.validateSession(request);
 
-        // Get document to retrieve storage key
+        // Get document to retrieve vultr_key for reprocessing
         const document = await this.env.DOCUMENT_SERVICE.getDocument(documentId, workspaceId, user.userId);
 
-        this.env.logger.info('Enqueueing document for processing', { documentId, workspaceId, userId: user.userId });
+        if (!document.vultrKey) {
+          return new Response(
+            JSON.stringify({
+              error: 'Document does not have a valid Vultr storage key. Cannot reprocess.',
+            }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
 
-        // Enqueue the document for processing with retry support
+        this.env.logger.info('Enqueueing document for reprocessing', {
+          documentId,
+          workspaceId,
+          userId: user.userId,
+          vultrKey: document.vultrKey,
+          action: 'extract_and_index',
+        });
+
+        // Enqueue the document for full reprocessing (new flow)
         await this.env.DOCUMENT_PROCESSING_QUEUE.send({
           documentId,
           workspaceId,
           userId: user.userId,
-          storageKey: document.storageKey,
+          vultrKey: document.vultrKey,
+          action: 'extract_and_index',  // Trigger full extraction pipeline
+          frameworkId: document.complianceFrameworkId,  // Preserve existing framework
         });
 
         return new Response(
           JSON.stringify({
             success: true,
-            message: 'Document queued for processing',
+            message: 'Document queued for reprocessing',
             documentId,
           }),
           {

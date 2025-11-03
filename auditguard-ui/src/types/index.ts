@@ -62,6 +62,7 @@ export interface Document {
   contentType: string;
   category: DocumentCategory | null;
   storageKey: string;
+  vultrKey?: string; // Vultr S3 key for original file
   uploadedBy: string;
   uploadedAt: number;
   updatedAt: number;
@@ -70,6 +71,7 @@ export interface Document {
   chunkCount: number;
   pageCount?: number;
   wordCount?: number;
+  chunksCreated?: number; // Phase 5: Custom vector chunks created
   embeddingsGenerated?: number;
   vectorIndexingStatus?: 'pending' | 'processing' | 'completed' | 'partial' | 'failed';
   complianceFrameworkId?: number;
