@@ -18,11 +18,11 @@ export class VultrStorageService {
 
   constructor(env: any) {
     this.env = env;
-    this.bucketName = env.VULTR_S3_BUCKET;
-    this.endpoint = env.VULTR_S3_ENDPOINT;
-    this.region = env.VULTR_S3_REGION;
-    this.accessKeyId = env.VULTR_S3_ACCESS_KEY;
-    this.secretAccessKey = env.VULTR_S3_SECRET_KEY;
+    this.bucketName = env.VULTR_STORAGE_BUCKET;
+    this.endpoint = env.VULTR_STORAGE_ENDPOINT;
+    this.region = env.VULTR_STORAGE_REGION;
+    this.accessKeyId = env.VULTR_STORAGE_ACCESS_KEY;
+    this.secretAccessKey = env.VULTR_STORAGE_SECRET_KEY;
 
     this.env.logger?.info('Vultr S3 Storage Service initialized (Worker-compatible)', {
       bucket: this.bucketName,
