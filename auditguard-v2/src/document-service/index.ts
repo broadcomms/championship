@@ -896,11 +896,15 @@ export default class extends Service<Env> {
           });
         }
       } catch (embeddingError) {
-        this.env.logger.error('Embedding generation failed, but continuing with document processing', {
+        this.env.logger.error('⚠️ EMBEDDING GENERATION FAILED ⚠️', {
           documentId,
           error: embeddingError instanceof Error ? embeddingError.message : String(embeddingError),
+          errorStack: embeddingError instanceof Error ? embeddingError.stack : undefined,
+          errorType: embeddingError?.constructor?.name,
+          LOCAL_EMBEDDING_SERVICE_URL: this.env.LOCAL_EMBEDDING_SERVICE_URL || 'NOT SET',
         });
         // Don't throw - we still want to mark the document as processed
+        // But log prominently so we can debug
       }
 
       // Update document with real chunk count and AI-extracted metadata

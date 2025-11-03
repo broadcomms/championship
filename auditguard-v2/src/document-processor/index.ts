@@ -190,30 +190,55 @@ export default class extends Each<Body, Env> {
 
       const chunkIds: number[] = [];
       for (const chunk of chunkingResult.chunks) {
-        const result = await (this.env.AUDITGUARD_DB as any).prepare(
-          `INSERT INTO document_chunks (
-            document_id, workspace_id, chunk_index, content, chunk_size,
-            start_char, end_char, token_count, has_header, section_title,
-            embedding_status, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-          RETURNING id`
-        ).bind(
-          documentId,
-          workspaceId,
-          chunk.index,
-          chunk.text,
-          chunk.text.length,
-          chunk.metadata.startChar,
-          chunk.metadata.endChar,
-          chunk.metadata.tokenCount,
-          chunk.metadata.hasHeader ? 1 : 0,
-          chunk.metadata.sectionTitle || null,
-          Date.now()
-        ).first();
+        try {
+          const result = await (this.env.AUDITGUARD_DB as any).prepare(
+            `INSERT INTO document_chunks (
+              document_id, workspace_id, chunk_index, content, chunk_size,
+              start_char, end_char, token_count, has_header, section_title,
+              embedding_status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+            RETURNING id`
+          ).bind(
+            documentId,
+            workspaceId,
+            chunk.index,
+            chunk.text,
+            chunk.text.length,
+            chunk.metadata.startChar,
+            chunk.metadata.endChar,
+            chunk.metadata.tokenCount,
+            chunk.metadata.hasHeader ? 1 : 0,
+            chunk.metadata.sectionTitle || null,
+            Date.now()
+          ).first();
 
-        // Get the inserted chunk ID from RETURNING clause
-        if (result && result.id) {
-          chunkIds.push(result.id);
+          this.env.logger.info('Chunk insert result', {
+            documentId,
+            chunkIndex: chunk.index,
+            hasResult: !!result,
+            resultKeys: result ? Object.keys(result) : [],
+            resultId: result?.id,
+            resultIdType: result?.id ? typeof result.id : 'undefined',
+          });
+
+          // Get the inserted chunk ID from RETURNING clause
+          if (result && result.id) {
+            chunkIds.push(result.id);
+          } else {
+            this.env.logger.error('Chunk insert did not return ID', {
+              documentId,
+              chunkIndex: chunk.index,
+              result,
+            });
+          }
+        } catch (error) {
+          this.env.logger.error('Failed to insert chunk', {
+            documentId,
+            chunkIndex: chunk.index,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+          throw error;
         }
       }
 

@@ -1,0 +1,9 @@
+Using organization: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+Using user: user_01K8RV423SG75TDJC3014RQN9B
+Tailing logs for auditguard-v2@01k93db9tdjehrmmqxqz1jdvsa using Riverjack service...
+Press Ctrl+C to stop
+
+🔄 Started streaming logs for auditguard-v2@01k93db9tdjehrmmqxqz1jdvsa
+   Organization: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+   User: user_01K8RV423SG75TDJC3014RQN9B
+   Time: 11/3/2025, 3:46:06 AM
