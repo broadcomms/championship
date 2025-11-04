@@ -275,11 +275,18 @@ export class EmbeddingService {
         });
 
         // Call Python embedding service
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+
+        // Add API key if configured
+        if (this.env.EMBEDDING_SERVICE_API_KEY) {
+          headers['X-API-Key'] = this.env.EMBEDDING_SERVICE_API_KEY;
+        }
+
         const response = await fetch(`${serviceUrl}/embed`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify({
             texts: texts,
             batch_size: Math.min(texts.length, 32),

@@ -1410,6 +1410,67 @@ export default class extends Service<Env> {
         }
       }
 
+      // POST /api/admin/test-embedding - Test embedding service directly
+      if (path === '/api/admin/test-embedding' && request.method === 'POST') {
+        this.env.logger.info('Testing embedding service directly');
+
+        try {
+          // Import embedding service
+          const { EmbeddingService } = await import('../embedding-service');
+          const embeddingService = new EmbeddingService(this.env);
+
+          this.env.logger.info('EmbeddingService instance created');
+
+          // Test with a simple chunk
+          const testChunk = {
+            text: 'This is a test document chunk for testing the embedding service.',
+            index: 0,
+            metadata: {
+              chunkIndex: 0,
+              startChar: 0,
+              endChar: 64,
+              hasHeader: false,
+              sectionTitle: undefined,
+              tokenCount: 12,
+            },
+          };
+
+          this.env.logger.info('Calling generateAndStoreEmbeddings');
+
+          const result = await embeddingService.generateAndStoreEmbeddings(
+            'test-doc-123',
+            'test-workspace',
+            [testChunk],
+            [999]  // Fake chunk ID
+          );
+
+          this.env.logger.info('Test embedding completed', { result });
+
+          return new Response(JSON.stringify({
+            success: true,
+            result,
+            message: 'Embedding service test passed!',
+          }, null, 2), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+
+        } catch (error) {
+          this.env.logger.error('Test embedding failed', {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+
+          return new Response(JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined,
+          }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
       // POST /api/admin/analytics/query
       if (path === '/api/admin/analytics/query' && request.method === 'POST') {
         const user = await this.validateSession(request);

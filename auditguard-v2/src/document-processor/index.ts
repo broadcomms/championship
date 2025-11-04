@@ -4,6 +4,7 @@ import { VultrStorageService } from '../storage-service';
 import { TextExtractionService } from '../text-extraction-service';
 import { ChunkingService } from '../chunking-service';
 import { ComplianceTaggingService } from '../compliance-tagging-service';
+import { EmbeddingService } from '../embedding-service';
 
 export interface Body {
   documentId: string;
@@ -446,9 +447,20 @@ export default class extends Each<Body, Env> {
     }
 
     try {
-      // Import embedding service dynamically
-      const { EmbeddingService } = await import('../embedding-service');
+      // Use embedding service (static import to avoid worker environment issues)
+      this.env.logger.info('Creating EmbeddingService instance', {
+        documentId,
+        chunkId,
+        hasEnv: !!this.env,
+        hasLogger: !!this.env.logger,
+      });
+
       const embeddingService = new EmbeddingService(this.env);
+
+      this.env.logger.info('EmbeddingService instance created successfully', {
+        documentId,
+        chunkId,
+      });
 
       // Generate embedding for single chunk
       const chunk = {

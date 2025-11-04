@@ -1,0 +1,43 @@
+[Unit]
+Description=Production Embedding Service
+After=network.target
+
+[Service]
+Type=notify
+User=embedding
+Group=embedding
+WorkingDirectory=/opt/embedding-service
+
+# Environment
+Environment="PATH=/opt/embedding-service/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/opt/embedding-service/.env
+
+# Start command
+ExecStart=/opt/embedding-service/venv/bin/gunicorn \
+    --config /opt/embedding-service/gunicorn_config.py \
+    app.main:app
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=0
+StartLimitBurst=5
+
+# Resource limits
+LimitNOFILE=65536
+MemoryLimit=4G
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/embedding-service/logs
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=embedding-service
+
+[Install]
+WantedBy=multi-user.target
