@@ -7,6 +7,7 @@ import { detectContentType } from './content-type-detector';
 import { VultrStorageService } from '../storage-service';
 import { VectorSearchService, VectorSearchRequest, VectorSearchResponse } from '../vector-search-service';
 import { ComplianceTaggingService } from '../compliance-tagging-service';
+import { EmbeddingService } from '../embedding-service';
 
 interface UploadDocumentInput {
   workspaceId: string;
@@ -115,6 +116,13 @@ export default class extends Service<Env> {
     });
 
     // Store metadata in database (extraction status: pending)
+    this.env.logger.info('🔍 INSERTING DOCUMENT INTO DATABASE', {
+      documentId,
+      processing_status: 'pending',
+      text_extracted: 0,
+      chunk_count: 0,
+    });
+
     await db
       .insertInto('documents')
       .values({
@@ -137,12 +145,32 @@ export default class extends Service<Env> {
       } as any)
       .execute();
 
+    // VERIFY INSERT (using raw query since types might be out of sync)
+    const inserted = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT processing_status, vector_indexing_status, chunks_created, text_extracted
+       FROM documents WHERE id = ?`
+    ).bind(documentId).first();
+
+    this.env.logger.info('✅ DATABASE INSERT VERIFIED', {
+      documentId,
+      queriedValues: inserted,
+    });
+
     // Queue for text extraction + SmartBucket indexing
     this.env.logger.info('Queueing document for text extraction and indexing', {
       documentId,
       workspaceId: input.workspaceId,
       vultrKey,
       action: 'extract_and_index',
+    });
+
+    this.env.logger.info('📤 SENDING MESSAGE TO QUEUE', {
+      documentId,
+      workspaceId: input.workspaceId,
+      vultrKey,
+      action: 'extract_and_index',
+      queueName: 'DOCUMENT_PROCESSING_QUEUE',
+      hasQueue: !!this.env.DOCUMENT_PROCESSING_QUEUE,
     });
 
     try {
@@ -156,17 +184,19 @@ export default class extends Service<Env> {
         frameworkId: input.frameworkId,  // Phase 4: Pass framework for auto-tagging
       });
 
-      this.env.logger.info('Document queued for text extraction and indexing', {
+      this.env.logger.info('✅ MESSAGE SENT TO QUEUE SUCCESSFULLY', {
         documentId,
         workspaceId: input.workspaceId,
         frameworkId: input.frameworkId,
       });
     } catch (error) {
-      this.env.logger.error('Failed to queue document for processing', {
+      this.env.logger.error('❌ FAILED TO SEND MESSAGE TO QUEUE', {
         documentId,
         error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       });
       // Don't fail the upload - user can manually trigger processing
+      throw error;  // Actually, DO fail so we know it's broken
     }
 
     return {
@@ -833,16 +863,38 @@ export default class extends Service<Env> {
       try {
         // Get all chunks for this document
         const chunksResult = await (this.env.AUDITGUARD_DB as any).prepare(
-          `SELECT id, document_id, chunk_index, content, token_count, embedding_status
+          `SELECT id, document_id, chunk_index, content, token_count, embedding_status,
+                  start_char, end_char, has_header, section_title
            FROM document_chunks
            WHERE document_id = ?
            ORDER BY chunk_index`
         ).bind(documentId).all();
 
-        const chunks = chunksResult.results || [];
-        const chunkIds = chunks.map((c: any) => c.id);
+        const rawChunks = chunksResult.results || [];
+
+        // Transform database chunks to Chunk interface format
+        // Database has 'content', but Chunk interface expects 'text'
+        const chunks = rawChunks.map((c: any) => ({
+          text: c.content,  // Map 'content' → 'text'
+          index: c.chunk_index,
+          metadata: {
+            startChar: c.start_char || 0,
+            endChar: c.end_char || 0,
+            tokenCount: c.token_count || 0,
+            hasHeader: c.has_header === 1,
+            sectionTitle: c.section_title || undefined,
+          },
+        }));
+
+        const chunkIds = rawChunks.map((c: any) => c.id);
 
         if (chunks.length > 0) {
+          this.env.logger.info('Transformed chunks for embedding generation', {
+            documentId,
+            chunkCount: chunks.length,
+            firstChunkTextLength: chunks[0]?.text?.length || 0,
+          });
+
           // Import embedding service dynamically
           const { EmbeddingService } = await import('../embedding-service');
           const embeddingService = new EmbeddingService(this.env);
@@ -1711,6 +1763,71 @@ export default class extends Service<Env> {
       failed: stats.failed,
       percentage,
       chunks,
+    };
+  }
+
+  /**
+   * Get ACTUAL Vector Index status by querying the Vector Index directly
+   * This bypasses database tracking and queries the real Vector Index
+   * Use this to show accurate "X/Y indexed" count in UI
+   */
+  async getActualVectorIndexStatus(
+    documentId: string,
+    workspaceId: string,
+    userId: string
+  ): Promise<{
+    documentId: string;
+    totalChunks: number;
+    indexedChunks: number;
+    vectorIds: string[];
+    status: 'completed' | 'partial' | 'failed';
+    smartBucketStatus: {
+      isIndexed: boolean;
+      chunkCount: number;
+      error?: string;
+    };
+  }> {
+    // Check workspace membership
+    const membership = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?`
+    ).bind(workspaceId, userId).first();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    // Verify document belongs to workspace
+    const document = await (this.env.AUDITGUARD_DB as any).prepare(
+      `SELECT id FROM documents WHERE id = ? AND workspace_id = ?`
+    ).bind(documentId, workspaceId).first();
+
+    if (!document) {
+      throw new Error('Document not found');
+    }
+
+    // Get actual Vector Index status from embedding service
+    const embeddingService = new EmbeddingService(this.env);
+    const vectorStatus = await embeddingService.getActualVectorIndexStatus(documentId);
+
+    // Also check SmartBucket indexing status
+    const smartBucketStatus = await embeddingService.verifySmartBucketIndexing(documentId, workspaceId);
+
+    this.env.logger.info('Actual vector index status retrieved', {
+      documentId,
+      workspaceId,
+      totalChunks: vectorStatus.totalChunks,
+      indexedChunks: vectorStatus.indexedChunks,
+      status: vectorStatus.status,
+      smartBucketIndexed: smartBucketStatus.isIndexed,
+    });
+
+    return {
+      documentId,
+      totalChunks: vectorStatus.totalChunks,
+      indexedChunks: vectorStatus.indexedChunks,
+      vectorIds: vectorStatus.vectorIds,
+      status: vectorStatus.status,
+      smartBucketStatus,
     };
   }
 }

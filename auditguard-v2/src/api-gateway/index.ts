@@ -385,6 +385,24 @@ export default class extends Service<Env> {
         });
       }
 
+      // Match /api/workspaces/:id/documents/:documentId/vector-status (ACTUAL vector index status)
+      const vectorStatusMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/vector-status$/);
+      if (vectorStatusMatch && vectorStatusMatch[1] && vectorStatusMatch[2] && request.method === 'GET') {
+        const workspaceId = vectorStatusMatch[1];
+        const documentId = vectorStatusMatch[2];
+        const user = await this.validateSession(request);
+
+        const status = await this.env.DOCUMENT_SERVICE.getActualVectorIndexStatus(
+          documentId,
+          workspaceId,
+          user.userId
+        );
+
+        return new Response(JSON.stringify(status), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/workspaces/:id/documents/search (semantic search)
       const documentSearchMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/search$/);
       if (documentSearchMatch && documentSearchMatch[1] && request.method === 'POST') {
@@ -1352,6 +1370,58 @@ export default class extends Service<Env> {
           return new Response(JSON.stringify({
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error'
+          }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // GET /api/admin/test-embedding-service - Test embedding service connectivity
+      if (path === '/api/admin/test-embedding-service' && request.method === 'GET') {
+        try {
+          const serviceUrl = (this.env as any).LOCAL_EMBEDDING_SERVICE_URL || 'NOT SET';
+          const apiKey = (this.env as any).EMBEDDING_SERVICE_API_KEY || 'NOT SET';
+
+          // Try to call the embedding service
+          const testResponse = await fetch(`${serviceUrl}/embed`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-API-Key': apiKey,
+            },
+            body: JSON.stringify({
+              texts: ['test connection'],
+              batch_size: 1,
+              normalize: true,
+            }),
+          });
+
+          const responseText = await testResponse.text();
+          let responseData: any;
+          try {
+            responseData = JSON.parse(responseText);
+          } catch {
+            responseData = { raw: responseText };
+          }
+
+          return new Response(JSON.stringify({
+            success: testResponse.ok,
+            serviceUrl,
+            apiKeyConfigured: apiKey !== 'NOT SET',
+            status: testResponse.status,
+            statusText: testResponse.statusText,
+            headers: Object.fromEntries(testResponse.headers.entries()),
+            response: responseData,
+          }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        } catch (error) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            serviceUrl: (this.env as any).LOCAL_EMBEDDING_SERVICE_URL || 'NOT SET',
           }), {
             status: 500,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },

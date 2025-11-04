@@ -281,33 +281,80 @@ export default class extends Each<Body, Env> {
         storedCount: chunkIds.length,
       });
 
-      // STEP 3C: Queue embedding generation messages
-      // IMPORTANT: Must await to ensure messages are sent before worker context cleanup
-      this.env.logger.info('Queuing chunks for embedding generation', {
+      // STEP 3C: Generate embeddings SYNCHRONOUSLY (simplified pipeline)
+      // IMPORTANT: Process embeddings immediately to avoid queue delays
+      this.env.logger.info('🚀 Starting SYNCHRONOUS embedding generation', {
         documentId,
         chunkCount: chunkingResult.chunks.length,
         chunkIdCount: chunkIds.length,
       });
 
+      let embeddingResult: any = null;
+
       try {
-        await this.queueEmbeddingGeneration(
+        // Update status to indicate vector indexing started
+        await (this.env.AUDITGUARD_DB as any).prepare(
+          `UPDATE documents
+           SET vector_indexing_status = 'processing',
+               chunks_created = ?
+           WHERE id = ?`
+        ).bind(chunkIds.length, documentId).run();
+
+        // Process embeddings immediately using EmbeddingService
+        const embeddingService = new EmbeddingService(this.env);
+
+        this.env.logger.info('Calling EmbeddingService.generateAndStoreEmbeddings', {
+          documentId,
+          workspaceId,
+          chunkCount: chunkingResult.chunks.length,
+        });
+
+        embeddingResult = await embeddingService.generateAndStoreEmbeddings(
           documentId,
           workspaceId,
           chunkingResult.chunks,
           chunkIds
         );
 
-        this.env.logger.info('Successfully queued all chunks for embedding', {
+        this.env.logger.info('✅ Embedding generation completed', {
           documentId,
-          chunkCount: chunkingResult.totalChunks,
+          successCount: embeddingResult.successCount,
+          failureCount: embeddingResult.failureCount,
+          duration: embeddingResult.duration,
         });
+
+        // Update document with final embedding count
+        await (this.env.AUDITGUARD_DB as any).prepare(
+          `UPDATE documents
+           SET embeddings_generated = ?,
+               vector_indexing_status = ?
+           WHERE id = ?`
+        ).bind(
+          embeddingResult.successCount,
+          embeddingResult.successCount === chunkIds.length ? 'completed' : 'failed',
+          documentId
+        ).run();
+
+        this.env.logger.info('🎉 Vector indexing complete', {
+          documentId,
+          totalChunks: chunkIds.length,
+          embeddingsGenerated: embeddingResult.successCount,
+          status: embeddingResult.successCount === chunkIds.length ? 'completed' : 'failed',
+        });
+
       } catch (error) {
-        this.env.logger.error('Failed to queue embedding messages', {
+        this.env.logger.error('❌ Synchronous embedding generation failed', {
           documentId,
           error: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
         });
-        // Continue - embeddings can be triggered manually later
+
+        // Mark as failed
+        await (this.env.AUDITGUARD_DB as any).prepare(
+          `UPDATE documents
+           SET vector_indexing_status = 'failed'
+           WHERE id = ?`
+        ).bind(documentId).run();
       }
 
       // STEP 3D: Auto-tag chunks with compliance frameworks (Phase 4)
@@ -362,11 +409,11 @@ export default class extends Each<Body, Env> {
         smartBucketKey,
       });
 
-      // STEP 5: Update database with extraction results (including full text and chunks)
+      // STEP 5: Update database with final processing results
       await this.env.DOCUMENT_SERVICE.updateDocumentProcessing(documentId, {
         textExtracted: true,
         chunkCount: chunkingResult.totalChunks,  // Custom chunks created
-        processingStatus: 'processing',  // SmartBucket now indexing in parallel
+        processingStatus: 'completed',  // All processing complete (extraction, chunking, embeddings)
         processedAt: Date.now(),
         extractedTextKey: smartBucketKey,
         extractedText: text,  // Store full text in database for immediate access
@@ -374,11 +421,14 @@ export default class extends Each<Body, Env> {
         wordCount: wordCount,
       });
 
-      this.env.logger.info('Document text extraction completed, SmartBucket indexing', {
+      this.env.logger.info('✅ Document processing COMPLETED successfully', {
         documentId,
         wordCount,
         pageCount,
+        chunkCount: chunkingResult.totalChunks,
+        embeddingsGenerated: embeddingResult?.successCount || 0,
         smartBucketKey,
+        status: 'completed',
       });
 
       // Acknowledge success - SmartBucket will continue indexing in background
