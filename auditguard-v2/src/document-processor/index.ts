@@ -8,11 +8,17 @@ import { ComplianceTaggingService } from '../compliance-tagging-service';
 export interface Body {
   documentId: string;
   workspaceId: string;
-  userId: string;
+  userId?: string;  // Optional: not needed for embedding generation
   vultrKey?: string;  // NEW: Vultr S3 key for new documents
   storageKey?: string;  // OLD: SmartBucket key for legacy documents
   action?: string;  // NEW: 'extract_and_index' or undefined (legacy)
   frameworkId?: number;  // Phase 4: Compliance framework for auto-tagging
+
+  // Embedding generation fields
+  type?: string;  // 'generate_embedding' for individual chunk processing
+  chunkId?: number;
+  chunkText?: string;
+  chunkIndex?: number;
 }
 
 export default class extends Each<Body, Env> {
@@ -24,18 +30,25 @@ export default class extends Each<Body, Env> {
       timestamp: Date.now(),
     });
 
-    const { documentId, workspaceId, userId, vultrKey, storageKey, action } = message.body;
+    const { documentId, workspaceId, userId, vultrKey, storageKey, action, type } = message.body;
 
-    this.env.logger.info('Observer: Processing document from queue', {
+    this.env.logger.info('Observer: Processing message from queue', {
       documentId,
       workspaceId,
       vultrKey,
       storageKey,
       action,
+      type,
       attempt: message.attempts,
     });
 
     try {
+      // EMBEDDING GENERATION: Process individual chunk embedding
+      if (type === 'generate_embedding') {
+        await this.processEmbeddingGeneration(message);
+        return;
+      }
+
       // NEW FLOW: Text extraction + SmartBucket indexing
       if (action === 'extract_and_index' && vultrKey) {
         await this.processNewDocument(documentId, workspaceId, userId, vultrKey, message);
@@ -267,31 +280,34 @@ export default class extends Each<Body, Env> {
         storedCount: chunkIds.length,
       });
 
-      // STEP 3C: Generate and store embeddings (parallel with SmartBucket)
-      // This runs asynchronously - we don't wait for completion
-      this.env.logger.info('About to start async embedding generation', {
+      // STEP 3C: Queue embedding generation messages
+      // IMPORTANT: Must await to ensure messages are sent before worker context cleanup
+      this.env.logger.info('Queuing chunks for embedding generation', {
         documentId,
         chunkCount: chunkingResult.chunks.length,
         chunkIdCount: chunkIds.length,
       });
 
-      this.generateEmbeddingsAsync(
-        documentId,
-        workspaceId,
-        chunkingResult.chunks,
-        chunkIds
-      ).catch(error => {
-        this.env.logger.error('Async embedding generation failed in catch block', {
+      try {
+        await this.queueEmbeddingGeneration(
+          documentId,
+          workspaceId,
+          chunkingResult.chunks,
+          chunkIds
+        );
+
+        this.env.logger.info('Successfully queued all chunks for embedding', {
+          documentId,
+          chunkCount: chunkingResult.totalChunks,
+        });
+      } catch (error) {
+        this.env.logger.error('Failed to queue embedding messages', {
           documentId,
           error: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
         });
-      });
-
-      this.env.logger.info('Started async embedding generation', {
-        documentId,
-        chunkCount: chunkingResult.totalChunks,
-      });
+        // Continue - embeddings can be triggered manually later
+      }
 
       // STEP 3D: Auto-tag chunks with compliance frameworks (Phase 4)
       // This runs asynchronously in parallel with embeddings
@@ -404,10 +420,177 @@ export default class extends Each<Body, Env> {
   }
 
   /**
-   * Generate embeddings asynchronously in parallel with SmartBucket indexing
-   * This allows immediate search capability while SmartBucket processes in background
+   * Process individual chunk embedding generation from queue
+   * Called for each 'generate_embedding' message
    */
-  private async generateEmbeddingsAsync(
+  private async processEmbeddingGeneration(message: Message<Body>): Promise<void> {
+    const { documentId, workspaceId, chunkId, chunkText, chunkIndex } = message.body;
+
+    this.env.logger.info('Processing embedding generation for chunk', {
+      documentId,
+      chunkId,
+      chunkIndex,
+      attempt: message.attempts,
+    });
+
+    if (!documentId || !workspaceId || !chunkId || !chunkText || chunkIndex === undefined) {
+      this.env.logger.error('Missing required fields for embedding generation', {
+        documentId,
+        workspaceId,
+        chunkId,
+        chunkIndex,
+        hasChunkText: !!chunkText,
+      });
+      message.ack(); // Ack to prevent infinite retries
+      return;
+    }
+
+    try {
+      // Import embedding service dynamically
+      const { EmbeddingService } = await import('../embedding-service');
+      const embeddingService = new EmbeddingService(this.env);
+
+      // Generate embedding for single chunk
+      const chunk = {
+        text: chunkText,
+        index: chunkIndex,
+        metadata: {
+          chunkIndex: chunkIndex,
+          startChar: 0,  // Not used for embedding generation
+          endChar: chunkText.length,
+          hasHeader: false,
+          sectionTitle: undefined,
+          tokenCount: chunkText.split(/\s+/).length,
+        },
+      };
+
+      this.env.logger.info('Calling embedding service for chunk', {
+        documentId,
+        chunkId,
+        chunkIndex,
+        textLength: chunkText.length,
+      });
+
+      const result = await embeddingService.generateAndStoreEmbeddings(
+        documentId,
+        workspaceId,
+        [chunk],
+        [chunkId]
+      );
+
+      this.env.logger.info('Embedding generation completed for chunk', {
+        documentId,
+        chunkId,
+        chunkIndex,
+        success: result.successCount > 0,
+      });
+
+      // Recalculate embeddings_generated from actual chunk statuses (avoid double-counting on retries)
+      const countResult = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT COUNT(*) as count FROM document_chunks
+         WHERE document_id = ? AND embedding_status = 'completed'`
+      ).bind(documentId).first();
+
+      const completedCount = countResult?.count || 0;
+
+      await (this.env.AUDITGUARD_DB as any).prepare(
+        `UPDATE documents
+         SET embeddings_generated = ?
+         WHERE id = ?`
+      ).bind(completedCount, documentId).run();
+
+      this.env.logger.info('Updated embeddings_generated counter from database', {
+        documentId,
+        chunkId,
+        completedCount,
+      });
+
+      // Check if all embeddings are complete
+      const doc = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT chunks_created, embeddings_generated
+         FROM documents
+         WHERE id = ?`
+      ).bind(documentId).first();
+
+      if (doc && doc.embeddings_generated >= doc.chunks_created) {
+        // All embeddings complete!
+        await (this.env.AUDITGUARD_DB as any).prepare(
+          `UPDATE documents
+           SET vector_indexing_status = 'completed'
+           WHERE id = ?`
+        ).bind(documentId).run();
+
+        this.env.logger.info('🎉 All embeddings completed for document', {
+          documentId,
+          totalEmbeddings: doc.embeddings_generated,
+          totalChunks: doc.chunks_created,
+        });
+      } else {
+        this.env.logger.info('Embedding progress updated', {
+          documentId,
+          embeddingsGenerated: doc?.embeddings_generated || 0,
+          totalChunks: doc?.chunks_created || 0,
+        });
+      }
+
+      message.ack();
+
+    } catch (error) {
+      this.env.logger.error('Embedding generation failed for chunk', {
+        documentId,
+        chunkId,
+        chunkIndex,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        attempt: message.attempts,
+      });
+
+      // Retry with backoff
+      if (message.attempts < 3) {
+        const delaySeconds = 10 * message.attempts;
+        this.env.logger.info('Retrying embedding generation', {
+          documentId,
+          chunkId,
+          nextAttempt: message.attempts + 1,
+          delaySeconds,
+        });
+        message.retry({ delaySeconds });
+      } else {
+        // Mark chunk as failed after max retries
+        this.env.logger.error('Max retries exceeded for chunk embedding', {
+          documentId,
+          chunkId,
+          chunkIndex,
+        });
+
+        try {
+          await (this.env.AUDITGUARD_DB as any).prepare(
+            `UPDATE document_chunks
+             SET embedding_status = 'failed'
+             WHERE id = ?`
+          ).bind(chunkId).run();
+
+          this.env.logger.info('Marked chunk embedding as failed', {
+            documentId,
+            chunkId,
+          });
+        } catch (updateError) {
+          this.env.logger.error('Failed to update chunk status', {
+            chunkId,
+            error: updateError instanceof Error ? updateError.message : String(updateError),
+          });
+        }
+
+        message.ack(); // Prevent infinite retries
+      }
+    }
+  }
+
+  /**
+   * Queue embedding generation messages for all chunks
+   * Messages are sent to DOCUMENT_PROCESSING_QUEUE and processed by the observer
+   */
+  private async queueEmbeddingGeneration(
     documentId: string,
     workspaceId: string,
     chunks: any[],
@@ -584,7 +767,7 @@ export default class extends Each<Body, Env> {
           dc.id as chunk_id,
           dc.document_id,
           dc.chunk_index,
-          dc.chunk_text,
+          dc.content as chunk_text,
           d.workspace_id
         FROM document_chunks dc
         JOIN documents d ON d.id = dc.document_id
@@ -618,7 +801,8 @@ export default class extends Each<Body, Env> {
           ).bind(chunk.chunk_id).run();
 
           // Queue the embedding job
-          await (this.env as any).EMBEDDING_QUEUE.send({
+          await (this.env as any).DOCUMENT_PROCESSING_QUEUE.send({
+            type: 'generate_embedding',
             chunkId: chunk.chunk_id,
             documentId: chunk.document_id,
             workspaceId: chunk.workspace_id,

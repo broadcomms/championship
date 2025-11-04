@@ -722,6 +722,7 @@ export default class extends Service<Env> {
       updateData.extracted_text_key = data.extractedTextKey;
       updateData.storage_key = data.extractedTextKey;  // storage_key now points to SmartBucket extracted text
       updateData.extraction_status = 'completed';
+      updateData.smartbucket_indexing_status = 'processing';  // SmartBucket now indexing in background
     }
     if (data.extractedText !== undefined) {
       updateData.extracted_text = data.extractedText;  // Store full text in database
@@ -888,7 +889,13 @@ export default class extends Service<Env> {
           // NOTE: We do NOT update chunk_count here - keep the LOCAL value set by document-processor
           processing_status: 'completed',
           updated_at: now,
-        })
+        } as any)
+        .where('id', '=', documentId)
+        .execute();
+
+      // Update SmartBucket indexing status separately (new column not in types yet)
+      await (db as any).updateTable('documents')
+        .set({ smartbucket_indexing_status: 'completed' })
         .where('id', '=', documentId)
         .execute();
 

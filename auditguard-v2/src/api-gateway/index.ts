@@ -1279,6 +1279,137 @@ export default class extends Service<Env> {
         }
       }
 
+      // POST /api/admin/reset-processing-chunks - Reset chunks stuck in 'processing' status
+      if (path === '/api/admin/reset-processing-chunks' && request.method === 'POST') {
+        this.env.logger.info('Resetting chunks stuck in processing status');
+
+        try {
+          // Find chunks stuck in 'processing' status for more than 5 minutes
+          const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+
+          const processingChunks = await (this.env.AUDITGUARD_DB as any).prepare(`
+            SELECT
+              dc.id as chunk_id,
+              dc.document_id,
+              dc.chunk_index,
+              dc.created_at
+            FROM document_chunks dc
+            WHERE dc.embedding_status = 'processing'
+              AND dc.created_at < ?
+            ORDER BY dc.created_at ASC
+          `).bind(fiveMinutesAgo).all();
+
+          const chunks = processingChunks.results || [];
+
+          if (chunks.length === 0) {
+            this.env.logger.info('No stuck processing chunks found');
+            return new Response(JSON.stringify({
+              success: true,
+              message: 'No stuck processing chunks found',
+              totalReset: 0,
+            }), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+
+          this.env.logger.info(`Found ${chunks.length} chunks stuck in processing, resetting to pending`);
+
+          // Reset all stuck chunks to 'pending'
+          let resetCount = 0;
+          for (const chunk of chunks) {
+            try {
+              await (this.env.AUDITGUARD_DB as any).prepare(
+                `UPDATE document_chunks SET embedding_status = 'pending' WHERE id = ?`
+              ).bind(chunk.chunk_id).run();
+
+              resetCount++;
+              this.env.logger.info(`Reset chunk ${chunk.chunk_index} from document ${chunk.document_id}`, {
+                chunkId: chunk.chunk_id,
+              });
+            } catch (error) {
+              this.env.logger.error(`Failed to reset chunk ${chunk.chunk_id}`, {
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+
+          this.env.logger.info(`Successfully reset ${resetCount} chunks to pending`);
+
+          return new Response(JSON.stringify({
+            success: true,
+            message: `Reset ${resetCount} chunks from processing to pending`,
+            totalReset: resetCount,
+            totalFound: chunks.length,
+          }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+
+        } catch (error) {
+          this.env.logger.error('Failed to reset processing chunks', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+
+          return new Response(JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // GET /api/admin/chunk-status-debug - Debug chunk statuses
+      if (path === '/api/admin/chunk-status-debug' && request.method === 'GET') {
+        this.env.logger.info('Debug: Getting all chunk statuses');
+
+        try {
+          // Get chunk status counts
+          const statusCounts = await (this.env.AUDITGUARD_DB as any).prepare(`
+            SELECT
+              embedding_status,
+              COUNT(*) as count
+            FROM document_chunks
+            GROUP BY embedding_status
+          `).all();
+
+          // Get recent chunks with details
+          const recentChunks = await (this.env.AUDITGUARD_DB as any).prepare(`
+            SELECT
+              dc.id,
+              dc.document_id,
+              dc.chunk_index,
+              dc.embedding_status,
+              dc.vector_id,
+              d.filename,
+              d.vector_indexing_status
+            FROM document_chunks dc
+            JOIN documents d ON d.id = dc.document_id
+            ORDER BY dc.created_at DESC
+            LIMIT 20
+          `).all();
+
+          return new Response(JSON.stringify({
+            statusCounts: statusCounts.results || [],
+            recentChunks: recentChunks.results || [],
+          }, null, 2), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+
+        } catch (error) {
+          this.env.logger.error('Failed to get chunk status debug info', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+
+          return new Response(JSON.stringify({
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
       // POST /api/admin/analytics/query
       if (path === '/api/admin/analytics/query' && request.method === 'POST') {
         const user = await this.validateSession(request);
