@@ -29,6 +29,10 @@ class AdminSearchRequest(BaseModel):
     limit: int = 10
 
 
+class CleanupRequest(BaseModel):
+    validDocumentIds: List[str] = []
+
+
 @router.get("/api/v1/admin/vector-stats")
 async def get_vector_stats(
     api_key: str = Depends(verify_api_key)
@@ -268,3 +272,119 @@ async def test_vector_search(
     except Exception as e:
         logger.error(f"Error in test vector search: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+
+@router.post("/api/v1/admin/cleanup/orphaned-embeddings")
+async def cleanup_orphaned_embeddings(
+    request: CleanupRequest,
+    api_key: str = Depends(verify_api_key)
+) -> Dict[str, Any]:
+    """
+    Clean up orphaned embeddings in PostgreSQL using D1 as source of truth.
+
+    Accepts a list of valid document IDs from D1 and deletes all documents,
+    chunks, and embeddings in PostgreSQL that don't exist in D1.
+
+    Args:
+        request: Contains validDocumentIds from D1 (source of truth)
+
+    Returns:
+        - totalEmbeddings: Total embeddings before cleanup
+        - validDocuments: Number of valid documents in D1
+        - orphanedDocuments: Number of orphaned documents in PostgreSQL
+        - orphanedEmbeddings: Number of orphaned embeddings found
+        - deletedDocuments: Number of documents deleted from PostgreSQL
+        - deletedChunks: Number of orphaned chunks deleted
+        - deletedEmbeddings: Number of embeddings successfully deleted
+        - errors: Number of errors encountered
+    """
+    try:
+        db = DatabaseService()
+
+        valid_document_ids = set(request.validDocumentIds)
+        logger.info(f"Starting orphaned embeddings cleanup with {len(valid_document_ids)} valid D1 document IDs")
+
+        with db.get_connection() as conn:
+            with conn.cursor() as cur:
+                # Get total embeddings count before cleanup
+                cur.execute("SELECT COUNT(*) FROM embeddings")
+                total_embeddings = cur.fetchone()[0]
+
+                # Get all document IDs currently in PostgreSQL
+                cur.execute("SELECT id FROM documents")
+                postgres_doc_ids = set(row[0] for row in cur.fetchall())
+                postgres_doc_count = len(postgres_doc_ids)
+
+                # Find orphaned documents (in PostgreSQL but not in D1)
+                orphaned_document_ids = postgres_doc_ids - valid_document_ids
+                orphaned_doc_count = len(orphaned_document_ids)
+
+                logger.info(f"PostgreSQL state: {total_embeddings} embeddings, {postgres_doc_count} documents")
+                logger.info(f"D1 state: {len(valid_document_ids)} valid documents")
+                logger.info(f"Found {orphaned_doc_count} orphaned documents in PostgreSQL")
+
+                deleted_documents = 0
+                deleted_chunks = 0
+                deleted_embeddings = 0
+                errors = 0
+
+                if orphaned_doc_count > 0:
+                    try:
+                        # Log sample of orphaned documents
+                        sample_orphaned = list(orphaned_document_ids)[:5]
+                        logger.info(f"Sample orphaned document IDs: {sample_orphaned}")
+
+                        # Convert set to list for SQL query
+                        orphaned_ids_list = list(orphaned_document_ids)
+
+                        # Delete orphaned embeddings first (foreign key constraint)
+                        cur.execute("""
+                            DELETE FROM embeddings
+                            WHERE document_id = ANY(%s::text[])
+                        """, (orphaned_ids_list,))
+                        deleted_embeddings = cur.rowcount
+                        logger.info(f"Deleted {deleted_embeddings} orphaned embeddings")
+
+                        # Delete orphaned chunks
+                        cur.execute("""
+                            DELETE FROM chunks
+                            WHERE document_id = ANY(%s::text[])
+                        """, (orphaned_ids_list,))
+                        deleted_chunks = cur.rowcount
+                        logger.info(f"Deleted {deleted_chunks} orphaned chunks")
+
+                        # Delete orphaned documents
+                        cur.execute("""
+                            DELETE FROM documents
+                            WHERE id = ANY(%s::text[])
+                        """, (orphaned_ids_list,))
+                        deleted_documents = cur.rowcount
+                        logger.info(f"Deleted {deleted_documents} orphaned documents")
+
+                        conn.commit()
+
+                        logger.info(f"Cleanup complete: deleted {deleted_documents} documents, {deleted_chunks} chunks, {deleted_embeddings} embeddings")
+
+                    except Exception as e:
+                        conn.rollback()
+                        logger.error(f"Error during cleanup: {e}", exc_info=True)
+                        errors = 1
+                        raise
+                else:
+                    logger.info("No orphaned documents found - PostgreSQL is in sync with D1")
+
+                return {
+                    "totalEmbeddings": total_embeddings,
+                    "validDocuments": len(valid_document_ids),
+                    "orphanedDocuments": orphaned_doc_count,
+                    "orphanedEmbeddings": deleted_embeddings,  # Same as deleted since we delete by document
+                    "deletedDocuments": deleted_documents,
+                    "deletedChunks": deleted_chunks,
+                    "deletedEmbeddings": deleted_embeddings,
+                    "errors": errors,
+                    "success": errors == 0
+                }
+
+    except Exception as e:
+        logger.error(f"Error cleaning up orphaned embeddings: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")

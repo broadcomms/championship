@@ -75,9 +75,12 @@ export default function VectorIndexPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any>(null);
   const [cleanupResult, setCleanupResult] = useState<{
-    totalVectorsInService: number;
-    validDocumentIds: string[];
-    orphanedVectorsDeleted: number;
+    totalEmbeddings: number;
+    validDocuments: number;
+    orphanedEmbeddings: number;
+    deletedEmbeddings: number;
+    deletedChunks: number;
+    deletedDocuments: number;
     errors: number;
   } | null>(null);
 
@@ -132,23 +135,32 @@ export default function VectorIndexPage() {
 
   const cleanupMutation = useMutation({
     mutationFn: async () => {
+      console.log('[Cleanup] Making API request to /api/admin/cleanup/orphaned-vectors');
       const response = await fetch('/api/admin/cleanup/orphaned-vectors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       });
+      console.log('[Cleanup] Response status:', response.status);
       if (!response.ok) {
         const error = await response.json();
+        console.error('[Cleanup] Error response:', error);
         throw new Error(error.error || 'Cleanup failed');
       }
-      return response.json();
+      const data = await response.json();
+      console.log('[Cleanup] Success response:', data);
+      return data;
     },
     onSuccess: (data) => {
+      console.log('[Cleanup] onSuccess called with data:', data);
       setCleanupResult(data);
       // Refresh stats after cleanup
       refetchStats();
       refetchStatus();
       refetchHealth();
+    },
+    onError: (error) => {
+      console.error('[Cleanup] onError called with error:', error);
     },
   });
 
@@ -159,9 +171,12 @@ export default function VectorIndexPage() {
   };
 
   const handleCleanup = () => {
-    if (confirm('This will delete all orphaned vectors from the embedding service. Continue?')) {
+    if (confirm('This will scan and delete all orphaned vectors from the embedding service. Continue?')) {
+      console.log('[Cleanup] Starting cleanup operation');
       setCleanupResult(null);
       cleanupMutation.mutate();
+    } else {
+      console.log('[Cleanup] Cleanup cancelled by user');
     }
   };
 
@@ -411,20 +426,29 @@ export default function VectorIndexPage() {
 
       {/* Cleanup Results */}
       {cleanupResult && (
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Cleanup Results</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-lg shadow-lg border-2 border-blue-500 p-6 animate-pulse-once">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+            Cleanup Results
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="text-center p-4 bg-blue-50 rounded-lg">
               <p className="text-2xl font-bold text-blue-600">
-                {cleanupResult.totalVectorsInService?.toLocaleString() || '0'}
+                {cleanupResult.totalEmbeddings?.toLocaleString() || '0'}
               </p>
-              <p className="text-sm text-gray-600 mt-1">Total Vectors Checked</p>
+              <p className="text-sm text-gray-600 mt-1">Total Embeddings</p>
+            </div>
+            <div className="text-center p-4 bg-purple-50 rounded-lg">
+              <p className="text-2xl font-bold text-purple-600">
+                {cleanupResult.validDocuments?.toLocaleString() || '0'}
+              </p>
+              <p className="text-sm text-gray-600 mt-1">Valid Documents</p>
             </div>
             <div className="text-center p-4 bg-green-50 rounded-lg">
               <p className="text-2xl font-bold text-green-600">
-                {cleanupResult.orphanedVectorsDeleted?.toLocaleString() || '0'}
+                {cleanupResult.deletedEmbeddings?.toLocaleString() || '0'}
               </p>
-              <p className="text-sm text-gray-600 mt-1">Orphaned Vectors Deleted</p>
+              <p className="text-sm text-gray-600 mt-1">Deleted Embeddings</p>
             </div>
             <div className="text-center p-4 bg-red-50 rounded-lg">
               <p className="text-2xl font-bold text-red-600">
@@ -433,9 +457,52 @@ export default function VectorIndexPage() {
               <p className="text-sm text-gray-600 mt-1">Errors</p>
             </div>
           </div>
-          {cleanupResult.orphanedVectorsDeleted === 0 && cleanupResult.errors === 0 && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 text-center">
-              No orphaned vectors found. Your vector index is in sync!
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            <div className="text-center p-3 bg-yellow-50 rounded-lg">
+              <p className="text-lg font-semibold text-yellow-700">
+                {cleanupResult.orphanedEmbeddings?.toLocaleString() || '0'}
+              </p>
+              <p className="text-xs text-gray-600 mt-1">Orphaned Embeddings</p>
+            </div>
+            <div className="text-center p-3 bg-orange-50 rounded-lg">
+              <p className="text-lg font-semibold text-orange-700">
+                {cleanupResult.deletedChunks?.toLocaleString() || '0'}
+              </p>
+              <p className="text-xs text-gray-600 mt-1">Deleted Chunks</p>
+            </div>
+            <div className="text-center p-3 bg-red-50 rounded-lg">
+              <p className="text-lg font-semibold text-red-700">
+                {cleanupResult.deletedDocuments?.toLocaleString() || '0'}
+              </p>
+              <p className="text-xs text-gray-600 mt-1">Orphaned Documents</p>
+            </div>
+          </div>
+          {cleanupResult.deletedEmbeddings === 0 && cleanupResult.errors === 0 && (
+            <div className="mt-4 p-4 bg-green-50 border-2 border-green-400 rounded-lg text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+                <span className="text-lg font-semibold text-green-800">Cleanup Complete!</span>
+              </div>
+              <p className="text-sm text-green-700">
+                No orphaned embeddings found. Your vector index is perfectly in sync with the database!
+              </p>
+              <p className="text-xs text-green-600 mt-2">
+                Scanned {cleanupResult.totalEmbeddings?.toLocaleString()} embeddings across {cleanupResult.validDocuments} documents.
+              </p>
+            </div>
+          )}
+          {cleanupResult.deletedEmbeddings > 0 && cleanupResult.errors === 0 && (
+            <div className="mt-4 p-4 bg-blue-50 border-2 border-blue-400 rounded-lg text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <CheckCircle className="h-6 w-6 text-blue-600" />
+                <span className="text-lg font-semibold text-blue-800">Cleanup Successful!</span>
+              </div>
+              <p className="text-sm text-blue-700">
+                Successfully cleaned up {cleanupResult.deletedDocuments} orphaned documents, {cleanupResult.deletedChunks} chunks, and {cleanupResult.deletedEmbeddings} embeddings!
+              </p>
+              <p className="text-xs text-blue-600 mt-2">
+                PostgreSQL is now in sync with D1 database.
+              </p>
             </div>
           )}
         </div>

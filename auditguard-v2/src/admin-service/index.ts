@@ -2763,12 +2763,15 @@ export default class extends Service<Env> {
 
   /**
    * Clean up orphaned vectors from embedding service
-   * Syncs embedding service with database state
+   * Syncs embedding service with D1 database state (D1 is source of truth)
    */
   async cleanupOrphanedVectors(adminUserId: string): Promise<{
-    totalVectorsInService: number;
-    validDocumentIds: string[];
-    orphanedVectorsDeleted: number;
+    totalEmbeddings: number;
+    validDocuments: number;
+    orphanedEmbeddings: number;
+    deletedEmbeddings: number;
+    deletedChunks: number;
+    deletedDocuments: number;
     errors: number;
   }> {
     this.env.logger.info('Cleanup orphaned vectors called', { adminUserId });
@@ -2782,116 +2785,88 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
-    this.env.logger.info('Starting orphaned vector cleanup', { adminUserId });
+    this.env.logger.info('Starting orphaned vector cleanup - using D1 as source of truth', { adminUserId });
 
     try {
+      const db = this.getDb();
+
+      // Step 1: Get ALL valid document IDs from D1 (source of truth)
+      const validDocsResult = await db
+        .selectFrom('documents')
+        .select('id')
+        .execute();
+
+      const validDocumentIds = validDocsResult.map((doc) => doc.id);
+
+      this.env.logger.info('Retrieved valid documents from D1', {
+        count: validDocumentIds.length,
+        sampleIds: validDocumentIds.slice(0, 5),
+      });
+
       const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
 
-      // Get all valid document IDs from database
-      const documentsResult = await (this.env.AUDITGUARD_DB as any)
-        .prepare('SELECT id FROM documents')
-        .all();
-
-      const validDocumentIds = new Set(
-        (documentsResult.results || []).map((doc: any) => doc.id)
-      );
-
-      this.env.logger.info('Found valid documents', {
-        count: validDocumentIds.size,
-      });
-
-      // Get stats from embedding service
-      const statsResponse = await fetch(`${embeddingServiceUrl}/api/v1/admin/vector-stats`, {
-        method: 'GET',
+      // Step 2: Send valid document IDs to PostgreSQL cleanup endpoint
+      const cleanupResponse = await fetch(`${embeddingServiceUrl}/api/v1/admin/cleanup/orphaned-embeddings`, {
+        method: 'POST',
         headers: {
           'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          validDocumentIds,
+        }),
       });
-      if (!statsResponse.ok) {
-        throw new Error('Failed to get embedding service stats');
+
+      if (!cleanupResponse.ok) {
+        const errorText = await cleanupResponse.text();
+        this.env.logger.error('PostgreSQL cleanup failed', {
+          status: cleanupResponse.status,
+          error: errorText,
+        });
+        throw new Error(`PostgreSQL cleanup failed: ${errorText}`);
       }
 
-      const stats = (await statsResponse.json()) as { total_vectors?: number; dimensions?: number };
-      const totalVectors = stats.total_vectors || 0;
+      const result = await cleanupResponse.json() as {
+        totalEmbeddings: number;
+        validDocuments: number;
+        orphanedEmbeddings: number;
+        deletedEmbeddings: number;
+        deletedChunks: number;
+        deletedDocuments: number;
+        errors: number;
+        success: boolean;
+      };
 
-      this.env.logger.info('Embedding service stats', {
-        totalVectors,
-        dimensions: stats.dimensions,
+      // Log the action
+      await this.logAdminAction(adminUserId, 'cleanup_orphaned_vectors', 'embeddings', null, {
+        d1ValidDocuments: validDocumentIds.length,
+        postgresValidDocuments: result.validDocuments,
+        totalEmbeddings: result.totalEmbeddings,
+        orphanedEmbeddings: result.orphanedEmbeddings,
+        deletedEmbeddings: result.deletedEmbeddings,
+        deletedChunks: result.deletedChunks,
+        deletedDocuments: result.deletedDocuments,
       });
 
-      // Get all vectors from embedding service
-      const vectorsResponse = await fetch(`${embeddingServiceUrl}/vectors`, {
-        method: 'GET',
-        headers: {
-          'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!vectorsResponse.ok) {
-        throw new Error('Failed to list vectors from embedding service');
-      }
-
-      const vectors = (await vectorsResponse.json()) as { vector_ids?: string[] };
-      const vectorIds = vectors.vector_ids || [];
-
-      let orphanedDeleted = 0;
-      let errors = 0;
-
-      // Check each vector and delete if orphaned
-      for (const vectorId of vectorIds) {
-        try {
-          // Vector ID format is: {documentId}_{chunkIndex}
-          const documentId = vectorId.split('_')[0];
-
-          if (!validDocumentIds.has(documentId)) {
-            // This vector belongs to a deleted document - delete it
-            const deleteResponse = await fetch(`${embeddingServiceUrl}/vectors/${vectorId}`, {
-              method: 'DELETE',
-              headers: {
-                'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
-                'Content-Type': 'application/json',
-              },
-            });
-
-            if (deleteResponse.ok) {
-              orphanedDeleted++;
-              this.env.logger.info('Deleted orphaned vector', { vectorId, documentId });
-            } else {
-              errors++;
-              this.env.logger.error('Failed to delete orphaned vector', {
-                vectorId,
-                status: deleteResponse.status,
-              });
-            }
-          }
-        } catch (error) {
-          errors++;
-          this.env.logger.error('Error processing vector', {
-            vectorId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-
-      await this.logAdminAction(adminUserId, 'cleanup_orphaned_vectors', 'system', null, {
-        totalVectorsInService: totalVectors,
-        validDocuments: validDocumentIds.size,
-        orphanedDeleted,
-        errors,
-      });
-
-      this.env.logger.info('Orphaned vector cleanup complete', {
-        totalVectors,
-        orphanedDeleted,
-        errors,
+      this.env.logger.info('PostgreSQL cleanup completed', {
+        d1ValidDocuments: validDocumentIds.length,
+        postgresValidDocuments: result.validDocuments,
+        totalEmbeddings: result.totalEmbeddings,
+        orphanedEmbeddings: result.orphanedEmbeddings,
+        deletedEmbeddings: result.deletedEmbeddings,
+        deletedChunks: result.deletedChunks,
+        deletedDocuments: result.deletedDocuments,
+        errors: result.errors,
       });
 
       return {
-        totalVectorsInService: totalVectors,
-        validDocumentIds: Array.from(validDocumentIds) as string[],
-        orphanedVectorsDeleted: orphanedDeleted,
-        errors,
+        totalEmbeddings: result.totalEmbeddings,
+        validDocuments: validDocumentIds.length, // Return D1 count as source of truth
+        orphanedEmbeddings: result.orphanedEmbeddings,
+        deletedEmbeddings: result.deletedEmbeddings,
+        deletedChunks: result.deletedChunks,
+        deletedDocuments: result.deletedDocuments || 0,
+        errors: result.errors,
       };
     } catch (error) {
       this.env.logger.error('Failed to cleanup orphaned vectors', {
