@@ -575,8 +575,8 @@ export class EmbeddingService {
   }
 
   /**
-   * Get ACTUAL Vector Index status by querying the Vector Index directly
-   * This is the TRUTH - it checks if vectors actually exist, not what database thinks
+   * Get ACTUAL Vector Index status by querying PostgreSQL directly
+   * This queries the PostgreSQL database where embeddings are actually stored
    * Use this for UI display to show real indexed count
    */
   async getActualVectorIndexStatus(documentId: string): Promise<{
@@ -586,17 +586,25 @@ export class EmbeddingService {
     status: 'completed' | 'partial' | 'failed';
   }> {
     try {
-      // Get total chunk count from database
-      const chunkCountResult = await (this.env.AUDITGUARD_DB as any).prepare(
-        `SELECT COUNT(*) as total, MAX(chunk_index) as maxIndex
-         FROM document_chunks
-         WHERE document_id = ?`
-      ).bind(documentId).first();
+      // Query PostgreSQL via embedding service API
+      const response = await fetch(
+        `https://auditrig.com/api/v1/documents/${documentId}/vector-status`,
+        {
+          method: 'GET',
+          headers: {
+            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-      const totalChunks = chunkCountResult?.total || 0;
-      const maxIndex = chunkCountResult?.maxIndex || 0;
+      if (!response.ok) {
+        this.env.logger.error('Failed to get vector status from PostgreSQL', {
+          documentId,
+          status: response.status,
+          statusText: response.statusText,
+        });
 
-      if (totalChunks === 0) {
         return {
           totalChunks: 0,
           indexedChunks: 0,
@@ -605,72 +613,26 @@ export class EmbeddingService {
         };
       }
 
-      // Check each expected vector ID to see if it exists in the Vector Index
-      const vectorIds: string[] = [];
-      let indexedCount = 0;
+      const data = await response.json() as {
+        documentId: string;
+        totalChunks: number;
+        indexedChunks: number;
+        vectorIds: string[];
+        status: 'completed' | 'partial' | 'failed';
+      };
 
-      for (let i = 0; i <= maxIndex; i++) {
-        const vectorId = `${documentId}_chunk_${i}`;
-
-        try {
-          // Query with the vector ID - if it exists, we'll get it back
-          // Use a dummy embedding for the query (we just want to check existence)
-          const dummyEmbedding = new Array(384).fill(0);
-          const result = await this.env.DOCUMENT_EMBEDDINGS.query(
-            dummyEmbedding,
-            {
-              topK: 1,
-              returnMetadata: 'all',
-            }
-          );
-
-          // Check if this specific vector ID exists in the results or metadata
-          // Note: This is a workaround since Vector Index doesn't have a direct "get by ID" method
-          // A better approach would be to use metadata filtering if supported
-          // For now, we'll check if we can get vectors for this document
-
-          // Alternative: Just check if vector_id is set in database (more reliable)
-          const chunkResult = await (this.env.AUDITGUARD_DB as any).prepare(
-            `SELECT vector_id FROM document_chunks WHERE document_id = ? AND chunk_index = ?`
-          ).bind(documentId, i).first();
-
-          if (chunkResult?.vector_id) {
-            vectorIds.push(vectorId);
-            indexedCount++;
-          }
-
-        } catch (error) {
-          // Vector doesn't exist or query failed
-          this.env.logger.debug('Vector not found in index', {
-            documentId,
-            vectorId,
-            chunkIndex: i,
-          });
-        }
-      }
-
-      // Determine status
-      let status: 'completed' | 'partial' | 'failed';
-      if (indexedCount === totalChunks) {
-        status = 'completed';
-      } else if (indexedCount > 0) {
-        status = 'partial';
-      } else {
-        status = 'failed';
-      }
-
-      this.env.logger.info('Vector Index status checked', {
+      this.env.logger.info('Vector status retrieved from PostgreSQL', {
         documentId,
-        totalChunks,
-        indexedChunks: indexedCount,
-        status,
+        totalChunks: data.totalChunks,
+        indexedChunks: data.indexedChunks,
+        status: data.status,
       });
 
       return {
-        totalChunks,
-        indexedChunks: indexedCount,
-        vectorIds,
-        status,
+        totalChunks: data.totalChunks,
+        indexedChunks: data.indexedChunks,
+        vectorIds: data.vectorIds,
+        status: data.status,
       };
 
     } catch (error) {

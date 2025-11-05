@@ -80,6 +80,15 @@ class Settings(BaseSettings):
     # Health Check
     health_check_enabled: bool = Field(default=True, description="Enable health check endpoints")
 
+    # Database Configuration (PostgreSQL)
+    db_host: str = Field(default="localhost", description="PostgreSQL host")
+    db_port: int = Field(default=5432, ge=1024, le=65535, description="PostgreSQL port")
+    db_name: str = Field(default="auditguard", description="PostgreSQL database name")
+    db_user: str = Field(default="postgres", description="PostgreSQL user")
+    db_password: str = Field(default="", description="PostgreSQL password")
+    db_pool_size: int = Field(default=10, ge=1, le=50, description="Connection pool size")
+    db_max_overflow: int = Field(default=20, ge=0, description="Max pool overflow connections")
+
     @validator("api_keys_str")
     def validate_api_keys(cls, v):
         """Validate API keys format."""

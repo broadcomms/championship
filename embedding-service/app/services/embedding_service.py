@@ -282,6 +282,34 @@ class EmbeddingService:
         return self._initialized and self._model is not None
 
 
+
+    async def generate_embeddings_async(
+        self,
+        texts: List[str],
+        normalize: bool = True,
+        batch_size: Optional[int] = None
+    ) -> List[List[float]]:
+        """
+        Async wrapper for generate_embeddings for use with FastAPI async routes.
+        
+        Args:
+            texts: List of input texts
+            normalize: Whether to normalize embeddings
+            batch_size: Batch size for processing
+            
+        Returns:
+            List[List[float]]: Generated embeddings
+        """
+        import asyncio
+        from functools import partial
+        
+        # Run synchronous method in thread pool
+        loop = asyncio.get_event_loop()
+        func = partial(self.generate_embeddings, texts, normalize, batch_size)
+        embeddings, _ = await loop.run_in_executor(None, func)
+        
+        return embeddings
+
 # Global service instance
 embedding_service = EmbeddingService()
 
@@ -294,3 +322,4 @@ def get_embedding_service() -> EmbeddingService:
         EmbeddingService: Service instance
     """
     return embedding_service
+

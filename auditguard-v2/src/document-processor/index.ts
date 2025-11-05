@@ -195,98 +195,14 @@ export default class extends Each<Body, Env> {
         warnings: chunkValidation.warnings,
       });
 
-      // STEP 3B: Store chunks in database (check for existing chunks first to handle retries)
-      this.env.logger.info('Storing chunks in database', {
+      // STEP 3B: Call PostgreSQL embedding service
+      // PostgreSQL service will handle: chunking, embedding generation, compliance tagging, storage
+      // NEW: Use centralized PostgreSQL service for embeddings + compliance tagging
+      this.env.logger.info('🚀 Calling PostgreSQL embedding service', {
         documentId,
-        chunkCount: chunkingResult.totalChunks,
-      });
-
-      // Check if chunks already exist for this document (retry scenario)
-      const existingChunksResult = await (this.env.AUDITGUARD_DB as any).prepare(
-        `SELECT id, chunk_index FROM document_chunks WHERE document_id = ? ORDER BY chunk_index`
-      ).bind(documentId).all();
-
-      const existingChunks = existingChunksResult.results || [];
-      const chunkIds: number[] = [];
-
-      if (existingChunks.length > 0) {
-        this.env.logger.info('Found existing chunks for document (retry scenario)', {
-          documentId,
-          existingCount: existingChunks.length,
-          expectedCount: chunkingResult.totalChunks,
-        });
-
-        // Reuse existing chunk IDs
-        for (const existingChunk of existingChunks) {
-          chunkIds.push(existingChunk.id);
-        }
-      } else {
-        // First time - insert new chunks
-        for (const chunk of chunkingResult.chunks) {
-          try {
-            const result = await (this.env.AUDITGUARD_DB as any).prepare(
-              `INSERT INTO document_chunks (
-                document_id, workspace_id, chunk_index, content, chunk_size,
-                start_char, end_char, token_count, has_header, section_title,
-                embedding_status, created_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-              RETURNING id`
-            ).bind(
-              documentId,
-              workspaceId,
-              chunk.index,
-              chunk.text,
-              chunk.text.length,
-              chunk.metadata.startChar,
-              chunk.metadata.endChar,
-              chunk.metadata.tokenCount,
-              chunk.metadata.hasHeader ? 1 : 0,
-              chunk.metadata.sectionTitle || null,
-              Date.now()
-            ).first();
-
-            this.env.logger.info('Chunk insert result', {
-              documentId,
-              chunkIndex: chunk.index,
-              hasResult: !!result,
-              resultKeys: result ? Object.keys(result) : [],
-              resultId: result?.id,
-              resultIdType: result?.id ? typeof result.id : 'undefined',
-            });
-
-            // Get the inserted chunk ID from RETURNING clause
-            if (result && result.id) {
-              chunkIds.push(result.id);
-            } else {
-              this.env.logger.error('Chunk insert did not return ID', {
-                documentId,
-                chunkIndex: chunk.index,
-                result,
-              });
-            }
-          } catch (error) {
-            this.env.logger.error('Failed to insert chunk', {
-              documentId,
-              chunkIndex: chunk.index,
-              error: error instanceof Error ? error.message : String(error),
-              stack: error instanceof Error ? error.stack : undefined,
-            });
-            throw error;
-          }
-        }
-      }
-
-      this.env.logger.info('Chunks stored in database', {
-        documentId,
-        storedCount: chunkIds.length,
-      });
-
-      // STEP 3C: Generate embeddings SYNCHRONOUSLY (simplified pipeline)
-      // IMPORTANT: Process embeddings immediately to avoid queue delays
-      this.env.logger.info('🚀 Starting SYNCHRONOUS embedding generation', {
-        documentId,
+        serviceUrl: 'https://auditrig.com/api/v1/documents/process',
+        textLength: text.length,
         chunkCount: chunkingResult.chunks.length,
-        chunkIdCount: chunkIds.length,
       });
 
       let embeddingResult: any = null;
@@ -295,55 +211,78 @@ export default class extends Each<Body, Env> {
         // Update status to indicate vector indexing started
         await (this.env.AUDITGUARD_DB as any).prepare(
           `UPDATE documents
-           SET vector_indexing_status = 'processing',
-               chunks_created = ?
+           SET vector_indexing_status = 'processing'
            WHERE id = ?`
-        ).bind(chunkIds.length, documentId).run();
+        ).bind(documentId).run();
 
-        // Process embeddings immediately using EmbeddingService
-        const embeddingService = new EmbeddingService(this.env);
-
-        this.env.logger.info('Calling EmbeddingService.generateAndStoreEmbeddings', {
-          documentId,
-          workspaceId,
-          chunkCount: chunkingResult.chunks.length,
+        // Call PostgreSQL embedding service with full document data
+        const postgresResponse = await fetch('https://auditrig.com/api/v1/documents/process', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY || 'test-api-key-1234567890abcdef',
+          },
+          body: JSON.stringify({
+            document_id: documentId,
+            workspace_id: workspaceId,
+            raw_text: text,
+            filename: document.filename,
+            content_type: document.contentType,
+            file_size: originalFile.length,
+            vultr_s3_key: vultrKey,
+            smartbucket_key: null,
+            uploaded_by: userId || 'unknown',
+          }),
         });
 
-        embeddingResult = await embeddingService.generateAndStoreEmbeddings(
-          documentId,
-          workspaceId,
-          chunkingResult.chunks,
-          chunkIds
-        );
+        if (!postgresResponse.ok) {
+          const errorText = await postgresResponse.text();
+          throw new Error(`PostgreSQL embedding service failed (${postgresResponse.status}): ${errorText}`);
+        }
 
-        this.env.logger.info('✅ Embedding generation completed', {
+        const postgresResult = await postgresResponse.json() as {
+          chunks_created: number;
+          embeddings_stored: number;
+          processing_time_ms: number;
+          status: string;
+        };
+
+        this.env.logger.info('✅ PostgreSQL embedding service completed', {
           documentId,
-          successCount: embeddingResult.successCount,
-          failureCount: embeddingResult.failureCount,
-          duration: embeddingResult.duration,
+          chunksCreated: postgresResult.chunks_created,
+          embeddingsStored: postgresResult.embeddings_stored,
+          processingTime: postgresResult.processing_time_ms,
         });
 
-        // Update document with final embedding count
+        // Update document with final embedding count and chunk count
+        embeddingResult = {
+          successCount: postgresResult.embeddings_stored,
+          failureCount: postgresResult.chunks_created - postgresResult.embeddings_stored,
+          duration: postgresResult.processing_time_ms,
+        };
+
         await (this.env.AUDITGUARD_DB as any).prepare(
           `UPDATE documents
            SET embeddings_generated = ?,
+               chunk_count = ?,
                vector_indexing_status = ?
            WHERE id = ?`
         ).bind(
-          embeddingResult.successCount,
-          embeddingResult.successCount === chunkIds.length ? 'completed' : 'failed',
+          postgresResult.embeddings_stored,
+          postgresResult.chunks_created,
+          postgresResult.embeddings_stored === postgresResult.chunks_created ? 'completed' : 'failed',
           documentId
         ).run();
 
-        this.env.logger.info('🎉 Vector indexing complete', {
+        this.env.logger.info('🎉 PostgreSQL vector indexing complete', {
           documentId,
-          totalChunks: chunkIds.length,
-          embeddingsGenerated: embeddingResult.successCount,
-          status: embeddingResult.successCount === chunkIds.length ? 'completed' : 'failed',
+          totalChunks: postgresResult.chunks_created,
+          embeddingsGenerated: postgresResult.embeddings_stored,
+          status: postgresResult.embeddings_stored === postgresResult.chunks_created ? 'completed' : 'failed',
         });
 
       } catch (error) {
-        this.env.logger.error('❌ Synchronous embedding generation failed', {
+        this.env.logger.error('❌ PostgreSQL embedding service failed', {
           documentId,
           error: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
@@ -357,28 +296,8 @@ export default class extends Each<Body, Env> {
         ).bind(documentId).run();
       }
 
-      // STEP 3D: Auto-tag chunks with compliance frameworks (Phase 4)
-      // This runs asynchronously in parallel with embeddings
-      if (message.body.frameworkId || chunkingResult.totalChunks > 0) {
-        this.autoTagChunksAsync(
-          documentId,
-          workspaceId,
-          chunkingResult.chunks,
-          chunkIds,
-          message.body.frameworkId
-        ).catch(error => {
-          this.env.logger.error('Async auto-tagging failed', {
-            documentId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        });
-
-        this.env.logger.info('Started async auto-tagging', {
-          documentId,
-          chunkCount: chunkingResult.totalChunks,
-          frameworkId: message.body.frameworkId,
-        });
-      }
+      // STEP 3D: Auto-tagging is now handled by PostgreSQL service
+      // PostgreSQL service handles: chunking, embeddings, and compliance tagging
 
       // STEP 4: Upload ONLY clean text to SmartBucket (for all file types including PDF)
       const smartBucketKey = `${workspaceId}/${documentId}/extracted.txt`;

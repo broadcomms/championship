@@ -18,8 +18,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import get_settings, validate_settings
 from app.services import get_embedding_service
 from app.routes import health_router, embeddings_router
+from app.routes.documents import router as documents_router
+from app.routes.document_routes import router as document_processing_router
 from app.middleware import metrics_middleware, get_metrics
 from app.models import ErrorResponse
+from app.database import db_pool
 
 
 # Configure logging
@@ -47,6 +50,15 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Settings validation failed: {e}")
         raise
     
+    # Initialize database pool
+    logger.info("Initializing database connection pool...")
+    try:
+        await db_pool.connect()
+        logger.info("✅ Database pool initialized")
+    except Exception as e:
+        logger.error(f"❌ Database pool initialization failed: {e}")
+        # Continue anyway - some endpoints don't need DB
+    
     # Pre-load model (optional: can also lazy load on first request)
     settings = get_settings()
     if hasattr(settings, 'preload_model') and settings.preload_model:
@@ -64,6 +76,14 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("🛑 Shutting down Embedding Service...")
+    
+    # Close database pool
+    try:
+        await db_pool.close()
+        logger.info("✅ Database pool closed")
+    except Exception as e:
+        logger.error(f"❌ Error closing database pool: {e}")
+    
     logger.info("✅ Shutdown complete")
 
 
@@ -99,6 +119,8 @@ if settings.enable_metrics:
 # Include routers
 app.include_router(health_router, prefix="", tags=["Health"])
 app.include_router(embeddings_router, prefix="", tags=["Embeddings"])
+app.include_router(documents_router, prefix="", tags=["Documents"])
+app.include_router(document_processing_router, prefix="", tags=["Document Processing"])
 
 
 # Prometheus metrics endpoint

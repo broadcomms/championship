@@ -365,6 +365,19 @@ export default class extends Service<Env> {
       throw new Error('Document not found');
     }
 
+    // Get real chunk count from PostgreSQL
+    let realChunkCount = document.chunk_count || 0;
+    try {
+      const embeddingService = new EmbeddingService(this.env);
+      const vectorStatus = await embeddingService.getActualVectorIndexStatus(documentId);
+      realChunkCount = vectorStatus.totalChunks;
+    } catch (error) {
+      this.env.logger.warn('Failed to get chunk count from PostgreSQL, using D1 value', {
+        documentId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     return {
       id: document.id,
       workspaceId: document.workspace_id,
@@ -382,7 +395,7 @@ export default class extends Service<Env> {
       updatedAt: document.updated_at,
       processingStatus: document.processing_status,
       textExtracted: document.text_extracted === 1,
-      chunkCount: document.chunk_count,
+      chunkCount: realChunkCount,
       wordCount: document.word_count,
       pageCount: document.page_count,
       chunksCreated: document.chunks_created,
@@ -1538,6 +1551,7 @@ export default class extends Service<Env> {
 
   /**
    * Phase 5: Get document chunks with framework tags for UI display
+   * NOW QUERIES POSTGRESQL VIA API
    */
   async getDocumentChunks(
     workspaceId: string,
@@ -1564,7 +1578,7 @@ export default class extends Service<Env> {
       autoTagged: boolean;
     }>;
   }>> {
-    this.env.logger.info('Getting document chunks', {
+    this.env.logger.info('Getting document chunks from PostgreSQL', {
       workspaceId,
       documentId,
       userId,
@@ -1588,81 +1602,70 @@ export default class extends Service<Env> {
       throw new Error('Document not found');
     }
 
-    // Get chunks with their framework tags
-    const result = await (this.env.AUDITGUARD_DB as any).prepare(
-      `SELECT
-        dc.id,
-        dc.document_id,
-        dc.chunk_index,
-        dc.content,
-        dc.chunk_size,
-        dc.start_char,
-        dc.end_char,
-        dc.token_count,
-        dc.has_header,
-        dc.section_title,
-        dc.embedding_status,
-        dc.created_at,
-        dcf.framework_id,
-        cf.name as framework_name,
-        cf.display_name as framework_display_name,
-        dcf.relevance_score,
-        dcf.auto_tagged
-      FROM document_chunks dc
-      LEFT JOIN document_chunk_frameworks dcf ON dc.id = dcf.chunk_id
-      LEFT JOIN compliance_frameworks cf ON dcf.framework_id = cf.id
-      WHERE dc.document_id = ?
-      ORDER BY dc.chunk_index ASC, dcf.relevance_score DESC`
-    ).bind(documentId).all();
+    // Get chunks from PostgreSQL via API
+    try {
+      const response = await fetch(
+        `https://auditrig.com/api/v1/documents/${documentId}/chunks`,
+        {
+          method: 'GET',
+          headers: {
+            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-    this.env.logger.info('Raw SQL results for chunks', {
-      documentId,
-      rowCount: result.results?.length || 0,
-      success: result.success,
-    });
-
-    // Group chunks with their tags
-    const chunksMap = new Map<number, any>();
-
-    for (const row of result.results || []) {
-      if (!chunksMap.has(row.id)) {
-        chunksMap.set(row.id, {
-          id: row.id,
-          documentId: row.document_id,
-          chunkIndex: row.chunk_index,
-          content: row.content,
-          chunkSize: row.chunk_size,
-          startChar: row.start_char,
-          endChar: row.end_char,
-          tokenCount: row.token_count,
-          hasHeader: row.has_header === 1,
-          sectionTitle: row.section_title,
-          embeddingStatus: row.embedding_status,
-          createdAt: row.created_at,
-          tags: [],
-        });
+      if (!response.ok) {
+        throw new Error(`PostgreSQL API error: ${response.status}`);
       }
 
-      // Add framework tag if exists
-      if (row.framework_id) {
-        chunksMap.get(row.id).tags.push({
-          frameworkId: row.framework_id,
-          frameworkName: row.framework_name,
-          frameworkDisplayName: row.framework_display_name,
-          relevanceScore: row.relevance_score,
-          autoTagged: row.auto_tagged === 1,
-        });
-      }
+      const data = await response.json() as {
+        documentId: string;
+        chunks: Array<{
+          chunkId: number;
+          chunkIndex: number;
+          content: string;
+          chunkSize: number;
+          startChar: number;
+          endChar: number;
+          tokenCount: number;
+          embeddingStatus: string;
+          createdAt: string;
+        }>;
+      };
+
+      this.env.logger.info('Retrieved chunks from PostgreSQL', {
+        documentId,
+        chunkCount: data.chunks.length,
+      });
+
+      // Transform to match expected format
+      // Note: PostgreSQL doesn't have compliance tags yet, so tags array is empty
+      return data.chunks.map(chunk => ({
+        id: chunk.chunkId,
+        documentId: data.documentId,
+        chunkIndex: chunk.chunkIndex,
+        content: chunk.content,
+        chunkSize: chunk.chunkSize,
+        startChar: chunk.startChar,
+        endChar: chunk.endChar,
+        tokenCount: chunk.tokenCount,
+        hasHeader: false, // PostgreSQL chunks don't track this yet
+        sectionTitle: null, // PostgreSQL chunks don't track this yet
+        embeddingStatus: chunk.embeddingStatus,
+        createdAt: new Date(chunk.createdAt).getTime(),
+        tags: [], // Compliance tags not implemented in PostgreSQL yet
+      }));
+
+    } catch (error) {
+      this.env.logger.error('Failed to get chunks from PostgreSQL', {
+        documentId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      
+      // Fallback to empty array instead of failing
+      return [];
     }
-
-    const chunks = Array.from(chunksMap.values());
-
-    this.env.logger.info('Document chunks retrieved', {
-      documentId,
-      chunkCount: chunks.length,
-    });
-
-    return chunks;
   }
 
   /**
