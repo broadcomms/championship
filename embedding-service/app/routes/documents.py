@@ -238,3 +238,88 @@ async def search_document(
     except Exception as e:
         logger.error(f"Error searching document: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to search document: {str(e)}")
+
+
+@router.delete("/api/v1/documents/{document_id}")
+async def delete_document(
+    document_id: str,
+    api_key: str = Depends(verify_api_key)
+) -> Dict[str, Any]:
+    """
+    Delete a document and all its associated data from PostgreSQL.
+
+    This endpoint is called when a document is deleted from D1 to maintain
+    database synchronization and prevent orphaned data.
+
+    Deletes in order:
+    1. Embeddings (foreign key to chunks)
+    2. Chunks (foreign key to documents)
+    3. Document record
+
+    Returns:
+        - documentId: The deleted document ID
+        - deletedEmbeddings: Number of embeddings deleted
+        - deletedChunks: Number of chunks deleted
+        - deletedDocument: Boolean indicating if document was deleted
+        - success: Boolean indicating overall success
+    """
+    try:
+        db = DatabaseService()
+
+        logger.info(f"Deleting document and all associated data: {document_id}")
+
+        with db.get_connection() as conn:
+            with conn.cursor() as cur:
+                # Get counts before deletion for response
+                cur.execute("SELECT COUNT(*) FROM embeddings WHERE document_id = %s", (document_id,))
+                embedding_count = cur.fetchone()[0]
+
+                cur.execute("SELECT COUNT(*) FROM chunks WHERE document_id = %s", (document_id,))
+                chunk_count = cur.fetchone()[0]
+
+                cur.execute("SELECT COUNT(*) FROM documents WHERE id = %s", (document_id,))
+                document_exists = cur.fetchone()[0] > 0
+
+                if not document_exists:
+                    logger.warning(f"Document {document_id} not found in PostgreSQL")
+                    return {
+                        "documentId": document_id,
+                        "deletedEmbeddings": 0,
+                        "deletedChunks": 0,
+                        "deletedDocument": False,
+                        "success": True,
+                        "message": "Document not found (may have been already deleted)"
+                    }
+
+                # Delete embeddings first (has foreign key to chunks)
+                cur.execute("DELETE FROM embeddings WHERE document_id = %s", (document_id,))
+                deleted_embeddings = cur.rowcount
+                logger.info(f"Deleted {deleted_embeddings} embeddings for document {document_id}")
+
+                # Delete chunks (has foreign key to documents)
+                cur.execute("DELETE FROM chunks WHERE document_id = %s", (document_id,))
+                deleted_chunks = cur.rowcount
+                logger.info(f"Deleted {deleted_chunks} chunks for document {document_id}")
+
+                # Delete document
+                cur.execute("DELETE FROM documents WHERE id = %s", (document_id,))
+                deleted_document = cur.rowcount > 0
+                logger.info(f"Deleted document {document_id}")
+
+                # Commit the transaction
+                conn.commit()
+
+                logger.info(f"Successfully deleted document {document_id} with {deleted_chunks} chunks and {deleted_embeddings} embeddings")
+
+                return {
+                    "documentId": document_id,
+                    "deletedEmbeddings": deleted_embeddings,
+                    "deletedChunks": deleted_chunks,
+                    "deletedDocument": deleted_document,
+                    "success": True,
+                    "message": f"Successfully deleted document with {deleted_chunks} chunks and {deleted_embeddings} embeddings"
+                }
+
+    except Exception as e:
+        logger.error(f"Error deleting document {document_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")

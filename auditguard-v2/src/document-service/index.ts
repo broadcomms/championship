@@ -625,81 +625,88 @@ export default class extends Service<Env> {
       throw new Error('Access denied: Requires document uploader, admin, or owner role');
     }
 
-    // Step 1: Get all chunk IDs for this document (needed for embedding service deletion)
-    const chunks = await db
-      .selectFrom('document_chunks')
-      .select(['id', 'chunk_index'])
-      .where('document_id', '=', documentId)
-      .execute();
-
     this.env.logger.info('Deleting document with cascade', {
       documentId,
       workspaceId,
-      chunkCount: chunks.length,
       storageKey: document.storage_key,
     });
 
-    // Step 2: Delete vectors from embedding service (auditrig.com)
-    if (chunks.length > 0) {
-      try {
-        const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
+    // Step 1: Delete document from PostgreSQL embedding service
+    // This ensures database synchronization and prevents orphaned data
+    try {
+      const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
 
-        // Delete each chunk's vector from the embedding service
-        for (const chunk of chunks) {
-          const vectorId = `${documentId}_${chunk.chunk_index}`;
-
-          try {
-            await fetch(`${embeddingServiceUrl}/vectors/${vectorId}`, {
-              method: 'DELETE',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            });
-
-            this.env.logger.info('Deleted vector from embedding service', {
-              vectorId,
-              documentId,
-              chunkIndex: chunk.chunk_index,
-            });
-          } catch (error) {
-            this.env.logger.error('Failed to delete vector from embedding service', {
-              vectorId,
-              error: error instanceof Error ? error.message : String(error),
-            });
-            // Continue with deletion even if embedding service fails
-          }
-        }
-      } catch (error) {
-        this.env.logger.error('Failed to delete vectors from embedding service', {
-          documentId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        // Continue with deletion even if embedding service fails
-      }
-    }
-
-    // Step 3: Delete document chunks from database
-    if (chunks.length > 0) {
-      await db
-        .deleteFrom('document_chunks')
-        .where('document_id', '=', documentId)
-        .execute();
-
-      this.env.logger.info('Deleted document chunks', {
+      this.env.logger.info('Deleting document from PostgreSQL embedding service', {
         documentId,
-        deletedCount: chunks.length,
+        embeddingServiceUrl,
       });
+
+      const deleteResponse = await fetch(`${embeddingServiceUrl}/api/v1/documents/${documentId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+        },
+      });
+
+      if (deleteResponse.ok) {
+        const result = await deleteResponse.json() as {
+          documentId: string;
+          deletedEmbeddings: number;
+          deletedChunks: number;
+          deletedDocument: boolean;
+          success: boolean;
+          message: string;
+        };
+        this.env.logger.info('Successfully deleted document from PostgreSQL', {
+          documentId,
+          deletedEmbeddings: result.deletedEmbeddings,
+          deletedChunks: result.deletedChunks,
+          message: result.message,
+        });
+      } else {
+        const errorText = await deleteResponse.text();
+        this.env.logger.error('Failed to delete document from PostgreSQL', {
+          documentId,
+          status: deleteResponse.status,
+          error: errorText,
+        });
+        // Continue with D1 deletion even if PostgreSQL deletion fails
+        // The cleanup job will handle orphaned data
+      }
+    } catch (error) {
+      this.env.logger.error('Error calling PostgreSQL delete endpoint', {
+        documentId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Continue with D1 deletion even if PostgreSQL deletion fails
+      // The cleanup job will handle orphaned data
     }
 
-    // Step 4: Delete from SmartBucket storage
+    // Step 2: Delete document chunks from D1 database
+    const deletedChunksResult = await db
+      .deleteFrom('document_chunks')
+      .where('document_id', '=', documentId)
+      .execute();
+
+    const chunksDeleted = deletedChunksResult.length > 0
+      ? Number(deletedChunksResult[0].numDeletedRows || 0n)
+      : 0;
+
+    this.env.logger.info('Deleted document chunks from D1', {
+      documentId,
+      deletedCount: chunksDeleted,
+    });
+
+    // Step 3: Delete from SmartBucket storage
     try {
       await this.env.DOCUMENTS_BUCKET.delete(document.storage_key);
-      this.env.logger.info('Deleted document from storage', {
+      this.env.logger.info('Deleted document from SmartBucket storage', {
         documentId,
         storageKey: document.storage_key,
       });
     } catch (error) {
-      this.env.logger.error('Failed to delete from storage', {
+      this.env.logger.error('Failed to delete from SmartBucket storage', {
         documentId,
         storageKey: document.storage_key,
         error: error instanceof Error ? error.message : String(error),
@@ -707,7 +714,7 @@ export default class extends Service<Env> {
       // Continue with deletion even if storage deletion fails
     }
 
-    // Step 5: Delete from documents table
+    // Step 4: Delete from D1 documents table
     await db
       .deleteFrom('documents')
       .where('id', '=', documentId)
@@ -717,7 +724,8 @@ export default class extends Service<Env> {
     this.env.logger.info('Document deleted successfully with cascade', {
       documentId,
       workspaceId,
-      chunksDeleted: chunks.length,
+      d1ChunksDeleted: chunksDeleted,
+      note: 'PostgreSQL embeddings/chunks also deleted via embedding service',
     });
 
     return { success: true };
