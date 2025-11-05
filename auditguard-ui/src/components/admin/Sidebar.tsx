@@ -89,7 +89,10 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navigation.map((item) => {
-          const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+          // Special handling for Dashboard - exact match only
+          const isActive = item.href === '/admin' 
+            ? pathname === '/admin'
+            : pathname === item.href || pathname?.startsWith(item.href + '/');
           return (
             <Link
               key={item.name}
