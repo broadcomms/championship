@@ -2,9 +2,70 @@ import { Service } from '@liquidmetal-ai/raindrop-framework';
 import { Env } from './raindrop.gen';
 
 export default class extends Service<Env> {
+  /**
+   * Track performance metrics for API requests
+   */
+  private async trackPerformance(
+    operation: string,
+    startTime: number,
+    success: boolean,
+    error?: string,
+    metadata?: Record<string, any>
+  ): Promise<void> {
+    try {
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+
+      await (this.env.AUDITGUARD_DB as any)
+        .prepare(`
+          INSERT INTO performance_metrics (operation, start_time, end_time, duration, success, metadata, error, created_at)
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        `)
+        .bind(
+          operation,
+          startTime,
+          endTime,
+          duration,
+          success ? 1 : 0,
+          metadata ? JSON.stringify(metadata) : null,
+          error || null,
+          Date.now()
+        )
+        .run();
+    } catch (err) {
+      // Log error but don't fail the request
+      this.env.logger.error('Failed to track performance metrics', {
+        operation,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Wrap response with performance tracking
+   */
+  private async trackAndReturn(
+    operation: string,
+    startTime: number,
+    response: Response,
+    metadata?: Record<string, any>
+  ): Promise<Response> {
+    const success = response.status >= 200 && response.status < 400;
+    await this.trackPerformance(
+      operation,
+      startTime,
+      success,
+      success ? undefined : `HTTP ${response.status}`,
+      metadata
+    );
+    return response;
+  }
+
   async fetch(request: Request): Promise<Response> {
+    const startTime = Date.now();
     const url = new URL(request.url);
     const path = url.pathname;
+    const operation = `${request.method} ${path}`;
 
     // CORS helper function
     const getCorsHeaders = (origin: string | null) => {
@@ -1145,9 +1206,13 @@ export default class extends Service<Env> {
       if (path === '/api/admin/stats' && request.method === 'GET') {
         const user = await this.validateSession(request);
         const result = await this.env.ADMIN_SERVICE.getSystemStats(user.userId);
-        return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        });
+        return this.trackAndReturn(
+          operation,
+          startTime,
+          new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          })
+        );
       }
 
       // GET /api/admin/users
@@ -1800,6 +1865,194 @@ export default class extends Service<Env> {
         });
       }
 
+      // ====== PHASE 4: ERROR LOGS & DEBUGGING ENDPOINTS ======
+
+      // GET /api/admin/logs/errors - Get application error logs
+      if (path === '/api/admin/logs/errors' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+
+        // Parse query parameters
+        const searchParams = url.searchParams;
+        const options = {
+          startTime: searchParams.get('startTime')
+            ? parseInt(searchParams.get('startTime')!)
+            : undefined,
+          endTime: searchParams.get('endTime') ? parseInt(searchParams.get('endTime')!) : undefined,
+          service: searchParams.get('service') || undefined,
+          severity: (searchParams.get('severity') as 'error' | 'warn' | 'info') || undefined,
+          limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined,
+          offset: searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : undefined,
+        };
+
+        const result = await this.env.ADMIN_SERVICE.getErrorLogs(user.userId, options);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/admin/health - Get overall system health dashboard
+      if (path === '/api/admin/health' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+        const result = await this.env.ADMIN_SERVICE.getSystemHealth(user.userId);
+
+        return this.trackAndReturn(
+          operation,
+          startTime,
+          new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          })
+        );
+      }
+
+      // GET /api/admin/metrics/performance - Get performance metrics
+      if (path === '/api/admin/metrics/performance' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+
+        // Parse query parameters
+        const searchParams = url.searchParams;
+        const options = {
+          startTime: searchParams.get('startTime')
+            ? parseInt(searchParams.get('startTime')!)
+            : undefined,
+          endTime: searchParams.get('endTime') ? parseInt(searchParams.get('endTime')!) : undefined,
+          operation: searchParams.get('operation') || undefined,
+          groupBy: (searchParams.get('groupBy') as 'hour' | 'day' | 'operation') || undefined,
+          limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined,
+        };
+
+        const result = await this.env.ADMIN_SERVICE.getPerformanceMetrics(user.userId, options);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // ====== PHASE 5: MIGRATIONS, EXPORTS & BACKUPS ENDPOINTS ======
+
+      // GET /api/admin/backup/export/:tableName - Export database table
+      const exportTableMatch = path.match(/^\/api\/admin\/backup\/export\/([^\/]+)$/);
+      if (exportTableMatch && exportTableMatch[1] && request.method === 'GET') {
+        const tableName = exportTableMatch[1];
+        const user = await this.validateSession(request);
+
+        const searchParams = url.searchParams;
+        const format = (searchParams.get('format') as 'json' | 'csv') || 'json';
+
+        const result = await this.env.ADMIN_SERVICE.exportTable(user.userId, tableName, format);
+
+        // Return as downloadable file
+        return new Response(result.data, {
+          headers: {
+            'Content-Type': format === 'json' ? 'application/json' : 'text/csv',
+            'Content-Disposition': `attachment; filename="${result.filename}"`,
+            ...corsHeaders,
+          },
+        });
+      }
+
+      // POST /api/admin/backup/create - Create full database backup
+      if (path === '/api/admin/backup/create' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+        const body = (await request.json().catch(() => ({}))) as {
+          includeTables?: string[];
+          excludeTables?: string[];
+        };
+
+        const result = await this.env.ADMIN_SERVICE.createBackup(user.userId, body);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/admin/backup/list - List available backups
+      if (path === '/api/admin/backup/list' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+        const result = await this.env.ADMIN_SERVICE.listBackups(user.userId);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/admin/backup/stats - Get database statistics
+      if (path === '/api/admin/backup/stats' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+        const result = await this.env.ADMIN_SERVICE.getDatabaseStats(user.userId);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/admin/migrations - Get migration status
+      if (path === '/api/admin/migrations' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+        const result = await this.env.ADMIN_SERVICE.getMigrationStatus(user.userId);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // POST /api/admin/backup/import - Import backup data
+      if (path === '/api/admin/backup/import' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+        const body = (await request.json()) as {
+          backupData: string;
+          dryRun?: boolean;
+          overwrite?: boolean;
+          includeTables?: string[];
+          excludeTables?: string[];
+        };
+
+        if (!body.backupData) {
+          return new Response(JSON.stringify({ error: 'backupData is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.ADMIN_SERVICE.importBackup(user.userId, body.backupData, {
+          dryRun: body.dryRun,
+          overwrite: body.overwrite,
+          includeTables: body.includeTables,
+          excludeTables: body.excludeTables,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // POST /api/admin/cleanup/orphaned-vectors - Clean up orphaned vectors
+      if (path === '/api/admin/cleanup/orphaned-vectors' && request.method === 'POST') {
+        try {
+          const user = await this.validateSession(request);
+          const result = await this.env.ADMIN_SERVICE.cleanupOrphanedVectors(user.userId);
+
+          return this.trackAndReturn(
+            operation,
+            startTime,
+            new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            })
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await this.trackPerformance(operation, startTime, false, errorMessage);
+
+          return new Response(JSON.stringify({ error: errorMessage }), {
+            status: error instanceof Error && error.message === 'Access denied' ? 403 : 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // Track 404 as failed request
+      await this.trackPerformance(operation, startTime, false, 'Not Found');
+
       return new Response(JSON.stringify({ error: 'Not Found' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -1809,6 +2062,12 @@ export default class extends Service<Env> {
       const corsHeaders = getCorsHeaders(origin);
 
       const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
+
+      // Track failed request
+      await this.trackPerformance(operation, startTime, false, errorMessage, {
+        path: url.pathname,
+        method: request.method,
+      });
 
       // Log error details
       this.env.logger.error('API Gateway error', {

@@ -19,6 +19,10 @@ scp -i $SSH_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     $VM_USER@$VM_HOST:$SERVICE_DIR/app/routes/
 
 scp -i $SSH_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    app/routes/admin.py \
+    $VM_USER@$VM_HOST:$SERVICE_DIR/app/routes/
+
+scp -i $SSH_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     app/services/database.py \
     $VM_USER@$VM_HOST:$SERVICE_DIR/app/services/
 

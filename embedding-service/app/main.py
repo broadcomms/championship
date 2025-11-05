@@ -20,6 +20,7 @@ from app.services import get_embedding_service
 from app.routes import health_router, embeddings_router
 from app.routes.documents import router as documents_router
 from app.routes.document_routes import router as document_processing_router
+from app.routes.admin import router as admin_router
 from app.middleware import metrics_middleware, get_metrics
 from app.models import ErrorResponse
 from app.database import db_pool
@@ -121,6 +122,7 @@ app.include_router(health_router, prefix="", tags=["Health"])
 app.include_router(embeddings_router, prefix="", tags=["Embeddings"])
 app.include_router(documents_router, prefix="", tags=["Documents"])
 app.include_router(document_processing_router, prefix="", tags=["Document Processing"])
+app.include_router(admin_router, prefix="", tags=["Admin"])
 
 
 # Prometheus metrics endpoint

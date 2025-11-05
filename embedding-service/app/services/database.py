@@ -62,25 +62,62 @@ class DatabaseService:
                 result = cur.fetchone()
                 return dict(result) if result else None
     
-    async def get_chunk_statistics(self, document_id: str) -> Dict[str, int]:
-        """Get chunk statistics by embedding status"""
+    async def get_chunk_statistics(self, document_id: Optional[str] = None) -> Dict[str, int]:
+        """
+        Get chunk statistics by embedding status.
+
+        If document_id is None, returns statistics for all documents.
+        Otherwise, returns statistics for the specific document.
+
+        Note: Most chunks don't have embedding_status tracked individually.
+        We aggregate from the documents table instead.
+        """
         with self.get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
-                    SELECT 
-                        COUNT(*) FILTER (WHERE embedding_status = 'completed') as completed,
-                        COUNT(*) FILTER (WHERE embedding_status = 'pending') as pending,
-                        COUNT(*) FILTER (WHERE embedding_status = 'processing') as processing,
-                        COUNT(*) FILTER (WHERE embedding_status = 'failed') as failed
-                    FROM chunks
-                    WHERE document_id = %s
-                """, (document_id,))
-                
-                result = cur.fetchone()
-                return dict(result) if result else {
-                    'completed': 0, 
-                    'pending': 0, 
-                    'processing': 0, 
+                if document_id:
+                    # Get stats for specific document from documents table
+                    cur.execute("""
+                        SELECT
+                            chunk_count as total,
+                            embedding_count as completed
+                        FROM documents
+                        WHERE id = %s
+                    """, (document_id,))
+
+                    result = cur.fetchone()
+                    if result:
+                        total = result['total'] or 0
+                        completed = result['completed'] or 0
+                        return {
+                            'completed': completed,
+                            'pending': total - completed,
+                            'processing': 0,
+                            'failed': 0
+                        }
+                else:
+                    # Get aggregate stats from documents table
+                    cur.execute("""
+                        SELECT
+                            COALESCE(SUM(chunk_count), 0) as total,
+                            COALESCE(SUM(embedding_count), 0) as completed
+                        FROM documents
+                    """)
+
+                    result = cur.fetchone()
+                    if result:
+                        total = result['total'] or 0
+                        completed = result['completed'] or 0
+                        return {
+                            'completed': completed,
+                            'pending': total - completed,
+                            'processing': 0,
+                            'failed': 0
+                        }
+
+                return {
+                    'completed': 0,
+                    'pending': 0,
+                    'processing': 0,
                     'failed': 0
                 }
     
@@ -147,8 +184,8 @@ class DatabaseService:
         return []
     
     async def update_document_status(
-        self, 
-        document_id: str, 
+        self,
+        document_id: str,
         status: str,
         chunk_count: Optional[int] = None,
         embedding_count: Optional[int] = None
@@ -172,3 +209,91 @@ class DatabaseService:
                             updated_at = EXTRACT(EPOCH FROM NOW())::bigint * 1000
                         WHERE id = %s
                     """, (status, document_id))
+
+    async def get_recent_documents_with_stats(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get recent documents with their embedding statistics"""
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT
+                        d.id as document_id,
+                        d.filename,
+                        d.created_at as uploaded_at,
+                        d.chunk_count,
+                        d.embedding_count as embeddings_generated,
+                        d.processing_status as status
+                    FROM documents d
+                    ORDER BY d.created_at DESC
+                    LIMIT %s
+                """, (limit,))
+
+                results = cur.fetchall()
+                return [dict(row) for row in results]
+
+    async def get_document_summary_stats(self) -> Dict[str, int]:
+        """Get summary statistics for all documents"""
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT
+                        COUNT(*) as total_documents,
+                        COUNT(*) FILTER (WHERE embedding_count > 0) as documents_with_embeddings
+                    FROM documents
+                """)
+
+                result = cur.fetchone()
+                return dict(result) if result else {
+                    'total_documents': 0,
+                    'documents_with_embeddings': 0
+                }
+
+    async def get_failed_chunks(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get chunks that failed embedding generation"""
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT
+                        c.id as chunk_id,
+                        c.document_id,
+                        c.chunk_index,
+                        c.chunk_text,
+                        c.embedding_status,
+                        c.updated_at
+                    FROM chunks c
+                    WHERE c.embedding_status = 'failed'
+                    ORDER BY c.updated_at DESC
+                    LIMIT %s
+                """, (limit,))
+
+                results = cur.fetchall()
+                return [dict(row) for row in results]
+
+    async def get_database_stats(self) -> Dict[str, Any]:
+        """Get PostgreSQL database statistics"""
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Get table sizes and row counts
+                cur.execute("""
+                    SELECT
+                        schemaname,
+                        tablename,
+                        pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size,
+                        pg_total_relation_size(schemaname||'.'||tablename) as size_bytes,
+                        n_live_tup as row_count
+                    FROM pg_stat_user_tables
+                    ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+                """)
+
+                tables = cur.fetchall()
+
+                # Get database size
+                cur.execute("""
+                    SELECT pg_size_pretty(pg_database_size(current_database())) as db_size
+                """)
+
+                db_size = cur.fetchone()
+
+                return {
+                    "database_size": db_size['db_size'] if db_size else "Unknown",
+                    "tables": [dict(row) for row in tables],
+                }

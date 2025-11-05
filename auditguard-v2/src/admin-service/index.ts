@@ -665,71 +665,83 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
-    this.env.logger.info('Getting vector index statistics', { adminUserId });
+    this.env.logger.info('Getting vector index statistics from PostgreSQL', { adminUserId });
 
-    // Get vector index metadata using describe()
-    let indexInfo: any = { dimensions: 384, metric: 'cosine', vectorCount: 0 };
     try {
-      indexInfo = await this.env.DOCUMENT_EMBEDDINGS.describe();
+      // Call PostgreSQL admin API
+      const response = await fetch(
+        `${this.env.LOCAL_EMBEDDING_SERVICE_URL}/api/v1/admin/vector-stats`,
+        {
+          method: 'GET',
+          headers: {
+            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`PostgreSQL API error: ${response.status}`);
+      }
+
+      const data = await response.json() as {
+        totalChunks: number;
+        chunksCompleted: number;
+        chunksPending: number;
+        chunksProcessing: number;
+        chunksFailed: number;
+        completionPercentage: number;
+        recentDocuments: Array<{
+          document_id: string;
+          filename: string;
+          uploaded_at: number;
+          chunk_count: number;
+          embeddings_generated: number;
+          status: string;
+        }>;
+        indexName: string;
+        dimensions: number;
+        metric: string;
+      };
+
+      // Extract sample vectors from recent documents
+      const sampleVectors = data.recentDocuments.slice(0, 10).map((doc) => ({
+        id: `${doc.document_id}_emb`,
+        documentId: doc.document_id,
+        chunkIndex: 0, // Not available in summary API
+        hasEmbedding: doc.embeddings_generated > 0,
+        embeddingStatus: doc.status,
+      }));
+
+      await this.logAdminAction(adminUserId, 'view_vector_stats', 'vector_index', null, {
+        totalVectors: data.chunksCompleted,
+        databaseVectors: data.chunksCompleted,
+        source: 'postgresql',
+      });
+
+      this.env.logger.info('Vector index statistics retrieved from PostgreSQL', {
+        adminUserId,
+        totalVectors: data.chunksCompleted,
+        totalChunks: data.totalChunks,
+        pending: data.chunksPending,
+        failed: data.chunksFailed,
+      });
+
+      return {
+        indexName: data.indexName,
+        dimensions: data.dimensions,
+        metric: data.metric,
+        totalVectors: data.chunksCompleted,
+        databaseVectors: data.chunksCompleted,
+        mismatch: 0, // PostgreSQL is single source of truth
+        sampleVectors,
+      };
     } catch (error) {
-      this.env.logger.warn('Could not describe vector index', {
+      this.env.logger.error('Failed to get vector stats from PostgreSQL', {
         error: error instanceof Error ? error.message : String(error),
       });
+      throw new Error('Failed to retrieve vector statistics from PostgreSQL');
     }
-
-    // Count vectors in database
-    const countQuery = await (this.env.AUDITGUARD_DB as any)
-      .prepare(`
-        SELECT
-          COUNT(*) as total,
-          SUM(CASE WHEN embedding_status = 'completed' THEN 1 ELSE 0 END) as completed,
-          SUM(CASE WHEN vector_embedding IS NOT NULL THEN 1 ELSE 0 END) as hasBlob,
-          SUM(CASE WHEN embedding_status = 'pending' THEN 1 ELSE 0 END) as pending,
-          SUM(CASE WHEN embedding_status = 'failed' THEN 1 ELSE 0 END) as failed
-        FROM document_chunks
-      `)
-      .first();
-
-    // Get sample of recent vectors
-    const sampleResult = await (this.env.AUDITGUARD_DB as any)
-      .prepare(`
-        SELECT vector_id, document_id, chunk_index, embedding_status, created_at
-        FROM document_chunks
-        ORDER BY created_at DESC
-        LIMIT 10
-      `)
-      .all();
-
-    const sampleVectors = (sampleResult.results || []).map((v: any) => ({
-      id: v.vector_id || 'none',
-      documentId: v.document_id,
-      chunkIndex: v.chunk_index,
-      hasEmbedding: v.embedding_status === 'completed',
-      embeddingStatus: v.embedding_status || 'unknown',
-    }));
-
-    await this.logAdminAction(adminUserId, 'view_vector_stats', 'vector_index', null, {
-      totalVectors: indexInfo.vectorCount || 0,
-      databaseVectors: countQuery?.completed || 0,
-    });
-
-    this.env.logger.info('Vector index statistics retrieved', {
-      adminUserId,
-      totalVectors: indexInfo.vectorCount || 0,
-      databaseCompleted: countQuery?.completed || 0,
-      pending: countQuery?.pending || 0,
-      failed: countQuery?.failed || 0,
-    });
-
-    return {
-      indexName: 'document-embeddings',
-      dimensions: indexInfo.dimensions || 384,
-      metric: indexInfo.metric || 'cosine',
-      totalVectors: indexInfo.vectorCount || 0,
-      databaseVectors: countQuery?.completed || 0,
-      mismatch: Math.abs((indexInfo.vectorCount || 0) - (countQuery?.completed || 0)),
-      sampleVectors,
-    };
   }
 
   /**
@@ -766,99 +778,123 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
-    this.env.logger.info('Getting embedding status dashboard', { adminUserId });
+    this.env.logger.info('Getting embedding status dashboard from PostgreSQL', { adminUserId });
 
-    // Summary statistics
-    const summaryResult = await (this.env.AUDITGUARD_DB as any)
-      .prepare(`
-        SELECT
-          COUNT(*) as totalChunks,
-          SUM(CASE WHEN embedding_status = 'completed' THEN 1 ELSE 0 END) as completed,
-          SUM(CASE WHEN embedding_status = 'pending' THEN 1 ELSE 0 END) as pending,
-          SUM(CASE WHEN embedding_status = 'failed' THEN 1 ELSE 0 END) as failed
-        FROM document_chunks
-      `)
-      .first();
+    try {
+      // Call PostgreSQL admin API
+      const response = await fetch(
+        `${this.env.LOCAL_EMBEDDING_SERVICE_URL}/api/v1/admin/embedding-summary`,
+        {
+          method: 'GET',
+          headers: {
+            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-    // Document counts
-    const docCountResult = await (this.env.AUDITGUARD_DB as any)
-      .prepare(`
-        SELECT
-          COUNT(*) as totalDocuments,
-          SUM(CASE WHEN embeddings_generated > 0 THEN 1 ELSE 0 END) as documentsWithEmbeddings
-        FROM documents
-      `)
-      .first();
+      if (!response.ok) {
+        throw new Error(`PostgreSQL API error: ${response.status}`);
+      }
 
-    // Recent documents with embedding progress
-    const recentDocsResult = await (this.env.AUDITGUARD_DB as any)
-      .prepare(`
-        SELECT
-          id,
-          filename,
-          uploaded_at,
-          chunk_count,
-          embeddings_generated,
-          vector_indexing_status
-        FROM documents
-        ORDER BY uploaded_at DESC
-        LIMIT 20
-      `)
-      .all();
+      const data = await response.json() as {
+        summary: {
+          totalDocuments: number;
+          documentsWithEmbeddings: number;
+          totalChunks: number;
+          chunksCompleted: number;
+          chunksPending: number;
+          chunksProcessing: number;
+          chunksFailed: number;
+          completionPercentage: number;
+        };
+        recentDocuments: Array<{
+          document_id: string;
+          filename: string;
+          uploaded_at: number;
+          chunk_count: number;
+          embeddings_generated: number;
+          status: string;
+        }>;
+      };
 
-    // Failed chunks for debugging
-    const failedChunksResult = await (this.env.AUDITGUARD_DB as any)
-      .prepare(`
-        SELECT id, document_id, chunk_index
-        FROM document_chunks
-        WHERE embedding_status = 'failed'
-        LIMIT 50
-      `)
-      .all();
+      // Get failed chunks from separate endpoint
+      let failedChunks: Array<{
+        chunkId: number;
+        documentId: string;
+        chunkIndex: number;
+        error: string;
+      }> = [];
 
-    const totalChunks = summaryResult?.totalChunks || 0;
-    const completed = summaryResult?.completed || 0;
-    const completionPercentage = totalChunks ? Math.round((completed / totalChunks) * 100) : 0;
+      try {
+        const failedResponse = await fetch(
+          `${this.env.LOCAL_EMBEDDING_SERVICE_URL}/api/v1/admin/failed-chunks?limit=50`,
+          {
+            method: 'GET',
+            headers: {
+              'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
 
-    await this.logAdminAction(adminUserId, 'view_embedding_status', 'embeddings', null, {
-      totalChunks,
-      completed,
-      completionPercentage,
-    });
+        if (failedResponse.ok) {
+          const failedData = await failedResponse.json() as {
+            failedChunks: Array<{
+              chunk_id: number;
+              document_id: string;
+              chunk_index: number;
+              chunk_text: string;
+              embedding_status: string;
+            }>;
+          };
 
-    this.env.logger.info('Embedding status retrieved', {
-      adminUserId,
-      totalChunks,
-      completed,
-      pending: summaryResult?.pending || 0,
-      failed: summaryResult?.failed || 0,
-    });
+          failedChunks = failedData.failedChunks.map((c) => ({
+            chunkId: c.chunk_id,
+            documentId: c.document_id,
+            chunkIndex: c.chunk_index,
+            error: 'Embedding generation failed - check logs',
+          }));
+        }
+      } catch (error) {
+        this.env.logger.warn('Could not fetch failed chunks', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
 
-    return {
-      summary: {
-        totalDocuments: docCountResult?.totalDocuments || 0,
-        documentsWithEmbeddings: docCountResult?.documentsWithEmbeddings || 0,
-        totalChunks,
-        chunksCompleted: completed,
-        chunksPending: summaryResult?.pending || 0,
-        chunksFailed: summaryResult?.failed || 0,
-        completionPercentage,
-      },
-      recentDocuments: (recentDocsResult.results || []).map((d: any) => ({
-        documentId: d.id,
-        filename: d.filename,
-        uploadedAt: d.uploaded_at,
-        chunkCount: d.chunk_count,
-        embeddingsGenerated: d.embeddings_generated,
-        status: d.vector_indexing_status,
-      })),
-      failedChunks: (failedChunksResult.results || []).map((c: any) => ({
-        chunkId: c.id,
-        documentId: c.document_id,
-        chunkIndex: c.chunk_index,
-        error: 'Check error logs for details',
-      })),
-    };
+      await this.logAdminAction(adminUserId, 'view_embedding_status', 'embeddings', null, {
+        totalChunks: data.summary.totalChunks,
+        completed: data.summary.chunksCompleted,
+        completionPercentage: data.summary.completionPercentage,
+        source: 'postgresql',
+      });
+
+      this.env.logger.info('Embedding status retrieved from PostgreSQL', {
+        adminUserId,
+        totalChunks: data.summary.totalChunks,
+        completed: data.summary.chunksCompleted,
+        pending: data.summary.chunksPending,
+        failed: data.summary.chunksFailed,
+      });
+
+      return {
+        summary: data.summary,
+        recentDocuments: data.recentDocuments.map((d) => ({
+          documentId: d.document_id,
+          filename: d.filename,
+          uploadedAt: d.uploaded_at,
+          chunkCount: d.chunk_count,
+          embeddingsGenerated: d.embeddings_generated,
+          status: d.status,
+        })),
+        failedChunks,
+      };
+    } catch (error) {
+      this.env.logger.error('Failed to get embedding status from PostgreSQL', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new Error('Failed to retrieve embedding status from PostgreSQL');
+    }
   }
 
   /**
@@ -886,53 +922,87 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
-    this.env.logger.info('Testing vector search', { adminUserId, query, topK });
-
-    const startTime = Date.now();
+    this.env.logger.info('Testing vector search from PostgreSQL', { adminUserId, query, topK });
 
     try {
-      // For now, return a placeholder response since we need the embedding service
-      // In production, this would call the embedding service to generate query vector
-      // and then query the vector index
+      // Call PostgreSQL admin test search endpoint
+      const response = await fetch(
+        `${this.env.LOCAL_EMBEDDING_SERVICE_URL}/api/v1/admin/test-search`,
+        {
+          method: 'POST',
+          headers: {
+            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query,
+            limit: topK,
+          }),
+        }
+      );
 
-      // Check if we have any completed embeddings first
-      const hasEmbeddingsResult = await (this.env.AUDITGUARD_DB as any)
-        .prepare(`SELECT COUNT(*) as count FROM document_chunks WHERE embedding_status = 'completed'`)
-        .first();
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.env.logger.error('PostgreSQL test search failed', {
+          status: response.status,
+          error: errorText,
+        });
 
-      const hasEmbeddings = (hasEmbeddingsResult?.count || 0) > 0;
-
-      if (!hasEmbeddings) {
-        const searchTime = Date.now() - startTime;
         return {
           query,
           results: [],
-          searchTime,
-          error: 'No embeddings available yet. Upload documents and wait for embedding generation.',
+          searchTime: 0,
+          error: `Search failed: ${response.status} - ${errorText}`,
         };
       }
 
-      // Try to query the vector index directly
-      // This requires the embedding service to convert the query to a vector
-      // For now, we'll return a diagnostic message
+      const data = await response.json() as {
+        query: string;
+        results: Array<{
+          vectorId: string;
+          chunkId: string;
+          documentId: string;
+          chunkIndex: number;
+          text: string;
+          filename: string;
+          workspaceId: string;
+          score: number;
+          similarity: number;
+          distance: number;
+        }>;
+        count: number;
+        searchTimeMs: number;
+      };
 
+      // Log the search test
       await this.logAdminAction(adminUserId, 'test_vector_search', 'vector_index', null, {
         query,
         topK,
+        resultsCount: data.count,
+        searchTimeMs: data.searchTimeMs,
+        source: 'postgresql',
       });
 
-      const searchTime = Date.now() - startTime;
+      this.env.logger.info('Vector search test completed from PostgreSQL', {
+        adminUserId,
+        query,
+        resultsCount: data.count,
+        searchTimeMs: data.searchTimeMs,
+      });
 
       return {
-        query,
-        results: [],
-        searchTime,
-        error: 'Vector search requires embedding service integration. Use document search API for now.',
+        query: data.query,
+        results: data.results.map((r) => ({
+          vectorId: r.vectorId,
+          score: r.score,
+          documentId: r.documentId,
+          chunkIndex: r.chunkIndex,
+          text: r.text.substring(0, 500), // Truncate text for response size
+        })),
+        searchTime: data.searchTimeMs,
       };
 
     } catch (error) {
-      const searchTime = Date.now() - startTime;
-
       this.env.logger.error('Vector search test failed', {
         adminUserId,
         query,
@@ -942,7 +1012,7 @@ export default class extends Service<Env> {
       return {
         query,
         results: [],
-        searchTime,
+        searchTime: 0,
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
@@ -1471,6 +1541,1364 @@ export default class extends Service<Env> {
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
+    }
+  }
+
+  /**
+   * Phase 4.1: Get application error logs
+   */
+  async getErrorLogs(
+    adminUserId: string,
+    options: {
+      startTime?: number;
+      endTime?: number;
+      service?: string;
+      severity?: 'error' | 'warn' | 'info';
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<{
+    logs: Array<{
+      id: string;
+      timestamp: number;
+      service: string;
+      severity: string;
+      message: string;
+      error?: string;
+      stack?: string;
+      context?: Record<string, any>;
+    }>;
+    totalCount: number;
+    hasMore: boolean;
+  }> {
+    // Verify admin access
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Access denied');
+    }
+
+    this.env.logger.info('Fetching error logs', {
+      adminUserId,
+      options,
+    });
+
+    try {
+      const limit = options.limit || 100;
+      const offset = options.offset || 0;
+
+      // Note: performance_metrics table doesn't exist yet
+      // For now, return empty logs with proper structure
+      // TODO: Create performance_metrics table or use logging service
+
+      const logs: any[] = [];
+      const totalCount = 0;
+
+      await this.logAdminAction(adminUserId, 'view_error_logs', 'system', null, {
+        totalCount,
+        limit,
+        offset,
+        filters: options,
+      });
+
+      this.env.logger.info('Error logs retrieved', {
+        adminUserId,
+        totalCount,
+        returnedCount: logs.length,
+      });
+
+      return {
+        logs,
+        totalCount,
+        hasMore: offset + logs.length < totalCount,
+      };
+    } catch (error) {
+      this.env.logger.error('Failed to fetch error logs', {
+        adminUserId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new Error('Failed to retrieve error logs');
+    }
+  }
+
+  /**
+   * Phase 4.2: Get overall system health dashboard
+   */
+  async getSystemHealth(adminUserId: string): Promise<{
+    status: 'healthy' | 'degraded' | 'unhealthy';
+    services: Array<{
+      name: string;
+      status: 'healthy' | 'degraded' | 'unhealthy';
+      uptime: number;
+      lastCheck: number;
+      errorRate: number;
+      avgLatency: number;
+      details?: Record<string, any>;
+    }>;
+    database: {
+      status: 'healthy' | 'degraded' | 'unhealthy';
+      connectionPool: {
+        active: number;
+        idle: number;
+        total: number;
+      };
+      slowQueries: number;
+      avgQueryTime: number;
+    };
+    embeddingService: {
+      status: 'healthy' | 'degraded' | 'unhealthy';
+      url: string;
+      modelName: string;
+      totalRequests: number;
+      errorRate: number;
+      avgLatency: number;
+    };
+    metrics: {
+      totalErrors24h: number;
+      errorRate24h: number;
+      avgResponseTime24h: number;
+      requestsPerMinute: number;
+      // Legacy fields for backwards compatibility
+      totalRequests: number;
+      avgResponseTime: number;
+      errorRate: number;
+      uptime: number;
+    };
+    alerts: Array<{
+      severity: 'warning' | 'error' | 'critical';
+      service: string;
+      message: string;
+      timestamp: number;
+    }>;
+  }> {
+    // Verify admin access
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Access denied');
+    }
+
+    this.env.logger.info('Fetching system health', { adminUserId });
+
+    try {
+      const now = Date.now();
+      const last24h = now - 24 * 60 * 60 * 1000;
+
+      // Get embedding service health
+      const embeddingHealth = await this.getEmbeddingServiceHealth(adminUserId);
+
+      // Get real metrics from performance_metrics table
+      const metricsResult = await (this.env.AUDITGUARD_DB as any)
+        .prepare(`
+          SELECT
+            COUNT(*) as total_requests,
+            SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as total_errors,
+            AVG(duration) as avg_duration
+          FROM performance_metrics
+          WHERE created_at >= ?1
+        `)
+        .bind(last24h)
+        .first();
+
+      const totalRequests = metricsResult?.total_requests || 0;
+      const totalErrors = metricsResult?.total_errors || 0;
+      const avgDuration = metricsResult?.avg_duration || 0;
+      const errorRate = totalRequests > 0 ? (totalErrors / totalRequests) * 100 : 0;
+
+      // Get service-specific metrics from performance_metrics
+      const serviceMetrics = await (this.env.AUDITGUARD_DB as any)
+        .prepare(`
+          SELECT
+            operation,
+            COUNT(*) as request_count,
+            SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as error_count,
+            AVG(duration) as avg_latency
+          FROM performance_metrics
+          WHERE created_at >= ?1
+          GROUP BY operation
+          ORDER BY request_count DESC
+          LIMIT 20
+        `)
+        .bind(last24h)
+        .all();
+
+      // Build services health status
+      const services = (serviceMetrics.results || []).map((metric: any) => {
+        const serviceName = metric.operation?.split(':')[0] || 'unknown';
+        const requestCount = metric.request_count || 0;
+        const errorCount = metric.error_count || 0;
+        const serviceErrorRate = requestCount > 0 ? (errorCount / requestCount) * 100 : 0;
+        const avgLatency = metric.avg_latency || 0;
+
+        let status: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+        if (serviceErrorRate > 10 || avgLatency > 5000) {
+          status = 'unhealthy';
+        } else if (serviceErrorRate > 5 || avgLatency > 2000) {
+          status = 'degraded';
+        }
+
+        return {
+          name: serviceName,
+          status,
+          uptime: 99.9, // Placeholder - would need actual uptime tracking
+          lastCheck: now,
+          errorRate: serviceErrorRate,
+          avgLatency,
+          details: {
+            requestCount,
+            errorCount,
+          },
+        };
+      });
+
+      // Database health (simplified - D1 doesn't expose connection pool stats)
+      const database = {
+        status: 'healthy' as const,
+        connectionPool: {
+          active: 0,
+          idle: 0,
+          total: 1,
+        },
+        slowQueries: 0,
+        avgQueryTime: avgDuration,
+      };
+
+      // Embedding service status
+      // Map 'unknown' status to 'degraded' for system health
+      const embeddingServiceStatus: 'healthy' | 'degraded' | 'unhealthy' =
+        embeddingHealth.status === 'unknown' ? 'degraded' : embeddingHealth.status;
+
+      const embeddingService = {
+        status: embeddingServiceStatus,
+        url: embeddingHealth.url,
+        modelName: embeddingHealth.modelName,
+        totalRequests: embeddingHealth.totalRequests,
+        errorRate: embeddingHealth.totalErrors > 0
+          ? (embeddingHealth.totalErrors / embeddingHealth.totalRequests) * 100
+          : 0,
+        avgLatency: embeddingHealth.avgLatencyMs,
+      };
+
+      // Generate alerts based on health data
+      const alerts: any[] = [];
+
+      if (errorRate > 10) {
+        alerts.push({
+          severity: 'critical',
+          service: 'system',
+          message: `High error rate: ${errorRate.toFixed(2)}% (last 24h)`,
+          timestamp: now,
+        });
+      } else if (errorRate > 5) {
+        alerts.push({
+          severity: 'warning',
+          service: 'system',
+          message: `Elevated error rate: ${errorRate.toFixed(2)}% (last 24h)`,
+          timestamp: now,
+        });
+      }
+
+      if (embeddingServiceStatus === 'unhealthy') {
+        alerts.push({
+          severity: 'critical',
+          service: 'embedding-service',
+          message: 'Embedding service is unhealthy',
+          timestamp: now,
+        });
+      } else if (embeddingServiceStatus === 'degraded') {
+        alerts.push({
+          severity: 'warning',
+          service: 'embedding-service',
+          message: 'Embedding service is degraded or unknown',
+          timestamp: now,
+        });
+      }
+
+      // Determine overall system status
+      let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+      const unhealthyServices = services.filter((s) => s.status === 'unhealthy').length;
+      const degradedServices = services.filter((s) => s.status === 'degraded').length;
+
+      if (unhealthyServices > 0 || embeddingServiceStatus === 'unhealthy') {
+        overallStatus = 'unhealthy';
+      } else if (degradedServices > 1 || embeddingServiceStatus === 'degraded') {
+        overallStatus = 'degraded';
+      }
+
+      await this.logAdminAction(adminUserId, 'view_system_health', 'system', null, {
+        status: overallStatus,
+        totalErrors24h: totalErrors,
+        errorRate,
+      });
+
+      this.env.logger.info('System health retrieved', {
+        adminUserId,
+        status: overallStatus,
+        totalErrors24h: totalErrors,
+      });
+
+      return {
+        status: overallStatus,
+        services,
+        database,
+        embeddingService,
+        metrics: {
+          // Detailed metrics
+          totalErrors24h: totalErrors,
+          errorRate24h: errorRate,
+          avgResponseTime24h: avgDuration,
+          requestsPerMinute: totalRequests / (24 * 60),
+          // Legacy fields for backwards compatibility
+          totalRequests,
+          avgResponseTime: avgDuration,
+          errorRate,
+          uptime: 604800, // 7 days in seconds (placeholder - would need actual app start time tracking)
+        },
+        alerts,
+      };
+    } catch (error) {
+      this.env.logger.error('Failed to fetch system health', {
+        adminUserId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new Error('Failed to retrieve system health');
+    }
+  }
+
+  /**
+   * Phase 4.3: Get performance metrics viewer
+   */
+  async getPerformanceMetrics(
+    adminUserId: string,
+    options: {
+      startTime?: number;
+      endTime?: number;
+      operation?: string;
+      groupBy?: 'hour' | 'day' | 'operation';
+      limit?: number;
+    } = {}
+  ): Promise<{
+    metrics: Array<{
+      timestamp?: number;
+      operation?: string;
+      requestCount: number;
+      successCount: number;
+      errorCount: number;
+      errorRate: number;
+      avgDuration: number;
+      minDuration: number;
+      maxDuration: number;
+      p50Duration?: number;
+      p95Duration?: number;
+      p99Duration?: number;
+    }>;
+    summary: {
+      totalRequests: number;
+      totalErrors: number;
+      overallErrorRate: number;
+      avgDuration: number;
+      timeRange: {
+        start: number;
+        end: number;
+      };
+    };
+  }> {
+    // Verify admin access
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Access denied');
+    }
+
+    this.env.logger.info('Fetching performance metrics', {
+      adminUserId,
+      options,
+    });
+
+    try {
+      const now = Date.now();
+      const startTime = options.startTime || now - 24 * 60 * 60 * 1000; // Default: last 24h
+      const endTime = options.endTime || now;
+
+      // Query performance_metrics table
+      let query = `
+        SELECT
+          operation,
+          COUNT(*) as requestCount,
+          SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successCount,
+          SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as errorCount,
+          AVG(duration) as avgDuration,
+          MIN(duration) as minDuration,
+          MAX(duration) as maxDuration
+        FROM performance_metrics
+        WHERE created_at >= ?1 AND created_at <= ?2
+      `;
+
+      const params: any[] = [startTime, endTime];
+
+      if (options.operation) {
+        query += ` AND operation = ?${params.length + 1}`;
+        params.push(options.operation);
+      }
+
+      query += ` GROUP BY operation ORDER BY requestCount DESC`;
+
+      if (options.limit) {
+        query += ` LIMIT ?${params.length + 1}`;
+        params.push(options.limit);
+      }
+
+      const result = await (this.env.AUDITGUARD_DB as any)
+        .prepare(query)
+        .bind(...params)
+        .all();
+
+      const metrics = (result.results || []).map((row: any) => ({
+        operation: row.operation,
+        requestCount: row.requestCount || 0,
+        successCount: row.successCount || 0,
+        errorCount: row.errorCount || 0,
+        errorRate: row.requestCount > 0 ? (row.errorCount / row.requestCount) * 100 : 0,
+        avgDuration: row.avgDuration || 0,
+        minDuration: row.minDuration || 0,
+        maxDuration: row.maxDuration || 0,
+      }));
+
+      const totalRequests = metrics.reduce((sum, m) => sum + m.requestCount, 0);
+      const totalErrors = metrics.reduce((sum, m) => sum + m.errorCount, 0);
+      const overallErrorRate = totalRequests > 0 ? (totalErrors / totalRequests) * 100 : 0;
+
+      await this.logAdminAction(adminUserId, 'view_performance_metrics', 'system', null, {
+        groupBy: options.groupBy,
+        operation: options.operation,
+        metricsCount: metrics.length,
+      });
+
+      this.env.logger.info('Performance metrics retrieved', {
+        adminUserId,
+        totalRequests,
+        metricsCount: metrics.length,
+      });
+
+      return {
+        metrics,
+        summary: {
+          totalRequests,
+          totalErrors,
+          overallErrorRate,
+          avgDuration: 0,
+          timeRange: {
+            start: startTime,
+            end: endTime,
+          },
+        },
+      };
+    } catch (error) {
+      this.env.logger.error('Failed to fetch performance metrics', {
+        adminUserId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new Error('Failed to retrieve performance metrics');
+    }
+  }
+
+  /**
+   * Phase 5.1: Export database table to JSON/CSV
+   */
+  async exportTable(
+    adminUserId: string,
+    tableName: string,
+    format: 'json' | 'csv' = 'json'
+  ): Promise<{
+    filename: string;
+    data: string;
+    rowCount: number;
+    size: number;
+  }> {
+    // Verify admin access
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Access denied');
+    }
+
+    this.env.logger.info('Exporting table', {
+      adminUserId,
+      tableName,
+      format,
+    });
+
+    try {
+      // Validate table exists
+      const tableCheck = await (this.env.AUDITGUARD_DB as any)
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?1`)
+        .bind(tableName)
+        .first();
+
+      if (!tableCheck) {
+        throw new Error(`Table "${tableName}" does not exist`);
+      }
+
+      // Get all data from table (use quoted identifier for safety)
+      const quotedTableName = `"${tableName.replace(/"/g, '""')}"`;
+      const result = await (this.env.AUDITGUARD_DB as any)
+        .prepare(`SELECT * FROM ${quotedTableName}`)
+        .all();
+
+      const rows = result.results || [];
+
+      let data: string;
+      let filename: string;
+
+      if (format === 'json') {
+        data = JSON.stringify(rows, null, 2);
+        filename = `${tableName}_${Date.now()}.json`;
+      } else {
+        // CSV format
+        if (rows.length === 0) {
+          data = '';
+          filename = `${tableName}_${Date.now()}.csv`;
+        } else {
+          const headers = Object.keys(rows[0]);
+          const csvRows = [
+            headers.join(','),
+            ...rows.map((row: any) =>
+              headers.map((h) => {
+                const value = row[h];
+                // Escape quotes and wrap in quotes if contains comma or quote
+                if (value === null || value === undefined) return '';
+                const stringValue = String(value);
+                if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+                  return `"${stringValue.replace(/"/g, '""')}"`;
+                }
+                return stringValue;
+              }).join(',')
+            ),
+          ];
+          data = csvRows.join('\n');
+          filename = `${tableName}_${Date.now()}.csv`;
+        }
+      }
+
+      await this.logAdminAction(adminUserId, 'export_table', 'database', tableName, {
+        format,
+        rowCount: rows.length,
+        size: data.length,
+      });
+
+      this.env.logger.info('Table exported successfully', {
+        adminUserId,
+        tableName,
+        format,
+        rowCount: rows.length,
+        size: data.length,
+      });
+
+      return {
+        filename,
+        data,
+        rowCount: rows.length,
+        size: data.length,
+      };
+    } catch (error) {
+      this.env.logger.error('Failed to export table', {
+        adminUserId,
+        tableName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Phase 5.2: Create full database backup
+   */
+  async createBackup(
+    adminUserId: string,
+    options: {
+      includeTables?: string[];
+      excludeTables?: string[];
+    } = {}
+  ): Promise<{
+    backupId: string;
+    filename: string;
+    tables: string[];
+    totalSize: number;
+    rowCounts: Record<string, number>;
+    created: number;
+  }> {
+    // Verify admin access
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Access denied');
+    }
+
+    this.env.logger.info('Creating database backup', {
+      adminUserId,
+      options,
+    });
+
+    try {
+      const backupId = `backup_${Date.now()}`;
+      const created = Date.now();
+
+      // Get list of all tables (exclude internal Cloudflare and SQLite tables)
+      const tablesResult = await (this.env.AUDITGUARD_DB as any)
+        .prepare(`
+          SELECT name FROM sqlite_master
+          WHERE type='table'
+          AND name NOT LIKE '_cf_%'
+          AND name NOT LIKE 'sqlite_%'
+          ORDER BY name
+        `)
+        .all();
+
+      let tables = (tablesResult.results || []).map((t: any) => t.name);
+
+      // Filter tables based on options
+      if (options.includeTables && options.includeTables.length > 0) {
+        tables = tables.filter((t: string) => options.includeTables!.includes(t));
+      }
+
+      if (options.excludeTables && options.excludeTables.length > 0) {
+        tables = tables.filter((t: string) => !options.excludeTables!.includes(t));
+      }
+
+      // Export each table
+      const backup: Record<string, any[]> = {};
+      const rowCounts: Record<string, number> = {};
+      let totalSize = 0;
+
+      for (const table of tables) {
+        // Use quoted identifier for safety
+        const quotedTableName = `"${table.replace(/"/g, '""')}"`;
+        const result = await (this.env.AUDITGUARD_DB as any)
+          .prepare(`SELECT * FROM ${quotedTableName}`)
+          .all();
+
+        const rows = result.results || [];
+        backup[table] = rows;
+        rowCounts[table] = rows.length;
+      }
+
+      const backupData = JSON.stringify(
+        {
+          backupId,
+          created,
+          tables,
+          data: backup,
+        },
+        null,
+        2
+      );
+
+      totalSize = backupData.length;
+
+      await this.logAdminAction(adminUserId, 'create_backup', 'database', null, {
+        backupId,
+        tables,
+        totalRows: Object.values(rowCounts).reduce((sum, count) => sum + count, 0),
+        totalSize,
+      });
+
+      this.env.logger.info('Database backup created successfully', {
+        adminUserId,
+        backupId,
+        tables,
+        totalSize,
+      });
+
+      return {
+        backupId,
+        filename: `${backupId}.json`,
+        tables,
+        totalSize,
+        rowCounts,
+        created,
+      };
+    } catch (error) {
+      this.env.logger.error('Failed to create backup', {
+        adminUserId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Phase 5.3: Get list of available backups
+   */
+  async listBackups(adminUserId: string): Promise<{
+    backups: Array<{
+      backupId: string;
+      created: number;
+      createdBy: string;
+      tables: string[];
+      totalSize: number;
+    }>;
+  }> {
+    // Verify admin access
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Access denied');
+    }
+
+    this.env.logger.info('Listing backups', { adminUserId });
+
+    try {
+      // Get backup entries from admin_audit_log
+      const result = await (this.env.AUDITGUARD_DB as any)
+        .prepare(`
+          SELECT
+            admin_user_id,
+            metadata,
+            created_at
+          FROM admin_audit_log
+          WHERE action = 'create_backup'
+          ORDER BY created_at DESC
+          LIMIT 50
+        `)
+        .all();
+
+      const backups = (result.results || []).map((r: any) => {
+        const metadata = r.metadata ? JSON.parse(r.metadata) : {};
+        return {
+          backupId: metadata.backupId || `backup_${r.created_at}`,
+          created: r.created_at,
+          createdBy: r.admin_user_id,
+          tables: metadata.tables || [],
+          totalSize: metadata.totalSize || 0,
+        };
+      });
+
+      await this.logAdminAction(adminUserId, 'list_backups', 'database', null, {
+        count: backups.length,
+      });
+
+      this.env.logger.info('Backups listed successfully', {
+        adminUserId,
+        count: backups.length,
+      });
+
+      return { backups };
+    } catch (error) {
+      this.env.logger.error('Failed to list backups', {
+        adminUserId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Phase 5.4: Get database statistics for backup/migration planning
+   */
+  async getDatabaseStats(adminUserId: string): Promise<{
+    tables: Array<{
+      name: string;
+      rowCount: number;
+      columnCount: number;
+      estimatedSize: number;
+    }>;
+    totalTables: number;
+    totalRows: number;
+    totalSize: number;
+  }> {
+    // Verify admin access
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Access denied');
+    }
+
+    this.env.logger.info('Getting database statistics', { adminUserId });
+
+    try {
+      // Get all tables (exclude internal Cloudflare and SQLite tables)
+      const tablesResult = await (this.env.AUDITGUARD_DB as any)
+        .prepare(`
+          SELECT name FROM sqlite_master
+          WHERE type='table'
+          AND name NOT LIKE '_cf_%'
+          AND name NOT LIKE 'sqlite_%'
+          ORDER BY name
+        `)
+        .all();
+
+      const tableNames = (tablesResult.results || []).map((t: any) => t.name);
+      const tables: Array<{
+        name: string;
+        rowCount: number;
+        columnCount: number;
+        estimatedSize: number;
+      }> = [];
+
+      let totalRows = 0;
+      let totalSize = 0;
+
+      for (const tableName of tableNames) {
+        try {
+          // Sanitize table name by wrapping in double quotes (SQLite identifier quoting)
+          const quotedTableName = `"${tableName.replace(/"/g, '""')}"`;
+
+          // Get row count
+          const countResult = await (this.env.AUDITGUARD_DB as any)
+            .prepare(`SELECT COUNT(*) as count FROM ${quotedTableName}`)
+            .first();
+
+          const rowCount = countResult?.count || 0;
+
+          // Get column count using PRAGMA
+          const columnsResult = await (this.env.AUDITGUARD_DB as any)
+            .prepare(`PRAGMA table_info(${quotedTableName})`)
+            .all();
+
+          const columnCount = (columnsResult.results || []).length;
+
+          // Estimate size (rough approximation)
+          const estimatedSize = rowCount * columnCount * 100; // ~100 bytes per cell
+
+          tables.push({
+            name: tableName,
+            rowCount,
+            columnCount,
+            estimatedSize,
+          });
+
+          totalRows += rowCount;
+          totalSize += estimatedSize;
+        } catch (tableError) {
+          // Log error but continue with other tables
+          this.env.logger.warn('Failed to get stats for table', {
+            tableName,
+            error: tableError instanceof Error ? tableError.message : String(tableError),
+          });
+        }
+      }
+
+      await this.logAdminAction(adminUserId, 'view_database_stats', 'database', null, {
+        totalTables: tables.length,
+        totalRows,
+      });
+
+      this.env.logger.info('Database statistics retrieved', {
+        adminUserId,
+        totalTables: tables.length,
+        totalRows,
+      });
+
+      return {
+        tables,
+        totalTables: tables.length,
+        totalRows,
+        totalSize,
+      };
+    } catch (error) {
+      this.env.logger.error('Failed to get database statistics', {
+        adminUserId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw new Error('Failed to retrieve database statistics');
+    }
+  }
+
+  /**
+   * Phase 5.3: Get database migration history
+   */
+  async getMigrationStatus(adminUserId: string): Promise<{
+    migrations: Array<{
+      name: string;
+      version: number;
+      appliedAt: number | null;
+      status: 'applied' | 'pending';
+      description: string;
+    }>;
+    currentVersion: number;
+    pendingMigrations: number;
+  }> {
+    // Verify admin access
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Access denied');
+    }
+
+    this.env.logger.info('Getting migration status', { adminUserId });
+
+    try {
+      // Known migrations list (in Cloudflare Workers we can't read filesystem)
+      // This should be updated whenever new migrations are added
+      const knownMigrations = [
+        { version: 1, name: '001_initial_schema', description: 'Initial database schema' },
+        { version: 2, name: '002_add_sessions', description: 'Add sessions table' },
+        { version: 3, name: '003_add_workspaces', description: 'Add workspaces and members tables' },
+        { version: 4, name: '004_add_documents', description: 'Add documents and chunks tables' },
+        { version: 5, name: '005_add_compliance', description: 'Add compliance checks and frameworks' },
+        { version: 6, name: '006_add_billing', description: 'Add subscriptions and billing tables' },
+        { version: 7, name: '007_add_admin', description: 'Add admin users and audit log tables' },
+        { version: 8, name: '008_add_embeddings', description: 'Add embeddings queue and vector metadata' },
+      ];
+
+      // Check which tables exist to determine which migrations have been applied
+      const tablesResult = await (this.env.AUDITGUARD_DB as any)
+        .prepare(`
+          SELECT name FROM sqlite_master
+          WHERE type='table'
+          AND name NOT LIKE '_cf_%'
+          AND name NOT LIKE 'sqlite_%'
+          ORDER BY name
+        `)
+        .all();
+
+      const existingTables = new Set(
+        (tablesResult.results || []).map((t: any) => t.name)
+      );
+
+      // Map migrations to status based on table existence
+      const migrations = knownMigrations.map((migration) => {
+        let isApplied = false;
+
+        // Simple heuristic: check if key tables from each migration exist
+        switch (migration.version) {
+          case 1: // Initial schema
+            isApplied = existingTables.has('users');
+            break;
+          case 2: // Sessions
+            isApplied = existingTables.has('sessions');
+            break;
+          case 3: // Workspaces
+            isApplied = existingTables.has('workspaces') && existingTables.has('workspace_members');
+            break;
+          case 4: // Documents
+            isApplied = existingTables.has('documents') && existingTables.has('document_chunks');
+            break;
+          case 5: // Compliance
+            isApplied = existingTables.has('compliance_checks') && existingTables.has('compliance_frameworks');
+            break;
+          case 6: // Billing
+            isApplied = existingTables.has('subscriptions') && existingTables.has('invoices');
+            break;
+          case 7: // Admin
+            isApplied = existingTables.has('admin_users') && existingTables.has('admin_audit_log');
+            break;
+          case 8: // Embeddings
+            isApplied = existingTables.has('embeddings_queue') && existingTables.has('vector_metadata');
+            break;
+          default:
+            isApplied = false;
+        }
+
+        return {
+          name: migration.name,
+          version: migration.version,
+          appliedAt: isApplied ? Date.now() : null, // We don't have actual timestamps
+          status: isApplied ? ('applied' as const) : ('pending' as const),
+          description: migration.description,
+        };
+      });
+
+      // Calculate current version and pending count
+      const appliedMigrations = migrations.filter((m) => m.status === 'applied');
+      const currentVersion = appliedMigrations.length > 0
+        ? Math.max(...appliedMigrations.map((m) => m.version))
+        : 0;
+      const pendingMigrations = migrations.filter((m) => m.status === 'pending').length;
+
+      await this.logAdminAction(adminUserId, 'view_migration_status', 'database', null, {
+        currentVersion,
+        pendingMigrations,
+      });
+
+      this.env.logger.info('Migration status retrieved', {
+        adminUserId,
+        currentVersion,
+        pendingMigrations,
+      });
+
+      return {
+        migrations,
+        currentVersion,
+        pendingMigrations,
+      };
+    } catch (error) {
+      this.env.logger.error('Failed to get migration status', {
+        adminUserId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw new Error('Failed to retrieve migration status');
+    }
+  }
+
+  /**
+   * Phase 5.4: Import data from JSON backup
+   */
+  async importBackup(
+    adminUserId: string,
+    backupData: string,
+    options: {
+      dryRun?: boolean;
+      overwrite?: boolean;
+      includeTables?: string[];
+      excludeTables?: string[];
+    } = {}
+  ): Promise<{
+    tables: Array<{
+      name: string;
+      rowsImported: number;
+      status: 'success' | 'failed' | 'skipped';
+      error?: string;
+    }>;
+    totalRows: number;
+    dryRun: boolean;
+    warnings: string[];
+  }> {
+    // Verify admin access
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Access denied');
+    }
+
+    this.env.logger.info('Importing backup', {
+      adminUserId,
+      dryRun: options.dryRun || false,
+      overwrite: options.overwrite || false,
+    });
+
+    const results: Array<{
+      name: string;
+      rowsImported: number;
+      status: 'success' | 'failed' | 'skipped';
+      error?: string;
+    }> = [];
+    const warnings: string[] = [];
+    let totalRows = 0;
+
+    try {
+      // Parse backup data
+      const backup = JSON.parse(backupData);
+
+      if (!backup.data || typeof backup.data !== 'object') {
+        throw new Error('Invalid backup format: missing data object');
+      }
+
+      const tablesData = backup.data as Record<string, any[]>;
+
+      // Validate backup
+      if (Object.keys(tablesData).length === 0) {
+        warnings.push('Backup contains no tables');
+      }
+
+      // Filter tables based on options
+      let tablesToImport = Object.keys(tablesData);
+
+      if (options.includeTables && options.includeTables.length > 0) {
+        tablesToImport = tablesToImport.filter((t) => options.includeTables!.includes(t));
+      }
+
+      if (options.excludeTables && options.excludeTables.length > 0) {
+        tablesToImport = tablesToImport.filter((t) => !options.excludeTables!.includes(t));
+      }
+
+      // Never allow importing sensitive system tables
+      const forbiddenTables = ['admin_users', 'sessions', 'api_keys'];
+      tablesToImport = tablesToImport.filter((t) => !forbiddenTables.includes(t));
+
+      if (tablesToImport.length === 0) {
+        warnings.push('No tables selected for import after filtering');
+      }
+
+      this.env.logger.info('Starting import', {
+        totalTables: tablesToImport.length,
+        dryRun: options.dryRun || false,
+      });
+
+      // Process each table
+      for (const tableName of tablesToImport) {
+        const rows = tablesData[tableName];
+
+        if (!Array.isArray(rows)) {
+          results.push({
+            name: tableName,
+            rowsImported: 0,
+            status: 'failed',
+            error: 'Table data is not an array',
+          });
+          continue;
+        }
+
+        if (rows.length === 0) {
+          results.push({
+            name: tableName,
+            rowsImported: 0,
+            status: 'skipped',
+            error: 'No rows to import',
+          });
+          continue;
+        }
+
+        try {
+          // Validate table exists
+          const tableCheck = await (this.env.AUDITGUARD_DB as any)
+            .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?1`)
+            .bind(tableName)
+            .first();
+
+          if (!tableCheck) {
+            results.push({
+              name: tableName,
+              rowsImported: 0,
+              status: 'failed',
+              error: 'Table does not exist in database',
+            });
+            continue;
+          }
+
+          if (!options.dryRun) {
+            // Clear table if overwrite is enabled
+            if (options.overwrite) {
+              const quotedTableName = `"${tableName.replace(/"/g, '""')}"`;
+              await (this.env.AUDITGUARD_DB as any)
+                .prepare(`DELETE FROM ${quotedTableName}`)
+                .run();
+
+              this.env.logger.info(`Cleared table ${tableName} for overwrite`);
+            }
+
+            // Insert rows (batch if possible, otherwise one by one)
+            let importedCount = 0;
+            for (const row of rows) {
+              try {
+                const columns = Object.keys(row);
+                const values = columns.map((col) => row[col]);
+
+                // Build parameterized query
+                const columnsList = columns.map((c) => `"${c.replace(/"/g, '""')}"`).join(', ');
+                const placeholders = columns.map((_, i) => `?${i + 1}`).join(', ');
+                const quotedTableName = `"${tableName.replace(/"/g, '""')}"`;
+
+                const query = `INSERT INTO ${quotedTableName} (${columnsList}) VALUES (${placeholders})`;
+
+                await (this.env.AUDITGUARD_DB as any)
+                  .prepare(query)
+                  .bind(...values)
+                  .run();
+
+                importedCount++;
+              } catch (rowError) {
+                // Log error but continue with other rows
+                this.env.logger.warn(`Failed to import row in table ${tableName}`, {
+                  error: rowError instanceof Error ? rowError.message : String(rowError),
+                });
+              }
+            }
+
+            results.push({
+              name: tableName,
+              rowsImported: importedCount,
+              status: importedCount === rows.length ? 'success' : 'failed',
+              error:
+                importedCount < rows.length
+                  ? `Only ${importedCount}/${rows.length} rows imported`
+                  : undefined,
+            });
+
+            totalRows += importedCount;
+          } else {
+            // Dry run: just validate
+            results.push({
+              name: tableName,
+              rowsImported: rows.length,
+              status: 'success',
+            });
+            totalRows += rows.length;
+          }
+
+          this.env.logger.info(`Processed table ${tableName}`, {
+            rowCount: rows.length,
+            dryRun: options.dryRun || false,
+          });
+        } catch (tableError) {
+          results.push({
+            name: tableName,
+            rowsImported: 0,
+            status: 'failed',
+            error: tableError instanceof Error ? tableError.message : String(tableError),
+          });
+
+          this.env.logger.error(`Failed to import table ${tableName}`, {
+            error: tableError instanceof Error ? tableError.message : String(tableError),
+          });
+        }
+      }
+
+      await this.logAdminAction(adminUserId, 'import_backup', 'database', null, {
+        tableCount: results.length,
+        totalRows,
+        dryRun: options.dryRun || false,
+        overwrite: options.overwrite || false,
+        successCount: results.filter((r) => r.status === 'success').length,
+        failedCount: results.filter((r) => r.status === 'failed').length,
+      });
+
+      this.env.logger.info('Backup import completed', {
+        adminUserId,
+        tableCount: results.length,
+        totalRows,
+        dryRun: options.dryRun || false,
+      });
+
+      return {
+        tables: results,
+        totalRows,
+        dryRun: options.dryRun || false,
+        warnings,
+      };
+    } catch (error) {
+      this.env.logger.error('Failed to import backup', {
+        adminUserId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Clean up orphaned vectors from embedding service
+   * Syncs embedding service with database state
+   */
+  async cleanupOrphanedVectors(adminUserId: string): Promise<{
+    totalVectorsInService: number;
+    validDocumentIds: string[];
+    orphanedVectorsDeleted: number;
+    errors: number;
+  }> {
+    this.env.logger.info('Cleanup orphaned vectors called', { adminUserId });
+
+    // Verify admin access
+    const isAdmin = await this.isAdmin(adminUserId);
+    this.env.logger.info('Admin check result', { adminUserId, isAdmin });
+
+    if (!isAdmin) {
+      this.env.logger.error('Access denied for cleanup', { adminUserId });
+      throw new Error('Access denied');
+    }
+
+    this.env.logger.info('Starting orphaned vector cleanup', { adminUserId });
+
+    try {
+      const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
+
+      // Get all valid document IDs from database
+      const documentsResult = await (this.env.AUDITGUARD_DB as any)
+        .prepare('SELECT id FROM documents')
+        .all();
+
+      const validDocumentIds = new Set(
+        (documentsResult.results || []).map((doc: any) => doc.id)
+      );
+
+      this.env.logger.info('Found valid documents', {
+        count: validDocumentIds.size,
+      });
+
+      // Get stats from embedding service
+      const statsResponse = await fetch(`${embeddingServiceUrl}/api/v1/admin/vector-stats`, {
+        method: 'GET',
+        headers: {
+          'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!statsResponse.ok) {
+        throw new Error('Failed to get embedding service stats');
+      }
+
+      const stats = (await statsResponse.json()) as { total_vectors?: number; dimensions?: number };
+      const totalVectors = stats.total_vectors || 0;
+
+      this.env.logger.info('Embedding service stats', {
+        totalVectors,
+        dimensions: stats.dimensions,
+      });
+
+      // Get all vectors from embedding service
+      const vectorsResponse = await fetch(`${embeddingServiceUrl}/vectors`, {
+        method: 'GET',
+        headers: {
+          'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!vectorsResponse.ok) {
+        throw new Error('Failed to list vectors from embedding service');
+      }
+
+      const vectors = (await vectorsResponse.json()) as { vector_ids?: string[] };
+      const vectorIds = vectors.vector_ids || [];
+
+      let orphanedDeleted = 0;
+      let errors = 0;
+
+      // Check each vector and delete if orphaned
+      for (const vectorId of vectorIds) {
+        try {
+          // Vector ID format is: {documentId}_{chunkIndex}
+          const documentId = vectorId.split('_')[0];
+
+          if (!validDocumentIds.has(documentId)) {
+            // This vector belongs to a deleted document - delete it
+            const deleteResponse = await fetch(`${embeddingServiceUrl}/vectors/${vectorId}`, {
+              method: 'DELETE',
+              headers: {
+                'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+                'Content-Type': 'application/json',
+              },
+            });
+
+            if (deleteResponse.ok) {
+              orphanedDeleted++;
+              this.env.logger.info('Deleted orphaned vector', { vectorId, documentId });
+            } else {
+              errors++;
+              this.env.logger.error('Failed to delete orphaned vector', {
+                vectorId,
+                status: deleteResponse.status,
+              });
+            }
+          }
+        } catch (error) {
+          errors++;
+          this.env.logger.error('Error processing vector', {
+            vectorId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      await this.logAdminAction(adminUserId, 'cleanup_orphaned_vectors', 'system', null, {
+        totalVectorsInService: totalVectors,
+        validDocuments: validDocumentIds.size,
+        orphanedDeleted,
+        errors,
+      });
+
+      this.env.logger.info('Orphaned vector cleanup complete', {
+        totalVectors,
+        orphanedDeleted,
+        errors,
+      });
+
+      return {
+        totalVectorsInService: totalVectors,
+        validDocumentIds: Array.from(validDocumentIds) as string[],
+        orphanedVectorsDeleted: orphanedDeleted,
+        errors,
+      };
+    } catch (error) {
+      this.env.logger.error('Failed to cleanup orphaned vectors', {
+        adminUserId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new Error('Failed to cleanup orphaned vectors');
     }
   }
 }
