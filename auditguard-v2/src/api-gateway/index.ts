@@ -104,6 +104,60 @@ export default class extends Service<Env> {
         });
       }
 
+      // AI Test Endpoint - No auth required for debugging
+      if (path === '/api/test-ai' && request.method === 'POST') {
+        try {
+          this.env.logger.info('🧪 Testing AI endpoint', {
+            timestamp: new Date().toISOString()
+          });
+
+          const testPrompt = `You are a helpful assistant. Respond with a JSON object containing:
+{
+  "status": "working",
+  "message": "AI is responding correctly",
+  "timestamp": "${new Date().toISOString()}"
+}`;
+
+          this.env.logger.info('Calling AI with test prompt');
+          
+          const aiResponse = await this.env.AI.run('deepseek-r1-distill-qwen-32b', {
+            messages: [
+              { role: 'user', content: testPrompt }
+            ],
+            response_format: { type: 'json_object' }
+          });
+
+          this.env.logger.info('✅ AI responded successfully', {
+            response: aiResponse
+          });
+
+          return new Response(JSON.stringify({
+            success: true,
+            aiResponse,
+            timestamp: new Date().toISOString()
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+
+        } catch (error) {
+          this.env.logger.error('❌ AI test failed', {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+          });
+
+          return new Response(JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            timestamp: new Date().toISOString()
+          }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
       // ====== AUTH ENDPOINTS ======
       if (path === '/api/auth/register' && request.method === 'POST') {
         const body = (await request.json()) as { email: string; password: string; name: string };
