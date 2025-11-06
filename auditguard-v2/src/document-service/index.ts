@@ -684,18 +684,10 @@ export default class extends Service<Env> {
     }
 
     // Step 2: Delete document chunks from D1 database
-    const deletedChunksResult = await db
-      .deleteFrom('document_chunks')
-      .where('document_id', '=', documentId)
-      .execute();
-
-    const chunksDeleted = deletedChunksResult.length > 0
-      ? Number(deletedChunksResult[0].numDeletedRows || 0n)
-      : 0;
-
-    this.env.logger.info('Deleted document chunks from D1', {
+    // NOTE: document_chunks table was dropped in migration 0014_drop_document_chunks.sql
+    // Chunks are now managed exclusively in PostgreSQL via external embedding service
+    this.env.logger.info('Skipping D1 chunk deletion (chunks in PostgreSQL only)', {
       documentId,
-      deletedCount: chunksDeleted,
     });
 
     // Step 3: Delete from SmartBucket storage
@@ -724,8 +716,7 @@ export default class extends Service<Env> {
     this.env.logger.info('Document deleted successfully with cascade', {
       documentId,
       workspaceId,
-      d1ChunksDeleted: chunksDeleted,
-      note: 'PostgreSQL embeddings/chunks also deleted via embedding service',
+      note: 'PostgreSQL embeddings/chunks deleted via embedding service (D1 chunks table removed)',
     });
 
     return { success: true };
@@ -1496,6 +1487,9 @@ export default class extends Service<Env> {
    * @param userId User ID making the request
    * @param frameworkId Framework ID
    * @param minRelevance Minimum relevance score (default: 0.6)
+   *
+   * NOTE: document_chunks table removed in migration 0014
+   * Chunk data now managed in PostgreSQL. This method returns empty array for backward compatibility.
    */
   async getFrameworkChunks(
     workspaceId: string,
@@ -1524,33 +1518,13 @@ export default class extends Service<Env> {
       throw new Error('Access denied: You are not a member of this workspace');
     }
 
-    // Get tagged chunks
-    const result = await (this.env.AUDITGUARD_DB as any).prepare(
-      `SELECT
-         dcf.chunk_id,
-         dc.document_id,
-         dc.content AS chunk_text,
-         d.title AS document_title,
-         dcf.relevance_score,
-         dcf.auto_tagged
-       FROM document_chunk_frameworks dcf
-       JOIN document_chunks dc ON dcf.chunk_id = dc.id
-       JOIN documents d ON dc.document_id = d.id
-       WHERE dcf.framework_id = ?
-         AND d.workspace_id = ?
-         AND dcf.relevance_score >= ?
-       ORDER BY dcf.relevance_score DESC
-       LIMIT 100`
-    ).bind(frameworkId, workspaceId, minRelevance).all();
+    this.env.logger.info('getFrameworkChunks called - returning empty (chunks in PostgreSQL)', {
+      workspaceId,
+      frameworkId,
+    });
 
-    return result.results?.map((row: any) => ({
-      chunkId: row.chunk_id,
-      documentId: row.document_id,
-      documentTitle: row.document_title,
-      chunkText: row.chunk_text,
-      relevanceScore: row.relevance_score,
-      autoTagged: row.auto_tagged === 1,
-    })) || [];
+    // Return empty array - chunk data now in PostgreSQL
+    return [];
   }
 
   /**
@@ -1660,26 +1634,17 @@ export default class extends Service<Env> {
       throw new Error('Access denied: Requires member role or above');
     }
 
-    // Verify chunk belongs to workspace
-    const chunk = await (this.env.AUDITGUARD_DB as any).prepare(
-      `SELECT dc.id, dc.workspace_id
-       FROM document_chunks dc
-       WHERE dc.id = ? AND dc.workspace_id = ?`
-    ).bind(chunkId, workspaceId).first();
-
-    if (!chunk) {
-      throw new Error('Chunk not found');
-    }
-
-    // Remove the tag
-    const taggingService = new ComplianceTaggingService(this.env);
-    await taggingService.untagChunk(chunkId, frameworkId);
-
-    this.env.logger.info('Chunk tag removed', {
+    // NOTE: document_chunks table removed in migration 0014
+    // Chunk tagging now handled in PostgreSQL
+    this.env.logger.info('untagChunk called - chunks now in PostgreSQL', {
       chunkId,
       frameworkId,
       userId,
+      workspaceId,
     });
+
+    // No-op: chunk data is in PostgreSQL, not D1
+    // This method is kept for backward compatibility but does nothing
   }
 
   /**
@@ -1840,49 +1805,33 @@ export default class extends Service<Env> {
       throw new Error('Access denied: You are not a member of this workspace');
     }
 
-    // Verify document belongs to workspace
+    // Verify document belongs to workspace and get embedding stats
     const document = await (this.env.AUDITGUARD_DB as any).prepare(
-      `SELECT id FROM documents WHERE id = ? AND workspace_id = ?`
+      `SELECT id, chunk_count, embeddings_generated FROM documents WHERE id = ? AND workspace_id = ?`
     ).bind(documentId, workspaceId).first();
 
     if (!document) {
       throw new Error('Document not found');
     }
 
-    // Get embedding statistics
-    const statsResult = await (this.env.AUDITGUARD_DB as any).prepare(
-      `SELECT
-         COUNT(*) as total,
-         SUM(CASE WHEN embedding_status = 'completed' THEN 1 ELSE 0 END) as completed,
-         SUM(CASE WHEN embedding_status = 'pending' THEN 1 ELSE 0 END) as pending,
-         SUM(CASE WHEN embedding_status = 'failed' THEN 1 ELSE 0 END) as failed
-       FROM document_chunks
-       WHERE document_id = ?`
-    ).bind(documentId).first();
-
-    const stats = statsResult || { total: 0, completed: 0, pending: 0, failed: 0 };
+    // NOTE: document_chunks table removed in migration 0014
+    // Embedding statistics now tracked at document level in 'documents' table
+    const stats = {
+      total: document.chunk_count || 0,
+      completed: document.embeddings_generated || 0,
+      pending: 0,
+      failed: 0,
+    };
     const percentage = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
-    // Get chunk details
-    const chunksResult = await (this.env.AUDITGUARD_DB as any).prepare(
-      `SELECT
-         id,
-         chunk_index,
-         embedding_status,
-         vector_id,
-         CASE WHEN vector_embedding IS NOT NULL THEN 1 ELSE 0 END as has_embedding
-       FROM document_chunks
-       WHERE document_id = ?
-       ORDER BY chunk_index ASC`
-    ).bind(documentId).all();
-
-    const chunks = (chunksResult.results || []).map((row: any) => ({
-      chunkId: row.id,
-      chunkIndex: row.chunk_index,
-      embeddingStatus: row.embedding_status,
-      vectorId: row.vector_id,
-      hasEmbedding: row.has_embedding === 1,
-    }));
+    // Chunks are in PostgreSQL - return empty chunk details array
+    const chunks: Array<{
+      chunkId: number;
+      chunkIndex: number;
+      embeddingStatus: string;
+      vectorId: string | null;
+      hasEmbedding: boolean;
+    }> = [];
 
     this.env.logger.info('Embedding statistics retrieved', {
       documentId,
