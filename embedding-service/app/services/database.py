@@ -297,3 +297,179 @@ class DatabaseService:
                     "database_size": db_size['db_size'] if db_size else "Unknown",
                     "tables": [dict(row) for row in tables],
                 }
+
+    async def get_pending_chunks(self, workspace_id: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Get chunks with embedding_status = 'pending' for processing.
+
+        Args:
+            workspace_id: Optional workspace filter
+            limit: Maximum number of chunks to return
+
+        Returns:
+            List of pending chunks with document info
+        """
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if workspace_id:
+                    cur.execute("""
+                        SELECT
+                            c.id,
+                            c.document_id,
+                            c.chunk_index,
+                            c.chunk_text,
+                            c.token_count,
+                            c.char_count,
+                            c.start_position,
+                            c.end_position,
+                            c.has_header,
+                            c.section_title,
+                            c.embedding_status,
+                            c.created_at,
+                            d.workspace_id,
+                            d.filename
+                        FROM chunks c
+                        JOIN documents d ON c.document_id = d.id
+                        WHERE c.embedding_status = 'pending'
+                        AND d.workspace_id = %s
+                        ORDER BY c.created_at ASC
+                        LIMIT %s
+                    """, (workspace_id, limit))
+                else:
+                    cur.execute("""
+                        SELECT
+                            c.id,
+                            c.document_id,
+                            c.chunk_index,
+                            c.chunk_text,
+                            c.token_count,
+                            c.char_count,
+                            c.start_position,
+                            c.end_position,
+                            c.has_header,
+                            c.section_title,
+                            c.embedding_status,
+                            c.created_at,
+                            d.workspace_id,
+                            d.filename
+                        FROM chunks c
+                        JOIN documents d ON c.document_id = d.id
+                        WHERE c.embedding_status = 'pending'
+                        ORDER BY c.created_at ASC
+                        LIMIT %s
+                    """, (limit,))
+
+                results = cur.fetchall()
+                return [dict(row) for row in results]
+
+    async def get_chunk_by_id(self, chunk_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a single chunk by ID with embedding info.
+
+        Args:
+            chunk_id: The chunk ID
+
+        Returns:
+            Chunk data or None if not found
+        """
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT
+                        c.id,
+                        c.document_id,
+                        c.chunk_index,
+                        c.chunk_text,
+                        c.token_count,
+                        c.char_count,
+                        c.start_position,
+                        c.end_position,
+                        c.has_header,
+                        c.section_title,
+                        c.embedding_status,
+                        e.id as embedding_id,
+                        c.created_at,
+                        c.updated_at,
+                        d.workspace_id,
+                        d.filename
+                    FROM chunks c
+                    LEFT JOIN embeddings e ON c.id = e.chunk_id
+                    JOIN documents d ON c.document_id = d.id
+                    WHERE c.id = %s
+                """, (chunk_id,))
+
+                result = cur.fetchone()
+                return dict(result) if result else None
+
+    async def update_chunk_status(self, chunk_id: str, status: str) -> bool:
+        """
+        Update the embedding_status of a chunk.
+
+        Args:
+            chunk_id: The chunk ID
+            status: New status (pending, processing, completed, failed)
+
+        Returns:
+            True if updated, False if chunk not found
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE chunks
+                    SET embedding_status = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                """, (status, chunk_id))
+
+                return cur.rowcount > 0
+
+    async def get_workspace_chunk_stats(self, workspace_id: str) -> Dict[str, Any]:
+        """
+        Get chunk statistics for a specific workspace.
+
+        Args:
+            workspace_id: The workspace ID
+
+        Returns:
+            Dictionary with chunk counts by status
+        """
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Get aggregate stats from documents table
+                cur.execute("""
+                    SELECT
+                        COUNT(*) as document_count,
+                        COALESCE(SUM(chunk_count), 0) as total_chunks,
+                        COALESCE(SUM(embedding_count), 0) as completed_chunks
+                    FROM documents
+                    WHERE workspace_id = %s
+                """, (workspace_id,))
+
+                result = cur.fetchone()
+
+                if result:
+                    total = result['total_chunks'] or 0
+                    completed = result['completed_chunks'] or 0
+                    pending = total - completed
+
+                    return {
+                        'workspace_id': workspace_id,
+                        'document_count': result['document_count'] or 0,
+                        'total_chunks': total,
+                        'completed': completed,
+                        'pending': pending,
+                        'processing': 0,
+                        'failed': 0,
+                        'completion_percentage': round((completed / total * 100)) if total > 0 else 0
+                    }
+
+                return {
+                    'workspace_id': workspace_id,
+                    'document_count': 0,
+                    'total_chunks': 0,
+                    'completed': 0,
+                    'pending': 0,
+                    'processing': 0,
+                    'failed': 0,
+                    'completion_percentage': 0
+                }

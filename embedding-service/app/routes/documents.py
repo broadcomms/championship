@@ -323,3 +323,180 @@ async def delete_document(
     except Exception as e:
         logger.error(f"Error deleting document {document_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")
+
+
+@router.get("/api/v1/chunks/pending")
+async def get_pending_chunks(
+    workspace_id: Optional[str] = None,
+    limit: int = 100,
+    api_key: str = Depends(verify_api_key)
+) -> Dict[str, Any]:
+    """
+    Get chunks with embedding_status = 'pending' for processing.
+
+    This endpoint is used by document-processor to find chunks that need embedding generation.
+
+    Query Parameters:
+        - workspace_id: Optional workspace filter
+        - limit: Maximum number of chunks to return (default: 100)
+
+    Returns:
+        - totalPending: Total count of pending chunks
+        - chunks: Array of pending chunk objects
+    """
+    try:
+        db = DatabaseService()
+        chunks = await db.get_pending_chunks(workspace_id, limit)
+
+        # Format chunks for API response
+        formatted_chunks = []
+        for chunk in chunks:
+            created_at = chunk.get("created_at")
+            created_at_str = created_at.isoformat() if created_at and hasattr(created_at, 'isoformat') else str(created_at) if created_at else None
+
+            formatted_chunks.append({
+                "chunkId": chunk["id"],
+                "documentId": chunk["document_id"],
+                "chunkIndex": chunk["chunk_index"],
+                "content": chunk["chunk_text"],
+                "tokenCount": chunk["token_count"],
+                "chunkSize": chunk["char_count"],
+                "startChar": chunk["start_position"],
+                "endChar": chunk["end_position"],
+                "hasHeader": chunk.get("has_header", False),
+                "sectionTitle": chunk.get("section_title"),
+                "embeddingStatus": chunk["embedding_status"],
+                "workspaceId": chunk["workspace_id"],
+                "filename": chunk["filename"],
+                "createdAt": created_at_str,
+            })
+
+        return {
+            "totalPending": len(formatted_chunks),
+            "chunks": formatted_chunks
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting pending chunks: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get pending chunks: {str(e)}")
+
+
+@router.get("/api/v1/chunks/{chunk_id}")
+async def get_chunk(
+    chunk_id: str,
+    api_key: str = Depends(verify_api_key)
+) -> Dict[str, Any]:
+    """
+    Get a single chunk by ID.
+
+    Returns chunk data including embedding status and associated document info.
+    """
+    try:
+        db = DatabaseService()
+        chunk = await db.get_chunk_by_id(chunk_id)
+
+        if not chunk:
+            raise HTTPException(status_code=404, detail=f"Chunk {chunk_id} not found")
+
+        # Format created_at and updated_at timestamps
+        created_at = chunk.get("created_at")
+        created_at_str = created_at.isoformat() if created_at and hasattr(created_at, 'isoformat') else str(created_at) if created_at else None
+
+        updated_at = chunk.get("updated_at")
+        updated_at_str = updated_at.isoformat() if updated_at and hasattr(updated_at, 'isoformat') else str(updated_at) if updated_at else None
+
+        return {
+            "chunkId": chunk["id"],
+            "documentId": chunk["document_id"],
+            "chunkIndex": chunk["chunk_index"],
+            "content": chunk["chunk_text"],
+            "tokenCount": chunk["token_count"],
+            "chunkSize": chunk["char_count"],
+            "startChar": chunk["start_position"],
+            "endChar": chunk["end_position"],
+            "hasHeader": chunk.get("has_header", False),
+            "sectionTitle": chunk.get("section_title"),
+            "embeddingStatus": chunk["embedding_status"],
+            "embeddingId": chunk.get("embedding_id"),
+            "workspaceId": chunk["workspace_id"],
+            "filename": chunk["filename"],
+            "createdAt": created_at_str,
+            "updatedAt": updated_at_str,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting chunk {chunk_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get chunk: {str(e)}")
+
+
+@router.patch("/api/v1/chunks/{chunk_id}/status")
+async def update_chunk_status(
+    chunk_id: str,
+    status: str,
+    api_key: str = Depends(verify_api_key)
+) -> Dict[str, Any]:
+    """
+    Update the embedding_status of a chunk.
+
+    This endpoint is used by document-processor to update chunk status during processing.
+
+    Body Parameters:
+        - status: New status (pending, processing, completed, failed)
+
+    Returns:
+        - chunkId: The chunk ID
+        - status: The new status
+        - success: Boolean indicating if update was successful
+    """
+    try:
+        # Validate status
+        valid_statuses = ['pending', 'processing', 'completed', 'failed']
+        if status not in valid_statuses:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+            )
+
+        db = DatabaseService()
+        updated = await db.update_chunk_status(chunk_id, status)
+
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Chunk {chunk_id} not found")
+
+        logger.info(f"Updated chunk {chunk_id} status to {status}")
+
+        return {
+            "chunkId": chunk_id,
+            "status": status,
+            "success": True,
+            "message": f"Successfully updated chunk status to {status}"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating chunk status: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update chunk status: {str(e)}")
+
+
+@router.get("/api/v1/workspaces/{workspace_id}/chunk-stats")
+async def get_workspace_chunk_stats(
+    workspace_id: str,
+    api_key: str = Depends(verify_api_key)
+) -> Dict[str, Any]:
+    """
+    Get chunk statistics for a specific workspace.
+
+    Returns document count, total chunks, and embedding status breakdown.
+    """
+    try:
+        db = DatabaseService()
+        stats = await db.get_workspace_chunk_stats(workspace_id)
+
+        return stats
+
+    except Exception as e:
+        logger.error(f"Error getting workspace chunk stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get workspace chunk stats: {str(e)}")

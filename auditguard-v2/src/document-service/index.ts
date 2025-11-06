@@ -967,32 +967,58 @@ export default class extends Service<Env> {
       });
 
       try {
-        // Get all chunks for this document
-        const chunksResult = await (this.env.AUDITGUARD_DB as any).prepare(
-          `SELECT id, document_id, chunk_index, content, token_count, embedding_status,
-                  start_char, end_char, has_header, section_title
-           FROM document_chunks
-           WHERE document_id = ?
-           ORDER BY chunk_index`
-        ).bind(documentId).all();
+        // Get all chunks from PostgreSQL via API
+        const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
+        const chunksResponse = await fetch(
+          `${embeddingServiceUrl}/api/v1/documents/${documentId}/chunks`,
+          {
+            method: 'GET',
+            headers: {
+              'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
 
-        const rawChunks = chunksResult.results || [];
+        if (!chunksResponse.ok) {
+          throw new Error(`Failed to get chunks from PostgreSQL: ${chunksResponse.status}`);
+        }
 
-        // Transform database chunks to Chunk interface format
-        // Database has 'content', but Chunk interface expects 'text'
+        const chunksData = await chunksResponse.json() as {
+          documentId: string;
+          totalChunks: number;
+          chunks: Array<{
+            chunkId: number;
+            chunkIndex: number;
+            content: string;
+            chunkSize: number;
+            startChar: number;
+            endChar: number;
+            tokenCount: number;
+            embeddingStatus: string;
+            hasHeader: boolean;
+            sectionTitle: string | null;
+            createdAt: string;
+          }>;
+        };
+
+        const rawChunks = chunksData.chunks || [];
+
+        // Transform API chunks to Chunk interface format
+        // API has 'content', but Chunk interface expects 'text'
         const chunks = rawChunks.map((c: any) => ({
           text: c.content,  // Map 'content' → 'text'
-          index: c.chunk_index,
+          index: c.chunkIndex,
           metadata: {
-            startChar: c.start_char || 0,
-            endChar: c.end_char || 0,
-            tokenCount: c.token_count || 0,
-            hasHeader: c.has_header === 1,
-            sectionTitle: c.section_title || undefined,
+            startChar: c.startChar || 0,
+            endChar: c.endChar || 0,
+            tokenCount: c.tokenCount || 0,
+            hasHeader: c.hasHeader || false,
+            sectionTitle: c.sectionTitle || undefined,
           },
         }));
 
-        const chunkIds = rawChunks.map((c: any) => c.id);
+        const chunkIds = rawChunks.map((c: any) => c.chunkId);
 
         if (chunks.length > 0) {
           this.env.logger.info('Transformed chunks for embedding generation', {
@@ -1211,32 +1237,46 @@ export default class extends Service<Env> {
       ? 'Processing... Summary will be available after indexing completes.'
       : 'Document indexed. Summary generation can be added later if needed.';
 
-    // Get chunks from LOCAL database (not SmartBucket)
+    // Get chunks from PostgreSQL via API
     try {
-      const dbChunks = await (this.env.AUDITGUARD_DB as any).prepare(
-        `SELECT
-          id,
-          chunk_index,
-          content as text,
-          embedding_status
-         FROM document_chunks
-         WHERE document_id = ?
-         ORDER BY chunk_index ASC`
-      ).bind(documentId).all();
+      const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
+      const chunksResponse = await fetch(
+        `${embeddingServiceUrl}/api/v1/documents/${documentId}/chunks`,
+        {
+          method: 'GET',
+          headers: {
+            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-      chunks = (dbChunks.results || []).map((chunk: any) => ({
-        text: chunk.text || '',
-        chunkIndex: chunk.chunk_index,
-        embeddingStatus: chunk.embedding_status,
+      if (!chunksResponse.ok) {
+        throw new Error(`Failed to get chunks from PostgreSQL: ${chunksResponse.status}`);
+      }
+
+      const chunksData = await chunksResponse.json() as {
+        documentId: string;
+        chunks: Array<{
+          chunkIndex: number;
+          content: string;
+          embeddingStatus: string;
+        }>;
+      };
+
+      chunks = (chunksData.chunks || []).map((chunk: any) => ({
+        text: chunk.content || '',
+        chunkIndex: chunk.chunkIndex,
+        embeddingStatus: chunk.embeddingStatus,
       }));
 
-      this.env.logger.info('Retrieved chunks from LOCAL database', {
+      this.env.logger.info('Retrieved chunks from PostgreSQL', {
         documentId,
         chunkCount: chunks.length,
-        source: 'local_database',
+        source: 'postgresql_api',
       });
     } catch (error) {
-      this.env.logger.error('Failed to retrieve chunks from database', {
+      this.env.logger.error('Failed to retrieve chunks from PostgreSQL', {
         documentId,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -1723,6 +1763,8 @@ export default class extends Service<Env> {
           endChar: number;
           tokenCount: number;
           embeddingStatus: string;
+          hasHeader: boolean;
+          sectionTitle: string | null;
           createdAt: string;
         }>;
       };
@@ -1743,8 +1785,8 @@ export default class extends Service<Env> {
         startChar: chunk.startChar,
         endChar: chunk.endChar,
         tokenCount: chunk.tokenCount,
-        hasHeader: false, // PostgreSQL chunks don't track this yet
-        sectionTitle: null, // PostgreSQL chunks don't track this yet
+        hasHeader: chunk.hasHeader || false,
+        sectionTitle: chunk.sectionTitle || null,
         embeddingStatus: chunk.embeddingStatus,
         createdAt: new Date(chunk.createdAt).getTime(),
         tags: [], // Compliance tags not implemented in PostgreSQL yet
