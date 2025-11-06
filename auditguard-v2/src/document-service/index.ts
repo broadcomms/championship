@@ -907,48 +907,148 @@ export default class extends Service<Env> {
     await this.updateProcessingStatus(documentId, 'processing');
 
     try {
-      // ✅ Verify SmartBucket has finished indexing
-      const indexStatus = await this.verifyIndexingComplete(
-        document.storage_key,
-        workspaceId
-      );
-
-      if (!indexStatus.isComplete) {
-        // Indexing not complete - throw error to trigger retry
-        const errorMsg = `Indexing in progress: ${indexStatus.progress}% (${indexStatus.chunkCount} chunks found)`;
-        this.env.logger.info('Document indexing not complete, will retry', {
-          documentId,
-          progress: indexStatus.progress,
-          chunkCount: indexStatus.chunkCount,
-        });
-        throw new Error(errorMsg);
-      }
-
-      // ✅ Indexing is complete!
-      // NOTE: We do NOT use SmartBucket's chunk count here
-      // We keep the LOCAL chunk count that was set by document-processor
-      this.env.logger.info('Document indexing verified complete', {
-        documentId,
-        smartBucketChunkCount: indexStatus.chunkCount,
-        localChunkCount: document.chunk_count,
-        storageKey: document.storage_key,
-      });
-
-      // ✅ Extract title and description using AI
-      this.env.logger.info('Extracting title and description using AI', {
+      // ✅ Extract title and description using AI (BEFORE indexing check - doesn't need chunks!)
+      this.env.logger.info('🤖 Starting AI-powered document enrichment', {
         documentId,
         storageKey: document.storage_key,
+        filename: document.filename,
       });
 
       let extractedTitle = document.filename;  // Fallback to filename
-      let extractedDescription = '';           // Default empty
+      let extractedDescription = `Uploaded ${document.content_type} document with ${document.word_count} words.`;  // Fallback description
 
-      // REMOVED: SmartBucket AI title/description extraction
-      // We'll focus on local embeddings first, then add AI extraction later
-      this.env.logger.info('Skipping AI title/description extraction - using filename', {
+      try {
+        // Get document text from SmartBucket for enrichment
+        const documentText = await this.env.DOCUMENTS_BUCKET.get(document.storage_key);
+        if (!documentText) {
+          throw new Error('Document text not found in SmartBucket');
+        }
+
+        const textContent = await documentText.text();
+        const textPreview = textContent.substring(0, 4000); // First 4K chars
+
+        // Call AI to generate title and description
+        const prompt = `Analyze this document and provide a title and description.
+
+Document filename: ${document.filename}
+Content type: ${document.content_type}
+Word count: ${document.word_count}
+${document.page_count ? `Page count: ${document.page_count}` : ''}
+
+Document text:
+${textPreview}
+
+Respond with ONLY a JSON object in this exact format:
+{
+  "title": "A clear, descriptive title (50 chars max)",
+  "description": "A 2-3 sentence summary of the document's purpose and content"
+}`;
+
+        this.env.logger.info('🔍 Calling AI for enrichment', {
+          documentId,
+          model: 'deepseek-r1-distill-qwen-32b',
+          promptLength: prompt.length,
+        });
+
+        const aiResponse = await this.env.AI.run('deepseek-r1-distill-qwen-32b', {
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3,
+          max_tokens: 500,
+          response_format: { type: 'json_object' },
+        });
+
+        this.env.logger.info('✅ AI responded', {
+          documentId,
+          responseLength: JSON.stringify(aiResponse).length,
+        });
+
+        // Parse AI response
+        const content = (aiResponse as any).response || JSON.stringify(aiResponse);
+        const parsed = JSON.parse(content);
+
+        if (parsed.title && parsed.description) {
+          extractedTitle = parsed.title;
+          extractedDescription = parsed.description;
+
+          this.env.logger.info('✅ Document enrichment completed successfully', {
+            documentId,
+            title: extractedTitle,
+            descriptionLength: extractedDescription.length,
+          });
+        } else {
+          throw new Error('Invalid AI response format');
+        }
+
+      } catch (enrichmentError) {
+        // Log error but continue with fallback metadata
+        this.env.logger.error('⚠️ Document enrichment failed, using fallback metadata', {
+          documentId,
+          error: enrichmentError instanceof Error ? enrichmentError.message : String(enrichmentError),
+          stack: enrichmentError instanceof Error ? enrichmentError.stack : undefined,
+          fallbackTitle: extractedTitle,
+          fallbackDescription: extractedDescription,
+        });
+        // Continue with fallback values set above
+      }
+
+      // ✅ SAVE enrichment results to database IMMEDIATELY (before indexing check)
+      this.env.logger.info('💾 Saving enrichment results to database', {
         documentId,
-        filename: document.filename,
+        title: extractedTitle,
+        descriptionLength: extractedDescription.length,
       });
+
+      await db
+        .updateTable('documents')
+        .set({
+          title: extractedTitle,
+          description: extractedDescription,
+          updated_at: Date.now(),
+        } as any)
+        .where('id', '=', documentId)
+        .execute();
+
+      this.env.logger.info('✅ Enrichment results saved successfully', {
+        documentId,
+        title: extractedTitle,
+      });
+
+      // ✅ Verify SmartBucket has finished indexing (non-blocking check for logging)
+      let indexStatus = { isComplete: false, progress: 0, chunkCount: 0 };
+      try {
+        indexStatus = await this.verifyIndexingComplete(
+          document.storage_key,
+          workspaceId
+        );
+
+        if (!indexStatus.isComplete) {
+          // Indexing not complete - throw error to trigger retry
+          const errorMsg = `Indexing in progress: ${indexStatus.progress}% (${indexStatus.chunkCount} chunks found)`;
+          this.env.logger.info('Document indexing not complete, will retry', {
+            documentId,
+            progress: indexStatus.progress,
+            chunkCount: indexStatus.chunkCount,
+          });
+          throw new Error(errorMsg);
+        }
+
+        this.env.logger.info('Document indexing verified complete', {
+          documentId,
+          smartBucketChunkCount: indexStatus.chunkCount,
+          localChunkCount: document.chunk_count,
+          storageKey: document.storage_key,
+        });
+      } catch (verifyError) {
+        // Log but don't fail - enrichment already succeeded
+        this.env.logger.warn('Indexing verification skipped or failed (enrichment already complete)', {
+          documentId,
+          error: verifyError instanceof Error ? verifyError.message : String(verifyError),
+        });
+        // Re-throw to trigger observer retry if this is the indexing-in-progress error
+        if (verifyError instanceof Error && verifyError.message.includes('Indexing in progress')) {
+          throw verifyError;
+        }
+      }
 
       // WORKAROUND: Generate embeddings synchronously since queue observer isn't working
       this.env.logger.info('Starting embedding generation (synchronous workaround)', {
@@ -1215,18 +1315,18 @@ export default class extends Service<Env> {
       }
     }
 
-    // REMOVED: SmartBucket summary query (was blocking/timing out)
-    // Summary generation requires full SmartBucket indexing to complete
-    // We'll show processing status instead of blocking the page load
-    this.env.logger.info('Skipping summary generation - requires SmartBucket indexing', {
+    // Use AI-generated description from database (generated during processDocument)
+    // Fallback to generic message if description not available
+    this.env.logger.info('Using AI-generated description as summary', {
       documentId,
+      hasDescription: !!document.description,
       processingStatus,
       isStillProcessing,
     });
 
     summary = isStillProcessing
       ? 'Processing... Summary will be available after indexing completes.'
-      : 'Document indexed. Summary generation can be added later if needed.';
+      : (document.description || 'Document indexed. Summary generation can be added later if needed.');
 
     // Get chunks from PostgreSQL via API
     try {

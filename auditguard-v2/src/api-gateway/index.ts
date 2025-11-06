@@ -434,34 +434,51 @@ export default class extends Service<Env> {
           );
         }
 
-        this.env.logger.info('Enqueueing document for reprocessing', {
+        this.env.logger.info('Starting document reprocessing', {
           documentId,
           workspaceId,
           userId: user.userId,
           vultrKey: document.vultrKey,
-          action: 'extract_and_index',
+          storageKey: document.storageKey,
         });
 
-        // Enqueue the document for full reprocessing (new flow)
-        await this.env.DOCUMENT_PROCESSING_QUEUE.send({
-          documentId,
-          workspaceId,
-          userId: user.userId,
-          vultrKey: document.vultrKey,
-          action: 'extract_and_index',  // Trigger full extraction pipeline
-          frameworkId: document.complianceFrameworkId,  // Preserve existing framework
-        });
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: 'Document queued for reprocessing',
+        // Call DOCUMENT_SERVICE.processDocument() directly (queue observer is broken)
+        // This will trigger AI enrichment, chunking, and re-indexing
+        try {
+          await this.env.DOCUMENT_SERVICE.processDocument(
             documentId,
-          }),
-          {
-            headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          }
-        );
+            workspaceId,
+            user.userId
+          );
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: 'Document reprocessed successfully',
+              documentId,
+            }),
+            {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        } catch (error) {
+          this.env.logger.error('Document reprocessing failed', {
+            documentId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'Failed to reprocess document',
+              details: error instanceof Error ? error.message : String(error),
+            }),
+            {
+              status: 500,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
       }
 
       // Phase 5: Match /api/workspaces/:id/documents/:documentId/chunks
