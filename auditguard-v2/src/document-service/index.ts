@@ -9,6 +9,7 @@ import { VectorSearchService, VectorSearchRequest, VectorSearchResponse } from '
 import { ComplianceTaggingService } from '../compliance-tagging-service';
 import { EmbeddingService } from '../embedding-service';
 import { TextExtractionService } from '../text-extraction-service';
+import { enrichDocument, type EnrichmentInput } from '../common/ai-enrichment';
 
 interface UploadDocumentInput {
   workspaceId: string;
@@ -1217,11 +1218,8 @@ Respond with ONLY a JSON object in this exact format:
   }
 
   /**
-   * Re-process document: Lightweight AI re-enrichment for title/description
+   * Re-process document: AI re-enrichment for title/description/category/framework
    * This is used by the "Reprocess" button to regenerate metadata without re-chunking/re-embedding
-   * 
-   * Phase 1 (current): Re-enrich title/description only
-   * Future phases: Add re-chunking, re-embedding, framework detection, etc.
    */
   async reProcessDocument(
     documentId: string,
@@ -1230,10 +1228,12 @@ Respond with ONLY a JSON object in this exact format:
     success: boolean;
     title: string;
     description: string;
+    category: string;
+    complianceFrameworkId: number | null;
   }> {
     const db = this.getDb();
 
-    this.env.logger.info('🔄 Starting document reprocessing (lightweight re-enrichment)', {
+    this.env.logger.info('🔄 Starting document reprocessing (AI re-enrichment)', {
       documentId,
       workspaceId,
     });
@@ -1266,99 +1266,36 @@ Respond with ONLY a JSON object in this exact format:
       wordCount: document.word_count,
     });
 
-    // Prepare AI enrichment
-    const textPreview = extractedText.substring(0, 4000); // First 4K chars for AI
-    
-    const prompt = `Analyze this document and provide a title and description.
+    // Use shared AI enrichment utility
+    const enrichmentInput: EnrichmentInput = {
+      filename: document.filename,
+      contentType: document.content_type,
+      text: extractedText,
+      wordCount: document.word_count || 0,
+      pageCount: document.page_count || undefined,
+    };
 
-Document filename: ${document.filename}
-Content type: ${document.content_type}
-Word count: ${document.word_count || 0}
-${document.page_count ? `Page count: ${document.page_count}` : ''}
+    const enrichmentResult = await enrichDocument(enrichmentInput, {
+      AI: this.env.AI,
+      AUDITGUARD_DB: this.env.AUDITGUARD_DB,
+      logger: this.env.logger,
+    });
 
-Document text:
-${textPreview}
-
-Respond with ONLY a JSON object in this exact format:
-{
-  "title": "A clear, descriptive title (50 chars max)",
-  "description": "A 2-3 sentence summary of the document's purpose and content"
-}`;
-
-    // Fallback values (used if AI fails)
-    let enrichedTitle = document.filename.replace(/\.(pdf|docx|txt|md)$/i, '');
-    let enrichedDescription = `Uploaded ${document.content_type} document with ${document.word_count || 0} words.`;
-
-    try {
-      this.env.logger.info('📤 Calling AI model for re-enrichment', {
-        documentId,
-        model: 'llama-3.1-8b-instruct-fast',
-        promptLength: prompt.length,
-        textPreviewLength: textPreview.length,
-      });
-
-      const aiResponse = await this.env.AI.run('llama-3.1-8b-instruct-fast', {
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        max_tokens: 300,
-      });
-
-      this.env.logger.info('📥 AI response received', {
-        documentId,
-        responseType: typeof aiResponse,
-        responsePreview: JSON.stringify(aiResponse).substring(0, 200),
-      });
-
-      // Parse AI response - handle different response formats
-      let parsed: any;
-      if (typeof aiResponse === 'string') {
-        parsed = JSON.parse(aiResponse);
-      } else if ((aiResponse as any).response) {
-        parsed = JSON.parse((aiResponse as any).response);
-      } else {
-        parsed = aiResponse;
-      }
-
-      if (parsed.title && parsed.description) {
-        enrichedTitle = parsed.title.substring(0, 200); // Truncate if too long
-        enrichedDescription = parsed.description.substring(0, 500);
-        
-        this.env.logger.info('✅ AI re-enrichment successful', {
-          documentId,
-          title: enrichedTitle,
-          descriptionLength: enrichedDescription.length,
-        });
-      } else {
-        this.env.logger.warn('⚠️ AI response missing title or description fields', {
-          documentId,
-          parsedResponse: JSON.stringify(parsed),
-        });
-        // Will use fallback values
-      }
-
-    } catch (enrichmentError) {
-      this.env.logger.error('⚠️ AI re-enrichment failed, using fallback metadata', {
-        documentId,
-        error: enrichmentError instanceof Error ? enrichmentError.message : String(enrichmentError),
-        stack: enrichmentError instanceof Error ? enrichmentError.stack : undefined,
-        fallbackTitle: enrichedTitle,
-        fallbackDescription: enrichedDescription,
-      });
-      // Continue with fallback values
-    }
-
-    // Update database with new enriched metadata
+    // Update database with enriched metadata
     this.env.logger.info('💾 Updating document with re-enriched metadata', {
       documentId,
-      title: enrichedTitle,
-      descriptionLength: enrichedDescription.length,
+      title: enrichmentResult.title,
+      category: enrichmentResult.category,
+      framework: enrichmentResult.complianceFrameworkId,
     });
 
     await db
       .updateTable('documents')
       .set({
-        title: enrichedTitle,
-        description: enrichedDescription,
+        title: enrichmentResult.title,
+        description: enrichmentResult.description,
+        category: enrichmentResult.category,
+        compliance_framework_id: enrichmentResult.complianceFrameworkId,
         updated_at: Date.now(),
       } as any)
       .where('id', '=', documentId)
@@ -1366,13 +1303,17 @@ Respond with ONLY a JSON object in this exact format:
 
     this.env.logger.info('✅ Document reprocessing completed successfully', {
       documentId,
-      title: enrichedTitle,
+      title: enrichmentResult.title,
+      category: enrichmentResult.category,
+      framework: enrichmentResult.complianceFrameworkId,
     });
 
     return {
       success: true,
-      title: enrichedTitle,
-      description: enrichedDescription,
+      title: enrichmentResult.title,
+      description: enrichmentResult.description,
+      category: enrichmentResult.category,
+      complianceFrameworkId: enrichmentResult.complianceFrameworkId,
     };
   }
 
