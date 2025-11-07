@@ -1149,6 +1149,28 @@ export default class extends Service<Env> {
         });
       }
 
+      // Match /api/workspaces/:id/compliance-frameworks/:frameworkId (get single framework)
+      const singleFrameworkMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/compliance-frameworks\/([^\/]+)$/);
+      if (singleFrameworkMatch && singleFrameworkMatch[1] && singleFrameworkMatch[2] && request.method === 'GET') {
+        const workspaceId = singleFrameworkMatch[1];
+        const frameworkId = parseInt(singleFrameworkMatch[2], 10);
+        const user = await this.validateSession(request);
+
+        const frameworks = await this.env.DOCUMENT_SERVICE.listFrameworks(workspaceId, user.userId);
+        const framework = frameworks.find(f => f.id === frameworkId);
+
+        if (!framework) {
+          return new Response(JSON.stringify({ error: 'Framework not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        return new Response(JSON.stringify({ framework }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/workspaces/:id/documents/:documentId/framework (assign framework to document)
       const assignFrameworkMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/framework$/);
       if (assignFrameworkMatch && assignFrameworkMatch[1] && assignFrameworkMatch[2] && request.method === 'PUT') {

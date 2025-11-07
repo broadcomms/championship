@@ -6,7 +6,6 @@ import { ChunkingService } from '../chunking-service';
 import { ComplianceTaggingService } from '../compliance-tagging-service';
 import { EmbeddingService } from '../embedding-service';
 import { enrichDocument, type EnrichmentInput } from '../common/ai-enrichment';
-import { processDocument } from 'unpdf';
 
 export interface Body {
   documentId: string;

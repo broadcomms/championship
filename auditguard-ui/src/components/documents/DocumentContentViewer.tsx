@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { DocumentChunksViewer } from './DocumentChunksViewer';
 import { CategoryBadge } from './CategoryBadge';
+import { ComplianceFrameworkBadge } from './ComplianceFrameworkBadge';
 import { ProcessingIndicator } from './ProcessingIndicator';
 import { Document } from '@/types';
 
@@ -283,6 +284,15 @@ function InfoTab({ document }: InfoTabProps) {
           <span className="text-gray-600">Category</span>
           <CategoryBadge category={document.category} />
         </div>
+        {document.complianceFrameworkId && (
+          <div className="flex justify-between border-b border-gray-100 pb-2">
+            <span className="text-gray-600">Compliance Framework</span>
+            <ComplianceFrameworkBadge 
+              frameworkId={document.complianceFrameworkId} 
+              workspaceId={document.workspaceId}
+            />
+          </div>
+        )}
         <div className="flex justify-between border-b border-gray-100 pb-2">
           <span className="text-gray-600">Processing Status</span>
           <ProcessingIndicator status={document.processingStatus} />
