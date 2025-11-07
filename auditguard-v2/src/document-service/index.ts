@@ -866,6 +866,31 @@ export default class extends Service<Env> {
       .set(updateData)
       .where('id', '=', documentId)
       .execute();
+
+    // 🚀 AUTO-TRIGGER AI ENRICHMENT: If extracted_text was just saved, run enrichment
+    if (data.extractedText !== undefined && data.extractedText.length > 0) {
+      this.env.logger.info('🚀 Auto-triggering AI enrichment (extracted_text just saved)', {
+        documentId,
+        textLength: data.extractedText.length,
+      });
+
+      // Get workspace ID from database
+      const doc = await db
+        .selectFrom('documents')
+        .select(['workspace_id', 'uploaded_by'])
+        .where('id', '=', documentId)
+        .executeTakeFirst();
+
+      if (doc) {
+        // Trigger enrichment asynchronously (don't wait for it)
+        this.processDocument(documentId, doc.workspace_id, doc.uploaded_by).catch((err) => {
+          this.env.logger.error('Auto-enrichment failed (non-blocking)', {
+            documentId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
+    }
   }
 
   /**
@@ -918,13 +943,14 @@ export default class extends Service<Env> {
       let extractedDescription = `Uploaded ${document.content_type} document with ${document.word_count} words.`;  // Fallback description
 
       try {
-        // Get document text from SmartBucket for enrichment
-        const documentText = await this.env.DOCUMENTS_BUCKET.get(document.storage_key);
-        if (!documentText) {
-          throw new Error('Document text not found in SmartBucket');
+        // Get document text from D1 database (already extracted and saved)
+        // This is much faster and doesn't depend on SmartBucket indexing
+        const extractedText = (document as any).extracted_text;
+        if (!extractedText) {
+          throw new Error('Document text not yet extracted');
         }
 
-        const textContent = await documentText.text();
+        const textContent = extractedText;
         const textPreview = textContent.substring(0, 4000); // First 4K chars
 
         // Call AI to generate title and description
@@ -1014,6 +1040,7 @@ Respond with ONLY a JSON object in this exact format:
       });
 
       // ✅ Verify SmartBucket has finished indexing (non-blocking check for logging)
+      // SmartBucket is OPTIONAL - don't block enrichment if it's slow
       let indexStatus = { isComplete: false, progress: 0, chunkCount: 0 };
       try {
         indexStatus = await this.verifyIndexingComplete(
@@ -1022,14 +1049,13 @@ Respond with ONLY a JSON object in this exact format:
         );
 
         if (!indexStatus.isComplete) {
-          // Indexing not complete - throw error to trigger retry
-          const errorMsg = `Indexing in progress: ${indexStatus.progress}% (${indexStatus.chunkCount} chunks found)`;
-          this.env.logger.info('Document indexing not complete, will retry', {
+          // SmartBucket indexing not complete - just log it, don't block enrichment
+          this.env.logger.info('SmartBucket indexing still in progress (non-blocking)', {
             documentId,
             progress: indexStatus.progress,
             chunkCount: indexStatus.chunkCount,
           });
-          throw new Error(errorMsg);
+          // Don't throw - SmartBucket is optional, enrichment already succeeded
         }
 
         this.env.logger.info('Document indexing verified complete', {
@@ -1039,15 +1065,12 @@ Respond with ONLY a JSON object in this exact format:
           storageKey: document.storage_key,
         });
       } catch (verifyError) {
-        // Log but don't fail - enrichment already succeeded
-        this.env.logger.warn('Indexing verification skipped or failed (enrichment already complete)', {
+        // Log but don't fail - SmartBucket is optional, enrichment already succeeded
+        this.env.logger.warn('SmartBucket indexing verification skipped or failed (non-blocking)', {
           documentId,
           error: verifyError instanceof Error ? verifyError.message : String(verifyError),
         });
-        // Re-throw to trigger observer retry if this is the indexing-in-progress error
-        if (verifyError instanceof Error && verifyError.message.includes('Indexing in progress')) {
-          throw verifyError;
-        }
+        // Don't re-throw - SmartBucket is optional, let enrichment complete
       }
 
       // WORKAROUND: Generate embeddings synchronously since queue observer isn't working

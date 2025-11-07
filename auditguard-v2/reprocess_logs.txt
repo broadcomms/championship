@@ -1,0 +1,864 @@
+Using organization: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+Using user: user_01K8RV423SG75TDJC3014RQN9B
+Tailing logs for auditguard-v2@01k9bhjfha7gv5jmvdxrryct4c using Riverjack service...
+Press Ctrl+C to stop
+
+🔄 Started streaming logs for auditguard-v2@01k9bhjfha7gv5jmvdxrryct4c
+   Organization: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+   User: user_01K8RV423SG75TDJC3014RQN9B
+   Time: 11/6/2025, 1:05:03 PM
+[11/6/2025, 1:05:03 PM] 🔗 Trace: 90526d069bd67902a8d572804767482d (114ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2577ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (32ms)
+  3. ✅ sql.all (34ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1971ms, 1 rows read, ENAM, DB: 460.0KB
+  4. ✅ listDocuments (77ms)
+  5. ✅ validateSession (36ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (116ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a68452fdc1ac40
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (43ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.2856ms, 16 rows read, ENAM, DB: 460.0KB
+  8. ✅ listDocuments (80ms)
+     service: DOCUMENT_SERVICE
+
+[11/6/2025, 1:05:04 PM] 🔗 Trace: 1ec718e27bcae96fc53b4439c9c783f8 (117ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2529ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (32ms)
+  3. ✅ sql.all (48ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2369ms, 1 rows read, ENAM, DB: 460.0KB
+  4. ✅ listDocuments (81ms)
+  5. ✅ validateSession (36ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (119ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684541f7daba5
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (33ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.3252ms, 16 rows read, ENAM, DB: 460.0KB
+  8. ✅ listDocuments (83ms)
+     service: DOCUMENT_SERVICE
+
+[11/6/2025, 1:05:05 PM] 🔗 Trace: 01d24effe2ec7f4e60ca9e5703e6db83 (106ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: api-gateway
+  1. ✅ validateSession (37ms)
+     service: AUTH_SERVICE
+  2. ✅ fetch (109ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a6845fefb7ab6a
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  3. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1604ms, 1 rows read, ENAM, DB: 460.0KB
+  4. ✅ listDocuments (67ms)
+  5. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.249ms, 2 rows read, ENAM, DB: 460.0KB
+  6. ✅ validateSession (32ms)
+  7. ✅ listDocuments (72ms)
+     service: DOCUMENT_SERVICE
+  8. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.3825ms, 16 rows read, ENAM, DB: 460.0KB
+
+[11/6/2025, 1:05:06 PM] 🔗 Trace: bef86658f0a284f95a920c031dc7758d (130ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (53ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 1.4154ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (53ms)
+  3. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2076ms, 1 rows read, ENAM, DB: 460.0KB
+  4. ✅ listDocuments (74ms)
+  5. ✅ validateSession (57ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (132ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a68465b80f3972
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (39ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.4409ms, 16 rows read, ENAM, DB: 460.0KB
+  8. ✅ listDocuments (75ms)
+     service: DOCUMENT_SERVICE
+
+[11/6/2025, 1:05:07 PM] 🔗 Trace: d3c016941b672d488c02cb63692719a4 (34ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (34ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2324ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (34ms)
+
+[11/6/2025, 1:05:08 PM] 🔗 Trace: a96d0b6f22bb69b1fe36213cbb4c45de (144ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (36ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2531ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (36ms)
+  3. ✅ validateSession (41ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (145ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a6847238e353dd
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (62ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2796ms, 1 rows read, ENAM, DB: 460.0KB
+  6. ✅ listDocuments (104ms)
+  7. ✅ listDocuments (104ms)
+     service: DOCUMENT_SERVICE
+  8. ✅ sql.all (42ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.2309ms, 16 rows read, ENAM, DB: 460.0KB
+
+[11/6/2025, 1:05:10 PM] 🔗 Trace: e02d82183af76d9434ac8a8929fafa60 (139ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (58ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2104ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (58ms)
+  3. ✅ sql.all (36ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1936ms, 1 rows read, ENAM, DB: 460.0KB
+  4. ✅ listDocuments (76ms)
+  5. ✅ validateSession (63ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (142ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a6847ec81aac42
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (40ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.3775ms, 16 rows read, ENAM, DB: 460.0KB
+  8. ✅ listDocuments (79ms)
+     service: DOCUMENT_SERVICE
+
+[11/6/2025, 1:05:12 PM] 🔗 Trace: 89df0685ec91fc9fcb1c967ed11733de (100ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (30ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2373ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (30ms)
+  3. ✅ validateSession (35ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (99ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a6848b3e2ac65d
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (30ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.3466ms, 1 rows read, ENAM, DB: 460.0KB
+  6. ✅ listDocuments (65ms)
+  7. ✅ listDocuments (64ms)
+     service: DOCUMENT_SERVICE
+  8. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.2972ms, 16 rows read, ENAM, DB: 460.0KB
+
+[11/6/2025, 1:05:13 PM] 🔗 Trace: 6d0bfad94b88c80d6efbe97f238930e5 (127ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: api-gateway
+  1. ✅ validateSession (41ms)
+     service: AUTH_SERVICE
+  2. ✅ fetch (130ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a6848c9eb1ab1c
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  3. ✅ sql.all (42ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1937ms, 1 rows read, ENAM, DB: 460.0KB
+  4. ✅ listDocuments (84ms)
+  5. ✅ sql.all (37ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2424ms, 2 rows read, ENAM, DB: 460.0KB
+  6. ✅ validateSession (37ms)
+  7. ✅ listDocuments (89ms)
+     service: DOCUMENT_SERVICE
+  8. ✅ sql.all (42ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.3312ms, 16 rows read, ENAM, DB: 460.0KB
+
+[11/6/2025, 1:05:13 PM] 🔗 Trace: 0fd2fe80bf72a3bc3102fb9688950cd7 (34ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (34ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2009ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (34ms)
+
+[11/6/2025, 1:05:14 PM] 🔗 Trace: 700d17d55888dc63c4ab4b329031b44f (141ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (41ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.3087ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (41ms)
+  3. ✅ validateSession (45ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (142ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684982c9edeef
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (53ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1537ms, 1 rows read, ENAM, DB: 460.0KB
+  6. ✅ listDocuments (96ms)
+  7. ✅ listDocuments (97ms)
+     service: DOCUMENT_SERVICE
+  8. ✅ sql.all (43ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.323ms, 16 rows read, ENAM, DB: 460.0KB
+
+[11/6/2025, 1:05:16 PM] 🔗 Trace: 831499427cc2cf2c742fa87891a68c10 (202ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (44ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.7315ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (44ms)
+  3. ✅ sql.all (104ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2012ms, 1 rows read, ENAM, DB: 460.0KB
+  4. ✅ listDocuments (155ms)
+  5. ✅ validateSession (47ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (203ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684a078e0ac09
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (51ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.3126ms, 16 rows read, ENAM, DB: 460.0KB
+  8. ✅ listDocuments (156ms)
+     service: DOCUMENT_SERVICE
+
+[11/6/2025, 1:05:17 PM] 🔗 Trace: 5e6d3c6cc55923b98960063fe639f952 (1510ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (1510ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.194ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (1510ms)
+
+[11/6/2025, 1:05:20 PM] 🔗 Trace: 83ccd41a8c6ff553dde20694f29322c9 (31ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (29ms)
+     🗄️  SQL Query: select "id", "email", "created_at" from "users" where "id" = ?
+     📊 meta: 0.1647ms, 1 rows read, ENAM, DB: 460.0KB
+  2. ✅ getUserById (29ms)
+  3. ✅ validateSession (37ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (70ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/auth/me
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/admin/database
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684bafdc011fc
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ getUserById (33ms)
+     service: AUTH_SERVICE
+
+[11/6/2025, 1:05:20 PM] 🔗 Trace: c655878607b8eb84e020cf1b2ea45fe1 (72ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.1916ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (32ms)
+  3. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "id", "email", "created_at" from "users" where "id" = ?
+     📊 meta: 0.2221ms, 1 rows read, ENAM, DB: 460.0KB
+  4. ✅ getUserById (35ms)
+  5. ✅ validateSession (35ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (74ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/auth/me
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/admin/database
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684bc6f5eaaa1
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ getUserById (39ms)
+     service: AUTH_SERVICE
+
+[11/6/2025, 1:05:21 PM] 🔗 Trace: d56965c3b3d757289e8ecdc044e17ba7 (105ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (30ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2359ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (30ms)
+  3. ✅ sql.all (37ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2137ms, 1 rows read, ENAM, DB: 460.0KB
+  4. ✅ listDocuments (70ms)
+  5. ✅ validateSession (33ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (106ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684c37808ac00
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (33ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.2878ms, 16 rows read, ENAM, DB: 460.0KB
+  8. ✅ listDocuments (73ms)
+     service: DOCUMENT_SERVICE
+
+[11/6/2025, 1:05:22 PM] 🔗 Trace: 9a76272363b0179cf9b496999a977696 (111ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (45ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.1816ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (45ms)
+  3. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1469ms, 1 rows read, ENAM, DB: 460.0KB
+  4. ✅ listDocuments (64ms)
+  5. ✅ validateSession (49ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (113ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684c49d6036a6
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (29ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.3527ms, 16 rows read, ENAM, DB: 460.0KB
+  8. ✅ listDocuments (64ms)
+     service: DOCUMENT_SERVICE
+
+[11/6/2025, 1:05:23 PM] 🔗 Trace: e2f38b8a593dc0581faabd5632d1a65a (137ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (39ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2374ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (39ms)
+  3. ✅ validateSession (44ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (144ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684cfffabaaf7
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (36ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2165ms, 1 rows read, ENAM, DB: 460.0KB
+  6. ✅ listDocuments (95ms)
+  7. ✅ listDocuments (100ms)
+     service: DOCUMENT_SERVICE
+  8. ✅ sql.all (59ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.2419ms, 16 rows read, ENAM, DB: 460.0KB
+
+[11/6/2025, 1:05:24 PM] 🔗 Trace: c56f9b2d3daf4499e708ff5fbbfa036f (200ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (29ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.211ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (29ms)
+  3. ✅ sql.all (29ms)
+     🗄️  SQL Query: select "user_id" from "admin_users" where "user_id" = ?
+     📊 meta: 0.2054ms, 1 rows read, ENAM, DB: 460.0KB
+  4. ✅ getTableData (167ms)
+  5. ✅ validateSession (32ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (206ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/admin/database/tables/documents?page=1&pageSize=50
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: http://localhost:3000/admin/database
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684d55c1babe2
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.first (28ms)
+     🗄️  SQL Query: SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?
+  8. ✅ getTableData (174ms)
+     service: ADMIN_SERVICE
+  9. ✅ log
+     level: INFO
+     message: Getting table data
+     fields: {"adminUserId":"usr_bootstrap_admin","tableName":"documents","page":1,"pageSize":50}
+  10. ✅ sql.first (29ms)
+     🗄️  SQL Query: SELECT COUNT(*) as count FROM documents
+  11. ✅ sql.all (33ms)
+     🗄️  SQL Query: SELECT * FROM documents LIMIT 50 OFFSET 0
+     📊 meta: 0.522ms, 8 rows read, ENAM, DB: 460.0KB
+  12. ✅ sql.all (48ms)
+     🗄️  SQL Query: insert into "admin_audit_log" ("id", "admin_user_id", "action", "resource_type", "resource_id", "changes", "ip_address", "created_at") values (?, ?, ?, ?, ?, ?, ?, ?)
+     📊 meta: 0.1994ms, 4 rows written, ENAM, DB: 460.0KB
+  13. ✅ log
+     level: INFO
+     message: Table data retrieved
+     fields: {"adminUserId":"usr_bootstrap_admin","tableName":"documents","rowCount":8,"totalRows":8}
+
+[11/6/2025, 1:05:24 PM] 🔗 Trace: e862c7ef58dbd8fa60e2dd8e3229c274 (28ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (28ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2687ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (28ms)
+
+[11/6/2025, 1:05:25 PM] 🔗 Trace: e6a7451f79c08bdcadc35a8616e2279a (80ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: document-service
+  1. ✅ sql.all (34ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.192ms, 1 rows read, ENAM, DB: 460.0KB
+  2. ✅ listDocuments (80ms)
+  3. ✅ validateSession (42ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (125ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684dc9fea36da
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (46ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.3461ms, 16 rows read, ENAM, DB: 460.0KB
+  6. ✅ listDocuments (83ms)
+     service: DOCUMENT_SERVICE
+
+[11/6/2025, 1:05:28 PM] 🔗 Trace: 8a204b0bcd8bd08615eeea182923d6ad (62ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: document-service
+  1. ✅ sql.all (33ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2158ms, 1 rows read, ENAM, DB: 460.0KB
+  2. ✅ listDocuments (63ms)
+  3. ✅ validateSession (38ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (108ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684ea781faafe
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (31ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.3041ms, 2 rows read, ENAM, DB: 460.0KB
+  6. ✅ validateSession (31ms)
+  7. ✅ sql.all (30ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.2791ms, 16 rows read, ENAM, DB: 460.0KB
+  8. ✅ listDocuments (70ms)
+     service: DOCUMENT_SERVICE
+
+[11/6/2025, 1:05:27 PM] 🔗 Trace: e6f2fe132e7217628a6a16bf47c291b0 (100ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: document-service
+  1. ✅ sql.all (55ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1731ms, 1 rows read, ENAM, DB: 460.0KB
+  2. ✅ listDocuments (98ms)
+  3. ✅ validateSession (40ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (144ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684e91b7736c2
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.1879ms, 2 rows read, ENAM, DB: 460.0KB
+  6. ✅ validateSession (35ms)
+  7. ✅ sql.all (43ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.2145ms, 16 rows read, ENAM, DB: 460.0KB
+  8. ✅ listDocuments (104ms)
+     service: DOCUMENT_SERVICE
+
+[11/6/2025, 1:05:28 PM] 🔗 Trace: e5d3337f428939cc7a931a96e1b294bb (31ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (31ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2729ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (31ms)
+
+[11/6/2025, 1:05:30 PM] 🔗 Trace: 53e299c98d39a7534f599cf2c295440b (118ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: auth-service
+  1. ✅ sql.all (38ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2183ms, 2 rows read, ENAM, DB: 460.0KB
+  2. ✅ validateSession (38ms)
+  3. ✅ sql.all (42ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.8614ms, 1 rows read, ENAM, DB: 460.0KB
+  4. ✅ listDocuments (76ms)
+  5. ✅ validateSession (42ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (121ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684fbc86539d2
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (34ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.3879ms, 16 rows read, ENAM, DB: 460.0KB
+  8. ✅ listDocuments (79ms)
+     service: DOCUMENT_SERVICE
+
+[11/6/2025, 1:05:31 PM] 🔗 Trace: d5dbf714a681c74acebb0cc39b964e24 (117ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9bhjfha7gv5jmvdxrryct4c, Script: api-gateway
+  1. ✅ validateSession (37ms)
+     service: AUTH_SERVICE
+  2. ✅ fetch (122ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9bhjfha7gv5jmvdxrryct4c
+     http.method: GET
+     http.url: https://svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762398900940_1hm208/documents
+     http.scheme: https
+     http.host: svc-01k9bhjprc2gv733hjbt2trng5.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762398900940_1hm208/documents/doc_1762452235933_ghy1u
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-CA,en-US;q=0.9,en;q=0.8
+     http.authorization: undefined
+     http.cf_ray: 99a684fd1f6babe2
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  3. ✅ sql.all (34ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.1971ms, 2 rows read, ENAM, DB: 460.0KB
+  4. ✅ validateSession (34ms)
+  5. ✅ sql.all (34ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1635ms, 1 rows read, ENAM, DB: 460.0KB
+  6. ✅ listDocuments (78ms)
+  7. ✅ listDocuments (85ms)
+     service: DOCUMENT_SERVICE
+  8. ✅ sql.all (44ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.386ms, 16 rows read, ENAM, DB: 460.0KB
+

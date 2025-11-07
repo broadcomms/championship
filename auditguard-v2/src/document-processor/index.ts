@@ -350,6 +350,25 @@ export default class extends Each<Body, Env> {
         status: 'completed',
       });
 
+      // STEP 6: Run AI enrichment (generate title and description)
+      this.env.logger.info('🤖 Triggering AI enrichment after text extraction', {
+        documentId,
+        workspaceId,
+      });
+
+      try {
+        await this.env.DOCUMENT_SERVICE.processDocument(documentId, workspaceId, userId);
+        this.env.logger.info('✅ AI enrichment completed', {
+          documentId,
+        });
+      } catch (enrichmentError) {
+        this.env.logger.error('AI enrichment failed (non-fatal)', {
+          documentId,
+          error: enrichmentError instanceof Error ? enrichmentError.message : String(enrichmentError),
+        });
+        // Don't fail the entire process if enrichment fails
+      }
+
       // Acknowledge success - SmartBucket will continue indexing in background
       message.ack();
 

@@ -1,7 +1,15 @@
 import { Service } from '@liquidmetal-ai/raindrop-framework';
 import { Env } from './raindrop.gen';
+import { Kysely } from 'kysely';
+import { D1Dialect } from '../common/kysely-d1';
+import { DB } from '../db/auditguard-db/types';
 
 export default class extends Service<Env> {
+  private getDb(): Kysely<DB> {
+    return new Kysely<DB>({
+      dialect: new D1Dialect({ database: this.env.AUDITGUARD_DB }),
+    });
+  }
   /**
    * Track performance metrics for API requests
    */
@@ -102,6 +110,90 @@ export default class extends Service<Env> {
         return new Response(JSON.stringify({ status: 'ok', service: 'AuditGuardX API' }), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
+      }
+
+      // Debug: List documents - No auth for debugging
+      if (path === '/api/debug/documents' && request.method === 'GET') {
+        try {
+          const url = new URL(request.url);
+          const workspaceId = url.searchParams.get('workspaceId') || 'wks_1762398900940_1hm208';
+
+          const db = this.getDb();
+          const documents = await db
+            .selectFrom('documents')
+            .selectAll()
+            .where('workspace_id', '=', workspaceId)
+            .orderBy('uploaded_at', 'desc')
+            .limit(10)
+            .execute();
+
+          return new Response(JSON.stringify({
+            success: true,
+            workspaceId,
+            count: documents.length,
+            documents: documents.map((doc) => ({
+              id: doc.id,
+              filename: doc.filename,
+              title: doc.title,
+              description: doc.description,
+              processing_status: doc.processing_status,
+              uploaded_at: doc.uploaded_at,
+              extracted_text_length: (doc as any).extracted_text?.length || 0,
+              has_extracted_text: !!(doc as any).extracted_text,
+            }))
+          }, null, 2), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        } catch (error) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          }, null, 2), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // Manual Enrichment Test - No auth for debugging
+      if (path === '/api/test-enrichment' && request.method === 'POST') {
+        try {
+          const body = await request.json() as { documentId: string; workspaceId: string };
+
+          this.env.logger.info('Manual enrichment test started', {
+            documentId: body.documentId,
+            workspaceId: body.workspaceId,
+          });
+
+          // Call processDocument directly
+          const result = await this.env.DOCUMENT_SERVICE.processDocument(
+            body.documentId,
+            body.workspaceId,
+            'usr_test'  // Dummy user ID for testing
+          );
+
+          return new Response(JSON.stringify({
+            success: true,
+            result,
+            message: 'Enrichment completed!'
+          }, null, 2), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        } catch (error) {
+          this.env.logger.error('Manual enrichment failed', {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+
+          return new Response(JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          }, null, 2), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
       }
 
       // AI Test Endpoint - No auth required for debugging
@@ -471,6 +563,75 @@ export default class extends Service<Env> {
             JSON.stringify({
               success: false,
               error: 'Failed to reprocess document',
+              details: error instanceof Error ? error.message : String(error),
+            }),
+            {
+              status: 500,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
+      }
+
+      // NEW: Save extracted text from frontend after embedding service call
+      // POST /api/workspaces/:id/documents/:documentId/extracted-text
+      const extractedTextMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/extracted-text$/);
+      if (extractedTextMatch && extractedTextMatch[1] && extractedTextMatch[2] && request.method === 'POST') {
+        const workspaceId = extractedTextMatch[1];
+        const documentId = extractedTextMatch[2];
+        const user = await this.validateSession(request);
+
+        try {
+          const body = await request.json() as {
+            extractedText: string;
+            wordCount: number;
+            pageCount?: number;
+          };
+
+          this.env.logger.info('💾 Saving extracted text to D1 (from frontend)', {
+            documentId,
+            workspaceId,
+            textLength: body.extractedText?.length || 0,
+            wordCount: body.wordCount,
+            pageCount: body.pageCount,
+          });
+
+          // Save extracted_text to D1 using updateDocumentProcessing
+          await this.env.DOCUMENT_SERVICE.updateDocumentProcessing(documentId, {
+            textExtracted: true,
+            chunkCount: 0,  // Chunks are in PostgreSQL, not D1
+            processingStatus: 'processing',  // Still processing, enrichment will run later
+            processedAt: Date.now(),
+            extractedText: body.extractedText,
+            wordCount: body.wordCount,
+            pageCount: body.pageCount,
+          });
+
+          this.env.logger.info('✅ Extracted text saved to D1 successfully', {
+            documentId,
+            textLength: body.extractedText?.length || 0,
+          });
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: 'Extracted text saved successfully',
+              documentId,
+            }),
+            {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        } catch (error) {
+          this.env.logger.error('Failed to save extracted text', {
+            documentId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'Failed to save extracted text',
               details: error instanceof Error ? error.message : String(error),
             }),
             {
