@@ -1639,9 +1639,10 @@ Respond with ONLY a JSON object in this exact format:
     const topK = Math.min(request.topK || 10, 100); // Max 100 results
     const pageSize = Math.min(request.pageSize || 10, 50); // Max 50 per page
     const page = Math.max(request.page || 1, 1); // Min page 1
-    const minScore = Math.max(Math.min(request.minScore || 0.7, 1.0), 0.0); // 0.0-1.0 range
+    const minScore = Math.max(Math.min(request.minScore || 0.7, 1.0), 0.0); // 0.0-1.0 range (PHASE 2.3: default 0.7 for high similarity)
+    const retryForIndexing = request.retryForIndexing !== undefined ? request.retryForIndexing : false; // PHASE 2.3: Retry for recently uploaded vectors
 
-    this.env.logger.info('Vector search request', {
+    this.env.logger.info('🔍 Vector search request (PHASE 2.3: bge-small-en)', {
       workspaceId,
       userId,
       query: request.query.substring(0, 100),
@@ -1650,12 +1651,13 @@ Respond with ONLY a JSON object in this exact format:
       pageSize,
       page,
       minScore,
+      retryForIndexing,
     });
 
     // Create vector search service
     const vectorSearchService = new VectorSearchService(this.env);
 
-    // Perform search with hybrid SmartBucket fallback
+    // PHASE 2.3: Perform search with retry logic for indexing delays
     const searchRequest: VectorSearchRequest = {
       query: request.query,
       workspaceId,
@@ -1665,6 +1667,7 @@ Respond with ONLY a JSON object in this exact format:
       includeChunks: request.includeChunks !== false,
       page,
       pageSize,
+      retryForIndexing, // PHASE 2.3: Pass retry flag for recently uploaded documents
     };
 
     // Enable hybrid search with SmartBucket fallback
@@ -1676,7 +1679,7 @@ Respond with ONLY a JSON object in this exact format:
 
     const results = await vectorSearchService.search(searchRequest, hybridOptions);
 
-    this.env.logger.info('Vector search completed', {
+    this.env.logger.info('✅ Vector search completed (PHASE 2.3)', {
       workspaceId,
       userId,
       query: request.query.substring(0, 50),
@@ -1684,9 +1687,40 @@ Respond with ONLY a JSON object in this exact format:
       returnedResults: results.results.length,
       source: results.source,
       searchTime: results.searchTime,
+      retryUsed: retryForIndexing,
     });
 
     return results;
+  }
+
+  /**
+   * PHASE 2.3: Search recently uploaded documents with retry logic
+   * Use this method when searching for documents that were just uploaded
+   * to account for the 3-5 second indexing delay in Raindrop Vector Index
+   * 
+   * @param workspaceId Workspace to search in
+   * @param userId User making the request
+   * @param query Search query text
+   * @param options Optional search parameters
+   */
+  async searchRecentDocuments(
+    workspaceId: string,
+    userId: string,
+    query: string,
+    options?: {
+      topK?: number;
+      minScore?: number;
+      frameworkId?: number;
+    }
+  ): Promise<VectorSearchResponse> {
+    return this.vectorSearch(workspaceId, userId, {
+      query,
+      workspaceId,
+      topK: options?.topK,
+      minScore: options?.minScore,
+      frameworkId: options?.frameworkId,
+      retryForIndexing: true, // Enable retry logic for indexing delays
+    });
   }
 
   /**

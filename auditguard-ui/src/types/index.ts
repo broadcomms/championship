@@ -73,7 +73,7 @@ export interface Document {
   wordCount?: number;
   chunksCreated?: number; // Phase 5: Custom vector chunks created
   embeddingsGenerated?: number;
-  vectorIndexingStatus?: 'pending' | 'processing' | 'completed' | 'partial' | 'failed';
+  vectorIndexingStatus?: 'pending' | 'processing' | 'indexing' | 'completed' | 'partial' | 'failed'; // Phase 2.4: Added 'indexing' status
   complianceFrameworkId?: number;
 }
 
@@ -259,6 +259,13 @@ export interface TrendAnalysis {
 // ==================
 // Assistant Types
 // ==================
+
+// Phase 2.4: Vector Search Request Type
+export interface VectorSearchRequest {
+  query: string;
+  frameworkId?: number;
+  retryForIndexing?: boolean; // Retry search if no results found (for recently uploaded documents)
+}
 
 export interface AssistantSession {
   id: string;

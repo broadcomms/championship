@@ -315,26 +315,53 @@ function InfoTab({ document }: InfoTabProps) {
                 <span className="font-medium text-gray-900">{document.pageCount}</span>
               </div>
             )}
-            <div className="flex justify-between border-b border-gray-100 pb-2">
-              <span className="text-gray-600">Chunk Count</span>
-              <span className="font-medium text-gray-900">{document.chunkCount}</span>
-            </div>
-            {document.vectorIndexingStatus && (
+            {document.chunkCount && (
               <div className="flex justify-between border-b border-gray-100 pb-2">
-                <span className="text-gray-600">Vector Indexing</span>
-                <span className={`font-medium ${
-                  document.vectorIndexingStatus === 'completed' ? 'text-green-600' :
-                  document.vectorIndexingStatus === 'processing' ? 'text-blue-600' :
-                  document.vectorIndexingStatus === 'failed' ? 'text-red-600' :
-                  'text-gray-600'
-                }`}>
-                  {document.vectorIndexingStatus === 'completed' && '✓ Completed'}
-                  {document.vectorIndexingStatus === 'processing' && '⚙ Processing'}
-                  {document.vectorIndexingStatus === 'failed' && '✗ Failed'}
-                  {document.vectorIndexingStatus === 'pending' && '⏳ Pending'}
-                  {document.vectorIndexingStatus === 'partial' && '⚠ Partial'}
-                </span>
+                <span className="text-gray-600">Chunk Count</span>
+                <span className="font-medium text-gray-900">{document.chunkCount}</span>
               </div>
+            )}
+            {document.vectorIndexingStatus && (
+              <>
+                <div className="flex justify-between border-b border-gray-100 pb-2">
+                  <span className="text-gray-600">Vector Indexing</span>
+                  <span className={`font-medium ${
+                    document.vectorIndexingStatus === 'completed' ? 'text-green-600' :
+                    document.vectorIndexingStatus === 'processing' ? 'text-blue-600' :
+                    document.vectorIndexingStatus === 'indexing' ? 'text-orange-600' :
+                    document.vectorIndexingStatus === 'failed' ? 'text-red-600' :
+                    'text-gray-600'
+                  }`}>
+                    {document.vectorIndexingStatus === 'completed' && '✓ Completed - Searchable'}
+                    {document.vectorIndexingStatus === 'processing' && (
+                      <>
+                        Processing... {document.embeddingsGenerated && document.chunkCount 
+                          ? `${Math.round((document.embeddingsGenerated / document.chunkCount) * 100)}%`
+                          : '0%'}
+                      </>
+                    )}
+                    {document.vectorIndexingStatus === 'indexing' && 'Indexing... Please wait'}
+                    {document.vectorIndexingStatus === 'failed' && '✗ Failed'}
+                    {document.vectorIndexingStatus === 'pending' && '⏳ Pending'}
+                    {document.vectorIndexingStatus === 'partial' && '⚠ Partial'}
+                  </span>
+                </div>
+                {/* Phase 2.4: Progress bar for embedding generation */}
+                {document.vectorIndexingStatus === 'processing' && document.embeddingsGenerated !== undefined && document.chunkCount > 0 && (
+                  <div className="border-b border-gray-100 pb-2">
+                    <div className="flex justify-between text-xs text-gray-600 mb-1">
+                      <span>Embedding Progress</span>
+                      <span>{document.embeddingsGenerated} / {document.chunkCount} chunks</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${Math.round((document.embeddingsGenerated / document.chunkCount) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
             )}
             {document.embeddingsGenerated !== undefined && document.embeddingsGenerated > 0 && (
               <div className="flex justify-between border-b border-gray-100 pb-2">

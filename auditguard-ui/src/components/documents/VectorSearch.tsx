@@ -28,6 +28,7 @@ interface VectorSearchProps {
 export function VectorSearch({ workspaceId }: VectorSearchProps) {
   const [query, setQuery] = useState('');
   const [frameworkFilter, setFrameworkFilter] = useState<number | undefined>(undefined);
+  const [retryForIndexing, setRetryForIndexing] = useState(false); // Phase 2.4: Retry toggle for recent uploads
   const [frameworks, setFrameworks] = useState<ComplianceFrameworkInfo[]>([]);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -66,6 +67,7 @@ export function VectorSearch({ workspaceId }: VectorSearchProps) {
         {
           query,
           frameworkId: frameworkFilter,
+          retryForIndexing, // Phase 2.4: Send retry parameter to backend
         }
       );
 
@@ -80,9 +82,17 @@ export function VectorSearch({ workspaceId }: VectorSearchProps) {
   };
 
   const getSimilarityColor = (score: number): string => {
-    if (score >= 0.8) return 'text-green-600 bg-green-50';
-    if (score >= 0.6) return 'text-blue-600 bg-blue-50';
-    return 'text-gray-600 bg-gray-50';
+    // Phase 2.4: Updated thresholds for bge-small-en model
+    if (score >= 0.70) return 'text-green-600 bg-green-50'; // High - same topic
+    if (score >= 0.50) return 'text-blue-600 bg-blue-50'; // Medium - related content
+    return 'text-gray-600 bg-gray-50'; // Low - different topics
+  };
+
+  const getSimilarityCategory = (score: number): string => {
+    // Phase 2.4: Category labels for thresholds
+    if (score >= 0.70) return 'Same Topic';
+    if (score >= 0.50) return 'Related Content';
+    return 'Different Topics';
   };
 
   const highlightQuery = (text: string): string => {
@@ -136,6 +146,38 @@ export function VectorSearch({ workspaceId }: VectorSearchProps) {
             {isSearching ? 'Searching...' : '🔍 Search'}
           </Button>
         </div>
+        
+        {/* Phase 2.4: Retry toggle for recent uploads */}
+        <div className="mt-3 flex items-center gap-2">
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={retryForIndexing}
+              onChange={(e) => setRetryForIndexing(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span>Retry for recently uploaded documents (waits for indexing)</span>
+          </label>
+          <div className="group relative">
+            <svg 
+              className="h-4 w-4 text-gray-400 hover:text-gray-600" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
+              />
+            </svg>
+            <div className="invisible group-hover:visible absolute left-0 top-6 z-10 w-64 rounded-md bg-gray-900 px-3 py-2 text-xs text-white shadow-lg">
+              Enable this if searching for a document uploaded in the last few minutes. The system will wait up to 5 seconds for the vector index to become available.
+            </div>
+          </div>
+        </div>
+        
         {searchTime !== null && (
           <p className="mt-2 text-xs text-gray-500">
             Found {results.length} results in {searchTime}ms
@@ -147,6 +189,27 @@ export function VectorSearch({ workspaceId }: VectorSearchProps) {
       {error && (
         <div className="rounded-md bg-red-50 p-4">
           <p className="text-sm text-red-800">{error}</p>
+        </div>
+      )}
+
+      {/* Phase 2.4: Similarity Threshold Information */}
+      {results.length > 0 && (
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+          <h4 className="text-sm font-semibold text-blue-900 mb-2">📊 Similarity Score Thresholds</h4>
+          <div className="grid grid-cols-3 gap-3 text-xs">
+            <div className="bg-white rounded-md p-2 border border-green-200">
+              <div className="font-medium text-green-700">High (≥70%)</div>
+              <div className="text-gray-600 mt-1">Same topic - highly relevant content</div>
+            </div>
+            <div className="bg-white rounded-md p-2 border border-blue-200">
+              <div className="font-medium text-blue-700">Medium (50-80%)</div>
+              <div className="text-gray-600 mt-1">Related content - contextually similar</div>
+            </div>
+            <div className="bg-white rounded-md p-2 border border-gray-200">
+              <div className="font-medium text-gray-700">Low (&lt;60%)</div>
+              <div className="text-gray-600 mt-1">Different topics - weak connection</div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -177,8 +240,13 @@ export function VectorSearch({ workspaceId }: VectorSearchProps) {
                     Chunk #{result.chunkIndex + 1}
                   </p>
                 </div>
-                <div className={`rounded-full px-3 py-1 text-sm font-medium ${getSimilarityColor(result.similarityScore)}`}>
-                  {(result.similarityScore * 100).toFixed(0)}% match
+                <div className="text-right">
+                  <div className={`rounded-full px-3 py-1 text-sm font-medium ${getSimilarityColor(result.similarityScore)}`}>
+                    {(result.similarityScore * 100).toFixed(0)}% match
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {getSimilarityCategory(result.similarityScore)}
+                  </div>
                 </div>
               </div>
 

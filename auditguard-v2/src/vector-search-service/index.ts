@@ -11,10 +11,11 @@ export interface VectorSearchRequest {
   workspaceId: string;              // Workspace to search in
   frameworkId?: number;             // Optional compliance framework filter
   topK?: number;                    // Number of results (default: 10)
-  minScore?: number;                // Minimum similarity score (default: 0.7)
+  minScore?: number;                // Minimum similarity score (default: 0.7 - PHASE 2.3: adjusted for bge-small-en)
   includeChunks?: boolean;          // Include chunk text in results (default: true)
   page?: number;                    // Page number for pagination (default: 1)
   pageSize?: number;                // Results per page (default: 10)
+  retryForIndexing?: boolean;       // PHASE 2.3: Retry for recently uploaded vectors (default: false)
 }
 
 export interface VectorSearchResult {
@@ -63,7 +64,7 @@ export class VectorSearchService {
   }
 
   /**
-   * Perform vector similarity search
+   * PHASE 2.3: Perform vector similarity search with adjusted thresholds for bge-small-en
    * @param request Search parameters
    * @param hybridOptions Optional hybrid search configuration
    */
@@ -73,23 +74,28 @@ export class VectorSearchService {
   ): Promise<VectorSearchResponse> {
     const startTime = Date.now();
 
-    // Validate and set defaults
+    // PHASE 2.3: Adjusted defaults for bge-small-en model
+    // High similarity: ≥0.70 (same topic)
+    // Medium similarity: 0.50-0.80 (related content)
+    // Low similarity: <0.60 (different topics)
     const topK = request.topK || 10;
-    const minScore = request.minScore || 0.7;
+    const minScore = request.minScore || 0.7; // Default high threshold unchanged
     const page = request.page || 1;
     const pageSize = request.pageSize || 10;
+    const retryForIndexing = request.retryForIndexing || false;
 
-    this.env.logger.info('Vector search started', {
+    this.env.logger.info('🔍 Vector search started (PHASE 2.3: bge-small-en thresholds)', {
       query: request.query.substring(0, 100),
       workspaceId: request.workspaceId,
       frameworkId: request.frameworkId,
       topK,
       minScore,
+      retryForIndexing,
     });
 
     try {
-      // Perform vector search
-      const vectorResults = await this.vectorSearch(request, topK, minScore);
+      // PHASE 2.3: Perform vector search with retry logic if requested
+      const vectorResults = await this.vectorSearch(request, topK, minScore, retryForIndexing);
 
       this.env.logger.info('Vector search completed', {
         resultCount: vectorResults.length,
@@ -163,28 +169,37 @@ export class VectorSearchService {
   }
 
   /**
-   * Perform vector similarity search using embeddings
+   * PHASE 2.3: Perform vector similarity search using embeddings with retry logic
+   * Adjusted for bge-small-en similarity score ranges:
+   * - High similarity: ≥0.70 (same topic)
+   * - Medium similarity: 0.50-0.80 (related content)
+   * - Low similarity: <0.60 (different topics)
    */
   private async vectorSearch(
     request: VectorSearchRequest,
     topK: number,
-    minScore: number
+    minScore: number,
+    retryForIndexing: boolean = false
   ): Promise<VectorSearchResult[]> {
-    // Query vector index
+    // PHASE 2.3: Query vector index with retry logic for indexing delays
     const vectorResults = await this.embeddingService.querySimilarChunks(
       request.query,
       topK * 2, // Get extra results for filtering
       request.workspaceId,
-      request.frameworkId
+      request.frameworkId,
+      retryForIndexing // Pass retry flag to embedding service
     );
 
-    // Filter by minimum score
+    // PHASE 2.3: Filter by minimum score (adjusted thresholds for bge-small-en)
     const filteredResults = vectorResults.filter(r => r.score >= minScore);
 
-    this.env.logger.info('Vector index query completed', {
+    this.env.logger.info('📊 Vector index query completed (PHASE 2.3)', {
       rawResults: vectorResults.length,
       filteredResults: filteredResults.length,
       minScore,
+      thresholdInfo: minScore >= 0.70 ? 'HIGH (≥0.70)' : 
+                     minScore >= 0.50 ? 'MEDIUM (0.50-0.80)' : 
+                     'LOW (<0.60)',
     });
 
     // Enrich results with document metadata
