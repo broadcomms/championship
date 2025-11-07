@@ -308,102 +308,8 @@ export default function DocumentDetailsPage() {
           </div>
         )}
 
-        {/* Document Metadata */}
-        {!isEditing ? (
-          <div className="mb-8 rounded-lg bg-white p-6 shadow">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">Document Information</h2>
-            <div className="space-y-3 text-sm">
-              {document.title && (
-                <div className="flex justify-between border-b border-gray-100 pb-2">
-                  <span className="text-gray-600">Title</span>
-                  <span className="font-medium text-gray-900">{document.title}</span>
-                </div>
-              )}
-              {document.description && (
-                <div className="flex justify-between border-b border-gray-100 pb-2">
-                  <span className="text-gray-600">Description</span>
-                  <span className="font-medium text-gray-900">{document.description}</span>
-                </div>
-              )}
-              <div className="flex justify-between border-b border-gray-100 pb-2">
-                <span className="text-gray-600">File Name</span>
-                <span className="font-medium text-gray-900">{document.filename}</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-100 pb-2">
-                <span className="text-gray-600">File Size</span>
-                <span className="font-medium text-gray-900">{formatFileSize(document.fileSize)}</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-100 pb-2">
-                <span className="text-gray-600">Content Type</span>
-                <span className="font-medium text-gray-900">{document.contentType}</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-100 pb-2">
-                <span className="text-gray-600">Category</span>
-                <CategoryBadge category={document.category} />
-              </div>
-              <div className="flex justify-between border-b border-gray-100 pb-2">
-                <span className="text-gray-600">Processing Status</span>
-                <ProcessingIndicator status={document.processingStatus} />
-              </div>
-              {document.textExtracted && (
-                <>
-                  <div className="flex justify-between border-b border-gray-100 pb-2">
-                    <span className="text-gray-600">Text Extracted</span>
-                    <span className="font-medium text-green-600">Yes</span>
-                  </div>
-                  {document.wordCount && (
-                    <div className="flex justify-between border-b border-gray-100 pb-2">
-                      <span className="text-gray-600">Word Count</span>
-                      <span className="font-medium text-gray-900">{document.wordCount.toLocaleString()}</span>
-                    </div>
-                  )}
-                  {document.pageCount && (
-                    <div className="flex justify-between border-b border-gray-100 pb-2">
-                      <span className="text-gray-600">Page Count</span>
-                      <span className="font-medium text-gray-900">{document.pageCount}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between border-b border-gray-100 pb-2">
-                    <span className="text-gray-600">Chunk Count</span>
-                    <span className="font-medium text-gray-900">{document.chunkCount}</span>
-                  </div>
-                  {document.vectorIndexingStatus && (
-                    <div className="flex justify-between border-b border-gray-100 pb-2">
-                      <span className="text-gray-600">Vector Indexing</span>
-                      <span className={`font-medium ${
-                        document.vectorIndexingStatus === 'completed' ? 'text-green-600' :
-                        document.vectorIndexingStatus === 'processing' ? 'text-blue-600' :
-                        document.vectorIndexingStatus === 'failed' ? 'text-red-600' :
-                        'text-gray-600'
-                      }`}>
-                        {document.vectorIndexingStatus === 'completed' && '✓ Completed'}
-                        {document.vectorIndexingStatus === 'processing' && '⚙ Processing'}
-                        {document.vectorIndexingStatus === 'failed' && '✗ Failed'}
-                        {document.vectorIndexingStatus === 'pending' && '⏳ Pending'}
-                        {document.vectorIndexingStatus === 'partial' && '⚠ Partial'}
-                      </span>
-                    </div>
-                  )}
-                  {document.embeddingsGenerated !== undefined && document.embeddingsGenerated > 0 && (
-                    <div className="flex justify-between border-b border-gray-100 pb-2">
-                      <span className="text-gray-600">Embeddings Generated</span>
-                      <span className="font-medium text-gray-900">{document.embeddingsGenerated}</span>
-                    </div>
-                  )}
-                </>
-              )}
-              <div className="flex justify-between border-b border-gray-100 pb-2">
-                <span className="text-gray-600">Uploaded</span>
-                <span className="font-medium text-gray-900">{formatDate(document.uploadedAt)}</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-100 pb-2">
-                <span className="text-gray-600">Last Updated</span>
-                <span className="font-medium text-gray-900">{formatDate(document.updatedAt)}</span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* Edit Form */
+        {/* Edit Form - Only shown when editing */}
+        {isEditing && (
           <div className="mb-8 rounded-lg bg-white p-6 shadow">
             <h2 className="mb-4 text-lg font-semibold text-gray-900">Edit Document</h2>
             <div className="space-y-4">
@@ -464,6 +370,7 @@ export default function DocumentDetailsPage() {
           <DocumentContentViewer
             workspaceId={workspaceId}
             documentId={documentId}
+            document={document}
             hasExtractedText={document.textExtracted || false}
             chunkCount={document.chunkCount}
           />

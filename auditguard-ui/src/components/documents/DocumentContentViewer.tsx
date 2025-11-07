@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { DocumentChunksViewer } from './DocumentChunksViewer';
+import { CategoryBadge } from './CategoryBadge';
+import { ProcessingIndicator } from './ProcessingIndicator';
+import { Document } from '@/types';
 
 interface DocumentContent {
   fullText: string;
@@ -16,6 +19,7 @@ interface DocumentContent {
 interface DocumentContentViewerProps {
   workspaceId: string;
   documentId: string;
+  document: Document;
   hasExtractedText: boolean;
   chunkCount?: number;
 }
@@ -23,6 +27,7 @@ interface DocumentContentViewerProps {
 export function DocumentContentViewer({
   workspaceId,
   documentId,
+  document,
   hasExtractedText,
   chunkCount,
 }: DocumentContentViewerProps) {
@@ -30,7 +35,7 @@ export function DocumentContentViewer({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isContentUnavailable, setIsContentUnavailable] = useState(false);
-  const [activeTab, setActiveTab] = useState<'summary' | 'fullText' | 'chunks'>('summary');
+  const [activeTab, setActiveTab] = useState<'info' | 'fullText' | 'chunks'>('info');
 
   const totalChunks = chunkCount ?? content?.chunks?.length ?? 0;
   const hasChunks = totalChunks > 0;
@@ -43,7 +48,7 @@ export function DocumentContentViewer({
 
   useEffect(() => {
     if (!hasChunks && activeTab === 'chunks') {
-      setActiveTab('summary');
+      setActiveTab('info');
     }
   }, [hasChunks, activeTab]);
 
@@ -153,9 +158,9 @@ export function DocumentContentViewer({
       <div className="border-b border-gray-200">
         <nav className="flex" aria-label="Tabs">
           <TabButton
-            active={activeTab === 'summary'}
-            onClick={() => setActiveTab('summary')}
-            label="Summary"
+            active={activeTab === 'info'}
+            onClick={() => setActiveTab('info')}
+            label="Information"
           />
           <TabButton
             active={activeTab === 'fullText'}
@@ -174,7 +179,7 @@ export function DocumentContentViewer({
 
       {/* Content Display */}
       <div className="p-6">
-        {activeTab === 'summary' && <SummaryTab summary={content.summary} />}
+        {activeTab === 'info' && <InfoTab document={document} />}
         {activeTab === 'fullText' && (
           <FullTextTab 
             fullText={content.fullText} 
@@ -223,16 +228,120 @@ function TabButton({ active, onClick, label }: TabButtonProps) {
   );
 }
 
-interface SummaryTabProps {
-  summary: string;
+interface InfoTabProps {
+  document: Document;
 }
 
-function SummaryTab({ summary }: SummaryTabProps) {
+function InfoTab({ document }: InfoTabProps) {
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const formatDate = (timestamp: number): string => {
+    return new Date(timestamp).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   return (
     <div>
-      <h3 className="mb-4 text-lg font-semibold text-gray-900">Document Summary</h3>
-      <div className="prose prose-sm max-w-none">
-        <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{summary}</p>
+      <h3 className="mb-4 text-lg font-semibold text-gray-900">Document Information</h3>
+      <div className="space-y-3 text-sm">
+        {document.title && (
+          <div className="flex justify-between border-b border-gray-100 pb-2">
+            <span className="text-gray-600">Title</span>
+            <span className="font-medium text-gray-900">{document.title}</span>
+          </div>
+        )}
+        {document.description && (
+          <div className="border-b border-gray-100 pb-2">
+            <span className="text-gray-600 block mb-1">Description</span>
+            <p className="font-medium text-gray-900 text-sm leading-relaxed">{document.description}</p>
+          </div>
+        )}
+        <div className="flex justify-between border-b border-gray-100 pb-2">
+          <span className="text-gray-600">File Name</span>
+          <span className="font-medium text-gray-900">{document.filename}</span>
+        </div>
+        <div className="flex justify-between border-b border-gray-100 pb-2">
+          <span className="text-gray-600">File Size</span>
+          <span className="font-medium text-gray-900">{formatFileSize(document.fileSize)}</span>
+        </div>
+        <div className="flex justify-between border-b border-gray-100 pb-2">
+          <span className="text-gray-600">Content Type</span>
+          <span className="font-medium text-gray-900">{document.contentType}</span>
+        </div>
+        <div className="flex justify-between border-b border-gray-100 pb-2">
+          <span className="text-gray-600">Category</span>
+          <CategoryBadge category={document.category} />
+        </div>
+        <div className="flex justify-between border-b border-gray-100 pb-2">
+          <span className="text-gray-600">Processing Status</span>
+          <ProcessingIndicator status={document.processingStatus} />
+        </div>
+        {document.textExtracted && (
+          <>
+            <div className="flex justify-between border-b border-gray-100 pb-2">
+              <span className="text-gray-600">Text Extracted</span>
+              <span className="font-medium text-green-600">Yes</span>
+            </div>
+            {document.wordCount && (
+              <div className="flex justify-between border-b border-gray-100 pb-2">
+                <span className="text-gray-600">Word Count</span>
+                <span className="font-medium text-gray-900">{document.wordCount.toLocaleString()}</span>
+              </div>
+            )}
+            {document.pageCount && (
+              <div className="flex justify-between border-b border-gray-100 pb-2">
+                <span className="text-gray-600">Page Count</span>
+                <span className="font-medium text-gray-900">{document.pageCount}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-b border-gray-100 pb-2">
+              <span className="text-gray-600">Chunk Count</span>
+              <span className="font-medium text-gray-900">{document.chunkCount}</span>
+            </div>
+            {document.vectorIndexingStatus && (
+              <div className="flex justify-between border-b border-gray-100 pb-2">
+                <span className="text-gray-600">Vector Indexing</span>
+                <span className={`font-medium ${
+                  document.vectorIndexingStatus === 'completed' ? 'text-green-600' :
+                  document.vectorIndexingStatus === 'processing' ? 'text-blue-600' :
+                  document.vectorIndexingStatus === 'failed' ? 'text-red-600' :
+                  'text-gray-600'
+                }`}>
+                  {document.vectorIndexingStatus === 'completed' && '✓ Completed'}
+                  {document.vectorIndexingStatus === 'processing' && '⚙ Processing'}
+                  {document.vectorIndexingStatus === 'failed' && '✗ Failed'}
+                  {document.vectorIndexingStatus === 'pending' && '⏳ Pending'}
+                  {document.vectorIndexingStatus === 'partial' && '⚠ Partial'}
+                </span>
+              </div>
+            )}
+            {document.embeddingsGenerated !== undefined && document.embeddingsGenerated > 0 && (
+              <div className="flex justify-between border-b border-gray-100 pb-2">
+                <span className="text-gray-600">Embeddings Generated</span>
+                <span className="font-medium text-gray-900">{document.embeddingsGenerated}</span>
+              </div>
+            )}
+          </>
+        )}
+        <div className="flex justify-between border-b border-gray-100 pb-2">
+          <span className="text-gray-600">Uploaded</span>
+          <span className="font-medium text-gray-900">{formatDate(document.uploadedAt)}</span>
+        </div>
+        <div className="flex justify-between border-b border-gray-100 pb-2">
+          <span className="text-gray-600">Last Updated</span>
+          <span className="font-medium text-gray-900">{formatDate(document.updatedAt)}</span>
+        </div>
       </div>
     </div>
   );
