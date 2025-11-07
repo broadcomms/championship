@@ -351,23 +351,109 @@ export default class extends Each<Body, Env> {
       });
 
       // STEP 6: Run AI enrichment (generate title and description)
-      this.env.logger.info('🤖 Triggering AI enrichment after text extraction', {
+      // This MUST happen immediately after text extraction, before chunking
+      this.env.logger.info('🤖 Starting AI enrichment immediately after text extraction', {
         documentId,
         workspaceId,
+        textLength: text.length,
+        wordCount: wordCount,
       });
 
+      let enrichedTitle = document.filename.replace(/\.(pdf|docx|txt|md)$/i, '');
+      let enrichedDescription = `Uploaded ${document.contentType} document with ${wordCount} words.`;
+
       try {
-        await this.env.DOCUMENT_SERVICE.processDocument(documentId, workspaceId, userId);
-        this.env.logger.info('✅ AI enrichment completed', {
+        // Call AI model directly here (don't delegate to document-service)
+        const textPreview = text.substring(0, 4000);
+        
+        const prompt = `Analyze this document and provide a title and description.
+
+Document filename: ${document.filename}
+Content type: ${document.contentType}
+Word count: ${wordCount}
+${pageCount ? `Page count: ${pageCount}` : ''}
+
+Document text:
+${textPreview}
+
+Respond with ONLY a JSON object in this exact format:
+{
+  "title": "A clear, descriptive title (50 chars max)",
+  "description": "A 2-3 sentence summary of the document's purpose and content"
+}`;
+
+        this.env.logger.info('📤 Calling AI model for enrichment', {
           documentId,
+          model: 'llama-3.1-8b-instruct-fast',
+          promptLength: prompt.length,
         });
+
+        const aiResponse = await this.env.AI.run('llama-3.1-8b-instruct-fast', {
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3,
+          max_tokens: 300,
+        });
+
+        this.env.logger.info('📥 AI response received', {
+          documentId,
+          responseType: typeof aiResponse,
+          response: JSON.stringify(aiResponse).substring(0, 500),
+        });
+
+        // Parse AI response - handle different response formats
+        let parsed: any;
+        if (typeof aiResponse === 'string') {
+          parsed = JSON.parse(aiResponse);
+        } else if ((aiResponse as any).response) {
+          parsed = JSON.parse((aiResponse as any).response);
+        } else {
+          parsed = aiResponse;
+        }
+
+        if (parsed.title && parsed.description) {
+          enrichedTitle = parsed.title.substring(0, 200); // Truncate if too long
+          enrichedDescription = parsed.description.substring(0, 500);
+          
+          this.env.logger.info('✅ AI enrichment successful', {
+            documentId,
+            title: enrichedTitle,
+            descriptionLength: enrichedDescription.length,
+          });
+        } else {
+          this.env.logger.warn('⚠️ AI response missing title or description, using fallback', {
+            documentId,
+            parsed: JSON.stringify(parsed),
+          });
+        }
+
       } catch (enrichmentError) {
-        this.env.logger.error('AI enrichment failed (non-fatal)', {
+        this.env.logger.error('⚠️ AI enrichment failed, using fallback', {
           documentId,
           error: enrichmentError instanceof Error ? enrichmentError.message : String(enrichmentError),
+          stack: enrichmentError instanceof Error ? enrichmentError.stack : undefined,
         });
-        // Don't fail the entire process if enrichment fails
       }
+
+      // STEP 6.5: Update database with enriched metadata IMMEDIATELY
+      this.env.logger.info('💾 Updating document with enriched metadata', {
+        documentId,
+        title: enrichedTitle,
+        descriptionLength: enrichedDescription.length,
+      });
+
+      // Update title and description directly in the database
+      await (this.env.AUDITGUARD_DB as any).prepare(
+        `UPDATE documents
+         SET title = ?,
+             description = ?,
+             updated_at = ?
+         WHERE id = ?`
+      ).bind(enrichedTitle, enrichedDescription, Date.now(), documentId).run();
+
+      this.env.logger.info('✅ Enriched metadata saved to database', {
+        documentId,
+        title: enrichedTitle,
+      });
 
       // Acknowledge success - SmartBucket will continue indexing in background
       message.ack();

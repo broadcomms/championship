@@ -867,30 +867,9 @@ export default class extends Service<Env> {
       .where('id', '=', documentId)
       .execute();
 
-    // 🚀 AUTO-TRIGGER AI ENRICHMENT: If extracted_text was just saved, run enrichment
-    if (data.extractedText !== undefined && data.extractedText.length > 0) {
-      this.env.logger.info('🚀 Auto-triggering AI enrichment (extracted_text just saved)', {
-        documentId,
-        textLength: data.extractedText.length,
-      });
-
-      // Get workspace ID from database
-      const doc = await db
-        .selectFrom('documents')
-        .select(['workspace_id', 'uploaded_by'])
-        .where('id', '=', documentId)
-        .executeTakeFirst();
-
-      if (doc) {
-        // Trigger enrichment asynchronously (don't wait for it)
-        this.processDocument(documentId, doc.workspace_id, doc.uploaded_by).catch((err) => {
-          this.env.logger.error('Auto-enrichment failed (non-blocking)', {
-            documentId,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        });
-      }
-    }
+    // NOTE: AI enrichment is now handled directly in document-processor
+    // This auto-trigger has been disabled to avoid duplicate enrichment attempts
+    // The enrichment happens immediately after text extraction in the processor
   }
 
   /**
