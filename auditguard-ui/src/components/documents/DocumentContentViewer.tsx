@@ -166,13 +166,13 @@ export function DocumentContentViewer({
           <TabButton
             active={activeTab === 'fullText'}
             onClick={() => setActiveTab('fullText')}
-            label="Full Text"
+            label="Text"
           />
           {hasChunks && (
             <TabButton
               active={activeTab === 'chunks'}
               onClick={() => setActiveTab('chunks')}
-              label={`Document Chunks (${totalChunks})`}
+              label={`Chunks (${totalChunks})`}
             />
           )}
         </nav>
