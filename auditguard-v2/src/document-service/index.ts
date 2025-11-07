@@ -8,6 +8,7 @@ import { VultrStorageService } from '../storage-service';
 import { VectorSearchService, VectorSearchRequest, VectorSearchResponse } from '../vector-search-service';
 import { ComplianceTaggingService } from '../compliance-tagging-service';
 import { EmbeddingService } from '../embedding-service';
+import { TextExtractionService } from '../text-extraction-service';
 
 interface UploadDocumentInput {
   workspaceId: string;
@@ -1213,6 +1214,289 @@ Respond with ONLY a JSON object in this exact format:
       await this.updateProcessingStatus(documentId, 'failed');
       throw error;
     }
+  }
+
+  /**
+   * Re-process document: Lightweight AI re-enrichment for title/description
+   * This is used by the "Reprocess" button to regenerate metadata without re-chunking/re-embedding
+   * 
+   * Phase 1 (current): Re-enrich title/description only
+   * Future phases: Add re-chunking, re-embedding, framework detection, etc.
+   */
+  async reProcessDocument(
+    documentId: string,
+    workspaceId: string
+  ): Promise<{
+    success: boolean;
+    title: string;
+    description: string;
+  }> {
+    const db = this.getDb();
+
+    this.env.logger.info('🔄 Starting document reprocessing (lightweight re-enrichment)', {
+      documentId,
+      workspaceId,
+    });
+
+    // Get document with extracted_text from D1
+    const document = await db
+      .selectFrom('documents')
+      .selectAll()
+      .where('id', '=', documentId)
+      .where('workspace_id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!document) {
+      throw new Error('Document not found');
+    }
+
+    // Check if extracted_text exists
+    const extractedText = (document as any).extracted_text;
+    if (!extractedText || extractedText.length === 0) {
+      this.env.logger.warn('⚠️ Document missing extracted_text', {
+        documentId,
+        filename: document.filename,
+      });
+      throw new Error('Document text not yet extracted. Please re-extract text from the "Full Text" tab first.');
+    }
+
+    this.env.logger.info('✅ Document text found in D1', {
+      documentId,
+      textLength: extractedText.length,
+      wordCount: document.word_count,
+    });
+
+    // Prepare AI enrichment
+    const textPreview = extractedText.substring(0, 4000); // First 4K chars for AI
+    
+    const prompt = `Analyze this document and provide a title and description.
+
+Document filename: ${document.filename}
+Content type: ${document.content_type}
+Word count: ${document.word_count || 0}
+${document.page_count ? `Page count: ${document.page_count}` : ''}
+
+Document text:
+${textPreview}
+
+Respond with ONLY a JSON object in this exact format:
+{
+  "title": "A clear, descriptive title (50 chars max)",
+  "description": "A 2-3 sentence summary of the document's purpose and content"
+}`;
+
+    // Fallback values (used if AI fails)
+    let enrichedTitle = document.filename.replace(/\.(pdf|docx|txt|md)$/i, '');
+    let enrichedDescription = `Uploaded ${document.content_type} document with ${document.word_count || 0} words.`;
+
+    try {
+      this.env.logger.info('📤 Calling AI model for re-enrichment', {
+        documentId,
+        model: 'llama-3.1-8b-instruct-fast',
+        promptLength: prompt.length,
+        textPreviewLength: textPreview.length,
+      });
+
+      const aiResponse = await this.env.AI.run('llama-3.1-8b-instruct-fast', {
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+        max_tokens: 300,
+      });
+
+      this.env.logger.info('📥 AI response received', {
+        documentId,
+        responseType: typeof aiResponse,
+        responsePreview: JSON.stringify(aiResponse).substring(0, 200),
+      });
+
+      // Parse AI response - handle different response formats
+      let parsed: any;
+      if (typeof aiResponse === 'string') {
+        parsed = JSON.parse(aiResponse);
+      } else if ((aiResponse as any).response) {
+        parsed = JSON.parse((aiResponse as any).response);
+      } else {
+        parsed = aiResponse;
+      }
+
+      if (parsed.title && parsed.description) {
+        enrichedTitle = parsed.title.substring(0, 200); // Truncate if too long
+        enrichedDescription = parsed.description.substring(0, 500);
+        
+        this.env.logger.info('✅ AI re-enrichment successful', {
+          documentId,
+          title: enrichedTitle,
+          descriptionLength: enrichedDescription.length,
+        });
+      } else {
+        this.env.logger.warn('⚠️ AI response missing title or description fields', {
+          documentId,
+          parsedResponse: JSON.stringify(parsed),
+        });
+        // Will use fallback values
+      }
+
+    } catch (enrichmentError) {
+      this.env.logger.error('⚠️ AI re-enrichment failed, using fallback metadata', {
+        documentId,
+        error: enrichmentError instanceof Error ? enrichmentError.message : String(enrichmentError),
+        stack: enrichmentError instanceof Error ? enrichmentError.stack : undefined,
+        fallbackTitle: enrichedTitle,
+        fallbackDescription: enrichedDescription,
+      });
+      // Continue with fallback values
+    }
+
+    // Update database with new enriched metadata
+    this.env.logger.info('💾 Updating document with re-enriched metadata', {
+      documentId,
+      title: enrichedTitle,
+      descriptionLength: enrichedDescription.length,
+    });
+
+    await db
+      .updateTable('documents')
+      .set({
+        title: enrichedTitle,
+        description: enrichedDescription,
+        updated_at: Date.now(),
+      } as any)
+      .where('id', '=', documentId)
+      .execute();
+
+    this.env.logger.info('✅ Document reprocessing completed successfully', {
+      documentId,
+      title: enrichedTitle,
+    });
+
+    return {
+      success: true,
+      title: enrichedTitle,
+      description: enrichedDescription,
+    };
+  }
+
+  /**
+   * Re-extract text from Vultr storage and update D1 database
+   * This is used by the "Re-extract Text" button on the Full Text tab
+   * for old documents that don't have extracted_text in D1
+   */
+  async reExtractText(
+    documentId: string,
+    workspaceId: string,
+    userId: string
+  ): Promise<{
+    success: boolean;
+    extractedText: string;
+    wordCount: number;
+    pageCount: number | null;
+  }> {
+    const db = this.getDb();
+
+    this.env.logger.info('🔄 Starting text re-extraction from Vultr storage', {
+      documentId,
+      workspaceId,
+      userId,
+    });
+
+    // Get document
+    const document = await db
+      .selectFrom('documents')
+      .selectAll()
+      .where('id', '=', documentId)
+      .where('workspace_id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!document) {
+      throw new Error('Document not found');
+    }
+
+    // Check if vultr_key exists
+    const vultrKey = (document as any).vultr_key;
+    if (!vultrKey) {
+      throw new Error('Document does not have a Vultr storage key. Cannot re-extract text.');
+    }
+
+    this.env.logger.info('📥 Downloading document from Vultr storage', {
+      documentId,
+      vultrKey,
+      filename: document.filename,
+      contentType: document.content_type,
+    });
+
+    // Download file from Vultr storage
+    const vultrStorage = new VultrStorageService(this.env);
+    const fileBuffer = await vultrStorage.getDocument(vultrKey);
+
+    this.env.logger.info('✅ File downloaded from Vultr', {
+      documentId,
+      fileSize: fileBuffer.byteLength,
+    });
+
+    // Extract text using TextExtractionService
+    this.env.logger.info('📄 Extracting text from document', {
+      documentId,
+      contentType: document.content_type,
+      filename: document.filename,
+    });
+
+    const textExtractor = new TextExtractionService(this.env);
+    const { text, pageCount, wordCount, metadata } = await textExtractor.extractText(
+      fileBuffer,
+      document.content_type,
+      document.filename
+    );
+
+    // Validate extraction quality
+    const validation = textExtractor.validateExtraction({ text, pageCount, wordCount, metadata });
+    if (!validation.isValid) {
+      this.env.logger.warn('⚠️ Text extraction quality warnings', {
+        documentId,
+        warnings: validation.warnings,
+      });
+    }
+
+    this.env.logger.info('✅ Text extraction completed', {
+      documentId,
+      textLength: text.length,
+      wordCount,
+      pageCount,
+      warnings: validation.warnings,
+    });
+
+    // Update D1 database with extracted text
+    this.env.logger.info('💾 Saving extracted text to D1 database', {
+      documentId,
+      textLength: text.length,
+      wordCount,
+      pageCount,
+    });
+
+    await db
+      .updateTable('documents')
+      .set({
+        extracted_text: text,
+        word_count: wordCount,
+        page_count: pageCount || null,
+        extraction_status: 'completed',
+        updated_at: Date.now(),
+      } as any)
+      .where('id', '=', documentId)
+      .execute();
+
+    this.env.logger.info('✅ Text re-extraction completed successfully', {
+      documentId,
+      textLength: text.length,
+      wordCount,
+      pageCount,
+    });
+
+    return {
+      success: true,
+      extractedText: text,
+      wordCount,
+      pageCount,
+    };
   }
 
   /**

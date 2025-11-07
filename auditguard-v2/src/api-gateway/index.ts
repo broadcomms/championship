@@ -534,20 +534,28 @@ export default class extends Service<Env> {
           storageKey: document.storageKey,
         });
 
-        // Call DOCUMENT_SERVICE.processDocument() directly (queue observer is broken)
-        // This will trigger AI enrichment, chunking, and re-indexing
+        // Call DOCUMENT_SERVICE.reProcessDocument() for lightweight AI re-enrichment
+        // This ONLY re-generates title/description (fast, reliable)
+        // Future phases: Add re-chunking, re-embedding, etc. one by one
         try {
-          await this.env.DOCUMENT_SERVICE.processDocument(
+          const result = await this.env.DOCUMENT_SERVICE.reProcessDocument(
             documentId,
-            workspaceId,
-            user.userId
+            workspaceId
           );
+
+          this.env.logger.info('✅ Document reprocessed successfully', {
+            documentId,
+            title: result.title,
+            descriptionLength: result.description.length,
+          });
 
           return new Response(
             JSON.stringify({
               success: true,
               message: 'Document reprocessed successfully',
               documentId,
+              title: result.title,
+              description: result.description,
             }),
             {
               headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -557,12 +565,75 @@ export default class extends Service<Env> {
           this.env.logger.error('Document reprocessing failed', {
             documentId,
             error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
           });
 
           return new Response(
             JSON.stringify({
               success: false,
               error: 'Failed to reprocess document',
+              details: error instanceof Error ? error.message : String(error),
+            }),
+            {
+              status: 500,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
+      }
+
+      // Match /api/workspaces/:id/documents/:documentId/re-extract-text
+      // This endpoint re-extracts text from Vultr storage for old documents
+      const reExtractTextMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/re-extract-text$/);
+      if (reExtractTextMatch && reExtractTextMatch[1] && reExtractTextMatch[2] && request.method === 'POST') {
+        const workspaceId = reExtractTextMatch[1];
+        const documentId = reExtractTextMatch[2];
+        const user = await this.validateSession(request);
+
+        this.env.logger.info('🔄 Starting text re-extraction for old document', {
+          documentId,
+          workspaceId,
+          userId: user.userId,
+        });
+
+        try {
+          const result = await this.env.DOCUMENT_SERVICE.reExtractText(
+            documentId,
+            workspaceId,
+            user.userId
+          );
+
+          this.env.logger.info('✅ Text re-extraction successful', {
+            documentId,
+            textLength: result.extractedText.length,
+            wordCount: result.wordCount,
+            pageCount: result.pageCount,
+          });
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: 'Text re-extracted successfully',
+              documentId,
+              textLength: result.extractedText.length,
+              wordCount: result.wordCount,
+              pageCount: result.pageCount,
+            }),
+            {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        } catch (error) {
+          this.env.logger.error('❌ Text re-extraction failed', {
+            documentId,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'Failed to re-extract text',
               details: error instanceof Error ? error.message : String(error),
             }),
             {
