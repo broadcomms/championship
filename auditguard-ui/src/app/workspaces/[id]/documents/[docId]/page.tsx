@@ -29,6 +29,7 @@ export default function DocumentDetailsPage() {
   const [document, setDocument] = useState<Document | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -125,12 +126,35 @@ export default function DocumentDetailsPage() {
   const handleProcess = async () => {
     setIsProcessing(true);
     setError('');
+    setSuccessMessage('');
     try {
-      await api.post(`/api/workspaces/${workspaceId}/documents/${documentId}/process`, {});
-      // Refresh document to get updated status
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/documents/${documentId}/process`,
+        {
+          method: 'POST',
+          credentials: 'include',
+        }
+      );
+
+      const data = await response.json();
+
+      if (!data.success) {
+        // Check if it's a "missing text" error
+        if (data.details?.includes('not yet extracted') || data.details?.includes('text not yet extracted')) {
+          setError('Text not yet extracted. Please go to the "Full Text" tab and click "Re-extract Text" first, then try reprocessing again.');
+        } else {
+          setError(data.details || data.error || 'Failed to process document');
+        }
+        return;
+      }
+
+      // Success - show success message
+      setSuccessMessage('Document reprocessed successfully! Title and description have been updated.');
+      
+      // Refresh document to get updated title/description
       await fetchDocument();
     } catch (err: any) {
-      setError(err.error || 'Failed to process document');
+      setError(err.error || err.message || 'Failed to process document');
     } finally {
       setIsProcessing(false);
     }
@@ -262,8 +286,25 @@ export default function DocumentDetailsPage() {
 
         {/* Error Display */}
         {error && (
-          <div className="mb-6 rounded-md bg-red-50 p-4">
-            <p className="text-sm text-red-800">{error}</p>
+          <div className="mb-6 rounded-md bg-red-50 border border-red-200 p-4">
+            <div className="flex items-start gap-3">
+              <svg className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Success Message Display */}
+        {successMessage && (
+          <div className="mb-6 rounded-md bg-green-50 border border-green-200 p-4">
+            <div className="flex items-start gap-3">
+              <svg className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-green-800">{successMessage}</p>
+            </div>
           </div>
         )}
 

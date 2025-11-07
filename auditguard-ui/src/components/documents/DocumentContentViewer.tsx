@@ -68,6 +68,11 @@ export function DocumentContentViewer({
     }
   };
 
+  const handleReExtract = () => {
+    // Refresh content after re-extraction
+    fetchContent();
+  };
+
   if (!hasExtractedText) {
     return (
       <div className="rounded-lg bg-gray-50 border-2 border-dashed border-gray-300 p-8">
@@ -170,7 +175,14 @@ export function DocumentContentViewer({
       {/* Content Display */}
       <div className="p-6">
         {activeTab === 'summary' && <SummaryTab summary={content.summary} />}
-        {activeTab === 'fullText' && <FullTextTab fullText={content.fullText} />}
+        {activeTab === 'fullText' && (
+          <FullTextTab 
+            fullText={content.fullText} 
+            workspaceId={workspaceId}
+            documentId={documentId}
+            onReExtract={handleReExtract}
+          />
+        )}
         {activeTab === 'chunks' && hasChunks && (
           <div className="-mx-6">
             <DocumentChunksViewer
@@ -228,9 +240,16 @@ function SummaryTab({ summary }: SummaryTabProps) {
 
 interface FullTextTabProps {
   fullText: string;
+  workspaceId: string;
+  documentId: string;
+  onReExtract?: () => void;
 }
 
-function FullTextTab({ fullText }: FullTextTabProps) {
+function FullTextTab({ fullText, workspaceId, documentId, onReExtract }: FullTextTabProps) {
+  const [isReExtracting, setIsReExtracting] = useState(false);
+  const [reExtractError, setReExtractError] = useState('');
+  const [reExtractSuccess, setReExtractSuccess] = useState('');
+
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(fullText);
@@ -239,26 +258,96 @@ function FullTextTab({ fullText }: FullTextTabProps) {
     }
   };
 
+  const handleReExtractText = async () => {
+    setIsReExtracting(true);
+    setReExtractError('');
+    setReExtractSuccess('');
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/documents/${documentId}/re-extract-text`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        setReExtractError(data.details || data.error || 'Failed to re-extract text');
+        return;
+      }
+
+      // Success - show success message
+      setReExtractSuccess(`Text re-extracted successfully! (${data.wordCount?.toLocaleString() || 0} words${data.pageCount ? `, ${data.pageCount} pages` : ''})`);
+      
+      // Call parent callback to refresh document data
+      if (onReExtract) {
+        onReExtract();
+      }
+    } catch (error: any) {
+      setReExtractError('Failed to re-extract text from storage');
+    } finally {
+      setIsReExtracting(false);
+    }
+  };
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900">Extracted Text</h3>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
-          </svg>
-          Copy text
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleReExtractText}
+            disabled={isReExtracting}
+            className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-orange-300 hover:text-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Re-extract text from original file (useful for old documents)"
+          >
+            {isReExtracting ? (
+              <>
+                <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Re-extracting...
+              </>
+            ) : (
+              <>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Re-extract Text
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
+            </svg>
+            Copy text
+          </button>
+        </div>
       </div>
+
+      {/* Re-extraction success/error messages */}
+      {reExtractSuccess && (
+        <div className="mb-4 rounded-md bg-green-50 border border-green-200 p-3">
+          <p className="text-sm text-green-800">{reExtractSuccess}</p>
+        </div>
+      )}
+      {reExtractError && (
+        <div className="mb-4 rounded-md bg-red-50 border border-red-200 p-3">
+          <p className="text-sm text-red-800">{reExtractError}</p>
+        </div>
+      )}
+
       <div className="max-h-[600px] overflow-y-auto rounded-md bg-gray-50 border border-gray-200 p-4">
         <pre className="whitespace-pre-wrap font-mono text-xs text-gray-800 leading-relaxed">
           {fullText}
