@@ -57,6 +57,7 @@ export class EmbeddingService {
 
   /**
    * Generate embeddings for document chunks and store in Vector Index
+   * PHASE 2 MIGRATION: Now uses Raindrop AI (bge-small-en) with 50-vector batch limit
    * @param documentId Document ID
    * @param workspaceId Workspace ID
    * @param chunks Chunks from chunking service
@@ -82,13 +83,15 @@ export class EmbeddingService {
     const fullConfig: EmbeddingConfig = { ...this.DEFAULT_CONFIG, ...config };
     const startTime = Date.now();
 
-    this.env.logger.info('Starting embedding generation with config', {
+    this.env.logger.info('Starting embedding generation with Raindrop AI', {
       documentId,
       workspaceId,
       totalChunks: chunks.length,
       batchSize: fullConfig.batchSize,
       hasAI: !!this.env.AI,
       hasVectorIndex: !!this.env.DOCUMENT_EMBEDDINGS,
+      model: 'bge-small-en',
+      vectorBatchLimit: 50,
     });
 
     if (chunks.length !== chunkIds.length) {
@@ -99,7 +102,11 @@ export class EmbeddingService {
     let successCount = 0;
     let failureCount = 0;
 
-    // Process chunks in batches
+    // PHASE 2: Process in embedding batches first, then vector storage batches
+    // Raindrop Vector Index has 50-vector limit per upsert
+    const VECTOR_BATCH_SIZE = 50;
+
+    // Process chunks in batches for embedding generation
     for (let i = 0; i < chunks.length; i += fullConfig.batchSize) {
       const batchChunks = chunks.slice(i, i + fullConfig.batchSize);
       const batchIds = chunkIds.slice(i, i + fullConfig.batchSize);
@@ -155,6 +162,7 @@ export class EmbeddingService {
       successCount,
       failureCount,
       duration,
+      throughput: `${(chunks.length / (duration / 1000)).toFixed(2)} chunks/sec`,
     });
 
     return {
@@ -169,6 +177,7 @@ export class EmbeddingService {
 
   /**
    * Process a batch of chunks: generate embeddings and store in vector index
+   * PHASE 2: Implements 50-vector batch limit for Raindrop Vector Index
    */
   private async processBatch(
     documentId: string,
@@ -186,19 +195,23 @@ export class EmbeddingService {
     );
 
     // Step 2: Store embeddings in Vector Index + Database
+    // PHASE 2: Split into 50-vector batches for Vector Index upsert limit
+    const VECTOR_BATCH_SIZE = 50;
     const results: EmbeddingResult[] = [];
 
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      const chunkId = chunkIds[i];
-      const embedding = embeddings[i];
-      const chunkIndex = startIndex + i;
+    for (let batchStart = 0; batchStart < chunks.length; batchStart += VECTOR_BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + VECTOR_BATCH_SIZE, chunks.length);
+      const vectorBatch: Array<{ id: string; values: number[]; metadata: any }> = [];
 
-      try {
-        // Generate vector ID
+      // Prepare batch of vectors
+      for (let i = batchStart; i < batchEnd; i++) {
+        const chunk = chunks[i];
+        const chunkId = chunkIds[i];
+        const embedding = embeddings[i];
+        const chunkIndex = startIndex + i;
+
         const vectorId = `${documentId}_chunk_${chunkIndex}`;
 
-        // Prepare metadata
         const metadata: VectorMetadata = {
           documentId,
           chunkId,
@@ -211,41 +224,84 @@ export class EmbeddingService {
           tokenCount: chunk.metadata.tokenCount,
         };
 
-        // Store in Vector Index
-        await this.storeInVectorIndex(vectorId, embedding, metadata);
-
-        // Store embedding in database
-        await this.storeInDatabase(chunkId, embedding, vectorId);
-
-        results.push({
-          chunkId,
-          vectorId,
-          embedding,
-          success: true,
+        vectorBatch.push({
+          id: vectorId,
+          values: embedding,
+          metadata: metadata as any,
         });
+      }
 
-        this.env.logger.info('Chunk embedding stored', {
+      try {
+        // Store batch in Vector Index (max 50 vectors)
+        await this.env.DOCUMENT_EMBEDDINGS.upsert(vectorBatch);
+
+        this.env.logger.info('Vector batch stored successfully', {
           documentId,
-          chunkId,
-          chunkIndex,
-          vectorId,
+          batchSize: vectorBatch.length,
+          startIndex: startIndex + batchStart,
+          endIndex: startIndex + batchEnd - 1,
         });
+
+        // Update database for each chunk in the batch
+        for (let i = batchStart; i < batchEnd; i++) {
+          const chunk = chunks[i];
+          const chunkId = chunkIds[i];
+          const embedding = embeddings[i];
+          const chunkIndex = startIndex + i;
+          const vectorId = `${documentId}_chunk_${chunkIndex}`;
+
+          try {
+            await this.storeInDatabase(chunkId, embedding, vectorId);
+
+            results.push({
+              chunkId,
+              vectorId,
+              embedding,
+              success: true,
+            });
+
+            this.env.logger.info('Chunk embedding stored', {
+              documentId,
+              chunkId,
+              chunkIndex,
+              vectorId,
+            });
+
+          } catch (dbError) {
+            this.env.logger.error('Failed to store chunk in database', {
+              documentId,
+              chunkId,
+              chunkIndex,
+              error: dbError instanceof Error ? dbError.message : String(dbError),
+            });
+
+            results.push({
+              chunkId,
+              vectorId,
+              embedding: [],
+              success: false,
+              error: dbError instanceof Error ? dbError.message : 'Database storage failed',
+            });
+          }
+        }
 
       } catch (error) {
-        this.env.logger.error('Failed to store chunk embedding', {
+        this.env.logger.error('Failed to store vector batch', {
           documentId,
-          chunkId,
-          chunkIndex: startIndex + i,
+          batchSize: vectorBatch.length,
           error: error instanceof Error ? error.message : String(error),
         });
 
-        results.push({
-          chunkId,
-          vectorId: '',
-          embedding: [],
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        // Mark all chunks in failed vector batch as failed
+        for (let i = batchStart; i < batchEnd; i++) {
+          results.push({
+            chunkId: chunkIds[i],
+            vectorId: '',
+            embedding: [],
+            success: false,
+            error: error instanceof Error ? error.message : 'Vector storage failed',
+          });
+        }
       }
     }
 
@@ -253,8 +309,9 @@ export class EmbeddingService {
   }
 
   /**
-   * Generate embeddings using local Python service (384-dim)
-   * Model: all-MiniLM-L6-v2 via FastAPI + Cloudflare Tunnel
+   * Generate embeddings using Raindrop AI (bge-small-en, 384-dim)
+   * PHASE 2 MIGRATION: Replaces external Python service with Raindrop native
+   * CRITICAL: Must use { text: [] } format, NOT { input: [] }
    */
   private async generateEmbeddings(
     texts: string[],
@@ -264,72 +321,45 @@ export class EmbeddingService {
 
     for (let attempt = 1; attempt <= config.maxRetries; attempt++) {
       try {
-        // HARDCODE FIX: Force correct embedding service URL
-        // The environment variable was set to a stale Cloudflare Tunnel URL that's no longer working
-        const serviceUrl = 'https://auditrig.com';
-
-        this.env.logger.info('Generating embeddings via Python service', {
+        this.env.logger.info('Generating embeddings via Raindrop AI', {
           textCount: texts.length,
           attempt,
           maxRetries: config.maxRetries,
-          serviceUrl,
-          envUrl: this.env.LOCAL_EMBEDDING_SERVICE_URL,
-          model: 'all-MiniLM-L6-v2',
+          model: 'bge-small-en',
+          dimensions: 384,
         });
 
-        // Call Python embedding service
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-
-        // Add API key if configured
-        if (this.env.EMBEDDING_SERVICE_API_KEY) {
-          headers['X-API-Key'] = this.env.EMBEDDING_SERVICE_API_KEY;
-        }
-
-        const response = await fetch(`${serviceUrl}/embed`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            texts: texts,
-            batch_size: Math.min(texts.length, 32),
-            normalize: true,
-          }),
+        // ⚠️ CRITICAL: Use { text: [] } format, NOT { input: [] }
+        // Cloudflare AI requires this specific format
+        // Phase 1 testing confirmed this requirement
+        const response = await this.env.AI.run('@cf/baai/bge-small-en-v1.5', {
+          text: texts  // ✅ CORRECT format
         });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Embedding service error (${response.status}): ${errorText}`);
-        }
-
-        const data = await response.json() as {
-          embeddings: number[][];
-          dimensions: number;
-          count: number;
-          latency_ms: number;
-        };
+        // Extract embeddings from response
+        const data = response as { data?: number[][] } | number[][];
+        const embeddings = Array.isArray(data) ? data : (data.data || []);
 
         // Validate response
-        if (!data || !Array.isArray(data.embeddings)) {
-          throw new Error('Invalid response from embedding service: missing embeddings array');
+        if (!Array.isArray(embeddings) || embeddings.length !== texts.length) {
+          throw new Error(
+            `Expected ${texts.length} embeddings, got ${embeddings.length}`
+          );
         }
 
-        if (data.embeddings.length !== texts.length) {
-          throw new Error(`Expected ${texts.length} embeddings, got ${data.embeddings.length}`);
-        }
-
-        // Validate dimensions (should be 384)
-        const embeddings: number[][] = data.embeddings;
+        // Validate dimensions (should be 384 for bge-small-en)
         for (let i = 0; i < embeddings.length; i++) {
           if (!Array.isArray(embeddings[i]) || embeddings[i].length !== 384) {
-            throw new Error(`Invalid embedding at index ${i}: expected 384 dimensions, got ${embeddings[i]?.length}`);
+            throw new Error(
+              `Invalid embedding at index ${i}: expected 384 dimensions, got ${embeddings[i]?.length}`
+            );
           }
         }
 
-        this.env.logger.info('Embeddings generated successfully via Python service', {
+        this.env.logger.info('Embeddings generated successfully via Raindrop AI', {
           count: embeddings.length,
           dimensions: embeddings[0]?.length,
-          latency_ms: data.latency_ms,
+          model: 'bge-small-en',
           attempt,
         });
 
@@ -338,13 +368,13 @@ export class EmbeddingService {
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        this.env.logger.error('Embedding generation failed', {
+        this.env.logger.error('Raindrop AI embedding generation failed', {
           attempt,
           maxRetries: config.maxRetries,
           error: lastError.message,
           errorStack: lastError.stack,
           willRetry: attempt < config.maxRetries,
-          model: 'Transformers.js',
+          model: 'bge-small-en',
         });
 
         if (attempt < config.maxRetries) {
@@ -359,38 +389,8 @@ export class EmbeddingService {
   }
 
   /**
-   * Store embedding in Vector Index
-   */
-  private async storeInVectorIndex(
-    vectorId: string,
-    embedding: number[],
-    metadata: VectorMetadata
-  ): Promise<void> {
-    try {
-      // VectorIndex.upsert expects an array of vectors with 'values' property
-      await this.env.DOCUMENT_EMBEDDINGS.upsert([{
-        id: vectorId,
-        values: embedding,
-        metadata: metadata as any,
-      }]);
-
-      this.env.logger.info('Vector stored in index', {
-        vectorId,
-        documentId: metadata.documentId,
-        chunkIndex: metadata.chunkIndex,
-      });
-
-    } catch (error) {
-      this.env.logger.error('Failed to store vector in index', {
-        vectorId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  /**
    * Store embedding in database (as BLOB)
+   * PHASE 2: Simplified - Vector Index already stores embeddings
    */
   private async storeInDatabase(
     chunkId: number,
@@ -431,40 +431,56 @@ export class EmbeddingService {
 
   /**
    * Query vector index for similar chunks
+   * PHASE 2: Adds retry logic for indexing delays (3-5 seconds)
    * @param queryText Text to search for
    * @param topK Number of results to return
    * @param workspaceId Optional workspace filter
    * @param frameworkId Optional framework filter
+   * @param retryForIndexing If true, will retry query to account for indexing delay
    */
   async querySimilarChunks(
     queryText: string,
     topK: number = 10,
     workspaceId?: string,
-    frameworkId?: number
+    frameworkId?: number,
+    retryForIndexing: boolean = false
   ): Promise<Array<{ id: string; score: number; metadata: VectorMetadata }>> {
     try {
-      // Generate embedding for query text
+      // Generate embedding for query text using Raindrop AI
       const queryEmbedding = await this.generateEmbeddings([queryText], this.DEFAULT_CONFIG);
 
-      // Build metadata filter
-      const filter: any = {};
-      if (workspaceId) {
-        filter.workspaceId = workspaceId;
-      }
-      if (frameworkId) {
-        filter.frameworkId = frameworkId;
-      }
+      // PHASE 2: Retry logic for indexing delays
+      let results: any;
+      let attempts = retryForIndexing ? 3 : 1;
+      let delay = 2000; // Start with 2 seconds
 
-      // Query vector index - query() expects vector as first param, options as second
-      const results = await this.env.DOCUMENT_EMBEDDINGS.query(
-        queryEmbedding[0],
-        {
-          topK,
-          returnMetadata: 'all',
-          // Note: Raindrop VectorIndex uses namespace filtering, not direct metadata filtering
-          // You may need to adjust filtering strategy based on your use case
+      for (let attempt = 1; attempt <= attempts; attempt++) {
+        // Query vector index
+        results = await this.env.DOCUMENT_EMBEDDINGS.query(
+          queryEmbedding[0],
+          {
+            topK: topK * 2, // Get more results for filtering
+            returnMetadata: 'all',
+          }
+        );
+
+        // If we got results or this is the last attempt, break
+        if (results.matches && results.matches.length > 0) {
+          break;
         }
-      );
+
+        // Wait before retry (indexing delay)
+        if (attempt < attempts) {
+          this.env.logger.info('No results found, retrying after indexing delay', {
+            queryText: queryText.substring(0, 100),
+            attempt,
+            maxAttempts: attempts,
+            delay,
+          });
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay += 1000; // Increase delay for next retry
+        }
+      }
 
       this.env.logger.info('Vector search completed', {
         queryText: queryText.substring(0, 100),
@@ -482,7 +498,10 @@ export class EmbeddingService {
         return true;
       });
 
-      return filteredMatches.map((match: any) => ({
+      // Limit to requested topK after filtering
+      const limitedMatches = filteredMatches.slice(0, topK);
+
+      return limitedMatches.map((match: any) => ({
         id: match.id,
         score: match.score,
         metadata: match.metadata as VectorMetadata,
@@ -533,8 +552,7 @@ export class EmbeddingService {
 
   /**
    * Get embedding generation progress for a document (DATABASE TRACKING)
-   * NOTE: This reads from database tracking fields which may be out of sync
-   * Use getActualVectorIndexStatus() for real-time Vector Index verification
+   * PHASE 2: Now the single source of truth (no external PostgreSQL)
    */
   async getEmbeddingProgress(documentId: string): Promise<{
     total: number;
@@ -567,76 +585,6 @@ export class EmbeddingService {
 
     } catch (error) {
       this.env.logger.error('Failed to get embedding progress', {
-        documentId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Get ACTUAL Vector Index status by querying PostgreSQL directly
-   * This queries the PostgreSQL database where embeddings are actually stored
-   * Use this for UI display to show real indexed count
-   */
-  async getActualVectorIndexStatus(documentId: string): Promise<{
-    totalChunks: number;
-    indexedChunks: number;
-    vectorIds: string[];
-    status: 'completed' | 'partial' | 'failed';
-  }> {
-    try {
-      // Query PostgreSQL via embedding service API
-      const response = await fetch(
-        `https://auditrig.com/api/v1/documents/${documentId}/vector-status`,
-        {
-          method: 'GET',
-          headers: {
-            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        this.env.logger.error('Failed to get vector status from PostgreSQL', {
-          documentId,
-          status: response.status,
-          statusText: response.statusText,
-        });
-
-        return {
-          totalChunks: 0,
-          indexedChunks: 0,
-          vectorIds: [],
-          status: 'failed',
-        };
-      }
-
-      const data = await response.json() as {
-        documentId: string;
-        totalChunks: number;
-        indexedChunks: number;
-        vectorIds: string[];
-        status: 'completed' | 'partial' | 'failed';
-      };
-
-      this.env.logger.info('Vector status retrieved from PostgreSQL', {
-        documentId,
-        totalChunks: data.totalChunks,
-        indexedChunks: data.indexedChunks,
-        status: data.status,
-      });
-
-      return {
-        totalChunks: data.totalChunks,
-        indexedChunks: data.indexedChunks,
-        vectorIds: data.vectorIds,
-        status: data.status,
-      };
-
-    } catch (error) {
-      this.env.logger.error('Failed to check Vector Index status', {
         documentId,
         error: error instanceof Error ? error.message : String(error),
       });

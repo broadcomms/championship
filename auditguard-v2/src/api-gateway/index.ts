@@ -2375,6 +2375,48 @@ export default class extends Service<Env> {
         }
       }
 
+      // POST /api/admin/test/phase1-vectors - Run Phase 1 vector migration tests
+      if (path === '/api/admin/test/phase1-vectors' && request.method === 'POST') {
+        try {
+          const user = await this.validateSession(request);
+          
+          this.env.logger.info('Starting Phase 1 Vector Tests', {
+            userId: user.userId,
+            email: user.email
+          });
+
+          // Import and run tests dynamically
+          const { RaindropVectorTester } = await import('../test-raindrop-vectors');
+          const tester = new RaindropVectorTester(this.env);
+          const results = await tester.runAllTests();
+
+          return this.trackAndReturn(
+            operation,
+            startTime,
+            new Response(JSON.stringify(results), {
+              status: results.failed === 0 ? 200 : 500,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            })
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await this.trackPerformance(operation, startTime, false, errorMessage);
+
+          this.env.logger.error('Phase 1 test execution failed', {
+            error: errorMessage,
+            stack: error instanceof Error ? error.stack : undefined
+          });
+
+          return new Response(JSON.stringify({ 
+            error: errorMessage,
+            stack: error instanceof Error ? error.stack : undefined
+          }), {
+            status: error instanceof Error && error.message === 'Access denied' ? 403 : 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
       // Track 404 as failed request
       await this.trackPerformance(operation, startTime, false, 'Not Found');
 

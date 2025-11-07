@@ -466,6 +466,7 @@ export default class extends Each<Body, Env> {
   }
 
   /**
+   * PHASE 2.2: Enhanced embedding generation with progress tracking and status updates
    * Process individual chunk embedding generation from queue
    * Called for each 'generate_embedding' message
    */
@@ -492,20 +493,27 @@ export default class extends Each<Body, Env> {
     }
 
     try {
+      // PHASE 2.2: Update status to "processing" with progress tracking
+      const progressResult = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT chunks_created, embeddings_generated
+         FROM documents
+         WHERE id = ?`
+      ).bind(documentId).first();
+
+      const currentProgress = progressResult?.embeddings_generated || 0;
+      const totalChunks = progressResult?.chunks_created || 0;
+
+      this.env.logger.info('📊 Embedding progress before processing', {
+        documentId,
+        chunkId,
+        chunkIndex,
+        currentProgress,
+        totalChunks,
+        percentage: totalChunks > 0 ? Math.round((currentProgress / totalChunks) * 100) : 0,
+      });
+
       // Use embedding service (static import to avoid worker environment issues)
-      this.env.logger.info('Creating EmbeddingService instance', {
-        documentId,
-        chunkId,
-        hasEnv: !!this.env,
-        hasLogger: !!this.env.logger,
-      });
-
       const embeddingService = new EmbeddingService(this.env);
-
-      this.env.logger.info('EmbeddingService instance created successfully', {
-        documentId,
-        chunkId,
-      });
 
       // Generate embedding for single chunk
       const chunk = {
@@ -542,7 +550,7 @@ export default class extends Each<Body, Env> {
         success: result.successCount > 0,
       });
 
-      // Recalculate embeddings_generated from actual chunk statuses (avoid double-counting on retries)
+      // PHASE 2.2: Recalculate embeddings_generated from actual chunk statuses (avoid double-counting on retries)
       const countResult = await (this.env.AUDITGUARD_DB as any).prepare(
         `SELECT COUNT(*) as count FROM document_chunks
          WHERE document_id = ? AND embedding_status = 'completed'`
@@ -552,48 +560,86 @@ export default class extends Each<Body, Env> {
 
       await (this.env.AUDITGUARD_DB as any).prepare(
         `UPDATE documents
-         SET embeddings_generated = ?
+         SET embeddings_generated = ?,
+             updated_at = ?
          WHERE id = ?`
-      ).bind(completedCount, documentId).run();
+      ).bind(completedCount, Date.now(), documentId).run();
 
-      this.env.logger.info('Updated embeddings_generated counter from database', {
+      this.env.logger.info('📈 Updated embeddings_generated counter from database', {
         documentId,
         chunkId,
         completedCount,
+        totalChunks,
+        percentage: totalChunks > 0 ? Math.round((completedCount / totalChunks) * 100) : 0,
       });
 
-      // Check if all embeddings are complete
+      // PHASE 2.2: Check if all embeddings are complete and update status accordingly
       const doc = await (this.env.AUDITGUARD_DB as any).prepare(
-        `SELECT chunks_created, embeddings_generated
+        `SELECT chunks_created, embeddings_generated, vector_indexing_status
          FROM documents
          WHERE id = ?`
       ).bind(documentId).first();
 
       if (doc && doc.embeddings_generated >= doc.chunks_created) {
-        // All embeddings complete!
+        // PHASE 2.2: All embeddings complete - transition to "indexing" status
+        // Raindrop Vector Index needs 3-5 seconds for indexing to complete
         await (this.env.AUDITGUARD_DB as any).prepare(
           `UPDATE documents
-           SET vector_indexing_status = 'completed'
+           SET vector_indexing_status = 'indexing',
+               updated_at = ?
            WHERE id = ?`
-        ).bind(documentId).run();
+        ).bind(Date.now(), documentId).run();
 
-        this.env.logger.info('🎉 All embeddings completed for document', {
+        this.env.logger.info('⏳ All embeddings generated - starting indexing delay (3-5s)', {
           documentId,
           totalEmbeddings: doc.embeddings_generated,
           totalChunks: doc.chunks_created,
+          status: 'indexing',
+        });
+
+        // Wait for indexing to complete (3-5 seconds as per Phase 1 tests)
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        // Mark as completed after indexing delay
+        await (this.env.AUDITGUARD_DB as any).prepare(
+          `UPDATE documents
+           SET vector_indexing_status = 'completed',
+               updated_at = ?
+           WHERE id = ?`
+        ).bind(Date.now(), documentId).run();
+
+        this.env.logger.info('🎉 Vector indexing completed - document is now searchable', {
+          documentId,
+          totalEmbeddings: doc.embeddings_generated,
+          totalChunks: doc.chunks_created,
+          status: 'completed',
         });
       } else {
-        this.env.logger.info('Embedding progress updated', {
+        // PHASE 2.2: Still processing - ensure status is correct
+        if (doc && doc.vector_indexing_status !== 'processing') {
+          await (this.env.AUDITGUARD_DB as any).prepare(
+            `UPDATE documents
+             SET vector_indexing_status = 'processing',
+                 updated_at = ?
+             WHERE id = ?`
+          ).bind(Date.now(), documentId).run();
+        }
+
+        this.env.logger.info('📊 Embedding progress updated', {
           documentId,
           embeddingsGenerated: doc?.embeddings_generated || 0,
           totalChunks: doc?.chunks_created || 0,
+          percentage: doc && doc.chunks_created > 0 
+            ? Math.round((doc.embeddings_generated / doc.chunks_created) * 100) 
+            : 0,
+          status: 'processing',
         });
       }
 
       message.ack();
 
     } catch (error) {
-      this.env.logger.error('Embedding generation failed for chunk', {
+      this.env.logger.error('❌ Embedding generation failed for chunk', {
         documentId,
         chunkId,
         chunkIndex,
@@ -602,7 +648,28 @@ export default class extends Each<Body, Env> {
         attempt: message.attempts,
       });
 
-      // Retry with backoff
+      // PHASE 2.2: Check for batch size error (50 vector limit)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Too many vectors') || errorMessage.includes('Max is 50')) {
+        this.env.logger.error('⚠️ BATCH SIZE LIMIT EXCEEDED - Max 50 vectors per upsert', {
+          documentId,
+          chunkId,
+          chunkIndex,
+          error: errorMessage,
+        });
+
+        // Mark chunk as failed - batch size issue requires manual intervention
+        await (this.env.AUDITGUARD_DB as any).prepare(
+          `UPDATE document_chunks
+           SET embedding_status = 'failed'
+           WHERE id = ?`
+        ).bind(chunkId).run();
+
+        message.ack(); // Don't retry - this is a code bug, not transient failure
+        return;
+      }
+
+      // Retry with backoff for transient failures
       if (message.attempts < 3) {
         const delaySeconds = 10 * message.attempts;
         this.env.logger.info('Retrying embedding generation', {
@@ -644,6 +711,7 @@ export default class extends Each<Body, Env> {
   }
 
   /**
+   * PHASE 2.2: Enhanced queue embedding generation with progress initialization
    * Queue embedding generation messages for all chunks
    * Messages are sent to DOCUMENT_PROCESSING_QUEUE and processed by the observer
    */
@@ -653,7 +721,7 @@ export default class extends Each<Body, Env> {
     chunks: any[],
     chunkIds: number[]
   ): Promise<void> {
-    this.env.logger.info('generateEmbeddingsAsync called', {
+    this.env.logger.info('🚀 Starting async embedding generation with progress tracking', {
       documentId,
       workspaceId,
       chunkCount: chunks.length,
@@ -661,19 +729,22 @@ export default class extends Each<Body, Env> {
     });
 
     try {
-      this.env.logger.info('Async embedding generation started - inside try block', {
-        documentId,
-        workspaceId,
-        chunkCount: chunks.length,
-      });
-
-      // Update document status to indicate vector indexing is in progress
+      // PHASE 2.2: Update document status to "processing" with initial progress (0%)
       await (this.env.AUDITGUARD_DB as any).prepare(
         `UPDATE documents
          SET vector_indexing_status = 'processing',
-             chunks_created = ?
+             chunks_created = ?,
+             embeddings_generated = 0,
+             updated_at = ?
          WHERE id = ?`
-      ).bind(chunks.length, documentId).run();
+      ).bind(chunks.length, Date.now(), documentId).run();
+
+      this.env.logger.info('📊 Initialized embedding progress tracking', {
+        documentId,
+        totalChunks: chunks.length,
+        initialProgress: 0,
+        status: 'processing',
+      });
 
       // Queue each chunk for embedding generation via message queue
       // This is the correct way to process embeddings in distributed architecture
@@ -692,15 +763,17 @@ export default class extends Each<Body, Env> {
 
           queuedCount++;
 
-          this.env.logger.info('Queued chunk for embedding generation', {
-            documentId,
-            chunkId: chunkIds[i],
-            chunkIndex: chunks[i].metadata.chunkIndex,
-            queuedSoFar: queuedCount,
-            totalChunks: chunks.length,
-          });
+          // Log progress every 10 chunks
+          if (queuedCount % 10 === 0 || queuedCount === chunks.length) {
+            this.env.logger.info('📤 Queuing progress', {
+              documentId,
+              queuedCount,
+              totalChunks: chunks.length,
+              percentage: Math.round((queuedCount / chunks.length) * 100),
+            });
+          }
         } catch (queueError) {
-          this.env.logger.error('Failed to queue chunk for embedding', {
+          this.env.logger.error('❌ Failed to queue chunk for embedding', {
             documentId,
             chunkId: chunkIds[i],
             chunkIndex: chunks[i].metadata.chunkIndex,
@@ -709,14 +782,15 @@ export default class extends Each<Body, Env> {
         }
       }
 
-      this.env.logger.info('Successfully queued all chunks for embedding generation', {
+      this.env.logger.info('✅ Successfully queued all chunks for embedding generation', {
         documentId,
         totalChunks: chunks.length,
         queuedCount: queuedCount,
+        failedToQueue: chunks.length - queuedCount,
       });
 
     } catch (error) {
-      this.env.logger.error('Async embedding generation failed critically', {
+      this.env.logger.error('❌ Async embedding generation failed critically', {
         documentId,
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
@@ -726,9 +800,10 @@ export default class extends Each<Body, Env> {
       try {
         await (this.env.AUDITGUARD_DB as any).prepare(
           `UPDATE documents
-           SET vector_indexing_status = 'failed'
+           SET vector_indexing_status = 'failed',
+               updated_at = ?
            WHERE id = ?`
-        ).bind(documentId).run();
+        ).bind(Date.now(), documentId).run();
       } catch (updateError) {
         this.env.logger.error('Failed to update vector indexing status', {
           documentId,

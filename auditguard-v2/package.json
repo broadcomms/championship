@@ -9,6 +9,7 @@
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:vectors": "npm run build && raindrop build deploy && bash ../scripts/test-vector-migration.sh",
     "create-migration": "npx ts-node ./scripts/create_migration.mts",
     "clean-seed": "find ./db -name '*seed*' -type f -delete",
     "seed:createSql": "npx ts-node ./scripts/seed-sql.mts",

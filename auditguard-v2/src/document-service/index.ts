@@ -367,18 +367,8 @@ export default class extends Service<Env> {
       throw new Error('Document not found');
     }
 
-    // Get real chunk count from PostgreSQL
-    let realChunkCount = document.chunk_count || 0;
-    try {
-      const embeddingService = new EmbeddingService(this.env);
-      const vectorStatus = await embeddingService.getActualVectorIndexStatus(documentId);
-      realChunkCount = vectorStatus.totalChunks;
-    } catch (error) {
-      this.env.logger.warn('Failed to get chunk count from PostgreSQL, using D1 value', {
-        documentId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    // PHASE 2: Get chunk count from D1 (single source of truth)
+    const realChunkCount = document.chunk_count || 0;
 
     return {
       id: document.id,
@@ -2219,28 +2209,33 @@ Respond with ONLY a JSON object in this exact format:
       throw new Error('Document not found');
     }
 
-    // Get actual Vector Index status from embedding service
+    // PHASE 2: Get Vector Index status from D1 database tracking
     const embeddingService = new EmbeddingService(this.env);
-    const vectorStatus = await embeddingService.getActualVectorIndexStatus(documentId);
+    const embeddingProgress = await embeddingService.getEmbeddingProgress(documentId);
 
     // Also check SmartBucket indexing status
     const smartBucketStatus = await embeddingService.verifySmartBucketIndexing(documentId, workspaceId);
 
-    this.env.logger.info('Actual vector index status retrieved', {
+    const status: 'completed' | 'partial' | 'failed' =
+      embeddingProgress.failed > 0 ? 'failed' :
+      embeddingProgress.completed === embeddingProgress.total ? 'completed' :
+      'partial';
+
+    this.env.logger.info('Vector index status retrieved from D1', {
       documentId,
       workspaceId,
-      totalChunks: vectorStatus.totalChunks,
-      indexedChunks: vectorStatus.indexedChunks,
-      status: vectorStatus.status,
+      totalChunks: embeddingProgress.total,
+      indexedChunks: embeddingProgress.completed,
+      status,
       smartBucketIndexed: smartBucketStatus.isIndexed,
     });
 
     return {
       documentId,
-      totalChunks: vectorStatus.totalChunks,
-      indexedChunks: vectorStatus.indexedChunks,
-      vectorIds: vectorStatus.vectorIds,
-      status: vectorStatus.status,
+      totalChunks: embeddingProgress.total,
+      indexedChunks: embeddingProgress.completed,
+      vectorIds: [], // No longer tracking individual vector IDs
+      status,
       smartBucketStatus,
     };
   }
