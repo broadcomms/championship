@@ -332,7 +332,9 @@ export class EmbeddingService {
         // ⚠️ CRITICAL: Use { text: [] } format, NOT { input: [] }
         // Cloudflare AI requires this specific format
         // Phase 1 testing confirmed this requirement
-        const response = await this.env.AI.run('@cf/baai/bge-small-en-v1.5', {
+        // ⚠️ CRITICAL: Use 'bge-small-en' NOT '@cf/baai/bge-small-en-v1.5'
+        // Raindrop AI uses short model names, not Cloudflare's @cf/ paths
+        const response = await this.env.AI.run('bge-small-en', {
           text: texts  // ✅ CORRECT format
         });
 

@@ -1545,46 +1545,29 @@ Respond with ONLY a JSON object in this exact format:
       ? 'Processing... Summary will be available after indexing completes.'
       : (document.description || 'Document indexed. Summary generation can be added later if needed.');
 
-    // Get chunks from PostgreSQL via API
+    // 📊 Phase 2.2: Get chunks from D1 database (local, no external API)
     try {
-      const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
-      const chunksResponse = await fetch(
-        `${embeddingServiceUrl}/api/v1/documents/${documentId}/chunks`,
-        {
-          method: 'GET',
-          headers: {
-            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const chunksResult = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT chunk_text, chunk_index, embedding_status, word_count
+         FROM document_chunks
+         WHERE document_id = ?
+         ORDER BY chunk_index ASC`
+      ).bind(documentId).all();
 
-      if (!chunksResponse.ok) {
-        throw new Error(`Failed to get chunks from PostgreSQL: ${chunksResponse.status}`);
-      }
-
-      const chunksData = await chunksResponse.json() as {
-        documentId: string;
-        chunks: Array<{
-          chunkIndex: number;
-          content: string;
-          embeddingStatus: string;
-        }>;
-      };
-
-      chunks = (chunksData.chunks || []).map((chunk: any) => ({
-        text: chunk.content || '',
-        chunkIndex: chunk.chunkIndex,
-        embeddingStatus: chunk.embeddingStatus,
+      chunks = (chunksResult.results || []).map((chunk: any) => ({
+        text: chunk.chunk_text || '',
+        chunkIndex: chunk.chunk_index,
+        embeddingStatus: chunk.embedding_status,
+        wordCount: chunk.word_count,
       }));
 
-      this.env.logger.info('Retrieved chunks from PostgreSQL', {
+      this.env.logger.info('📊 Phase 2.2: Retrieved chunks from D1', {
         documentId,
         chunkCount: chunks.length,
-        source: 'postgresql_api',
+        source: 'd1_database',
       });
     } catch (error) {
-      this.env.logger.error('Failed to retrieve chunks from PostgreSQL', {
+      this.env.logger.error('Failed to retrieve chunks from D1', {
         documentId,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -2051,61 +2034,42 @@ Respond with ONLY a JSON object in this exact format:
       throw new Error('Document not found');
     }
 
-    // Get chunks from PostgreSQL via API
+    // 📊 Phase 2.2: Get chunks from D1 database (local, no external API)
     try {
-      const response = await fetch(
-        `https://auditrig.com/api/v1/documents/${documentId}/chunks`,
-        {
-          method: 'GET',
-          headers: {
-            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const chunksResult = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT id, document_id, chunk_index, chunk_text, word_count, 
+                vector_id, embedding_status, created_at
+         FROM document_chunks
+         WHERE document_id = ? AND workspace_id = ?
+         ORDER BY chunk_index ASC`
+      ).bind(documentId, workspaceId).all();
 
-      if (!response.ok) {
-        throw new Error(`PostgreSQL API error: ${response.status}`);
-      }
-
-      const data = await response.json() as {
-        documentId: string;
-        chunks: Array<{
-          chunkId: number;
-          chunkIndex: number;
-          content: string;
-          chunkSize: number;
-          startChar: number;
-          endChar: number;
-          tokenCount: number;
-          embeddingStatus: string;
-          hasHeader: boolean;
-          sectionTitle: string | null;
-          createdAt: string;
-        }>;
-      };
-
-      this.env.logger.info('Retrieved chunks from PostgreSQL', {
+      this.env.logger.info('📊 Phase 2.2: Retrieved chunks from D1', {
         documentId,
-        chunkCount: data.chunks.length,
+        chunkCount: (chunksResult.results || []).length,
+        source: 'd1_database',
+        chunkStatuses: (chunksResult.results || []).map((c: any) => ({
+          index: c.chunk_index,
+          status: c.embedding_status,
+        })),
       });
 
       // Transform to match expected format
-      // Note: PostgreSQL doesn't have compliance tags yet, so tags array is empty
-      return data.chunks.map(chunk => ({
-        id: chunk.chunkId,
-        documentId: data.documentId,
-        chunkIndex: chunk.chunkIndex,
-        content: chunk.content,
-        chunkSize: chunk.chunkSize,
-        startChar: chunk.startChar,
-        endChar: chunk.endChar,
-        tokenCount: chunk.tokenCount,
-        hasHeader: chunk.hasHeader || false,
-        sectionTitle: chunk.sectionTitle || null,
-        embeddingStatus: chunk.embeddingStatus,
-        createdAt: new Date(chunk.createdAt).getTime(),
-        tags: [], // Compliance tags not implemented in PostgreSQL yet
+      // Note: Phase 2.2 doesn't have startChar/endChar/tokenCount/hasHeader/sectionTitle yet
+      return (chunksResult.results || []).map((chunk: any) => ({
+        id: chunk.chunk_index,
+        documentId: chunk.document_id,
+        chunkIndex: chunk.chunk_index,
+        content: chunk.chunk_text,
+        chunkSize: chunk.word_count || 0,
+        startChar: 0, // Not stored in Phase 2.2
+        endChar: chunk.chunk_text?.length || 0,
+        tokenCount: Math.ceil((chunk.word_count || 0) * 1.3), // Approximate
+        hasHeader: false, // Not stored in Phase 2.2
+        sectionTitle: null,
+        embeddingStatus: chunk.embedding_status || 'pending',
+        createdAt: chunk.created_at || Date.now(),
+        tags: [], // Phase 2.2 doesn't have compliance tags yet
       }));
 
     } catch (error) {

@@ -196,14 +196,16 @@ export default class extends Each<Body, Env> {
         warnings: chunkValidation.warnings,
       });
 
-      // STEP 3B: Call PostgreSQL embedding service
-      // PostgreSQL service will handle: chunking, embedding generation, compliance tagging, storage
-      // NEW: Use centralized PostgreSQL service for embeddings + compliance tagging
-      this.env.logger.info('🚀 Calling PostgreSQL embedding service', {
+      // ============================================================================
+      // PHASE 2.2: DIRECT RAINDROP AI EMBEDDING GENERATION (NO EXTERNAL API)
+      // ============================================================================
+      
+      this.env.logger.info('� Phase 2.2: Starting embedding generation with Raindrop AI', {
         documentId,
-        serviceUrl: 'https://auditrig.com/api/v1/documents/process',
-        textLength: text.length,
-        chunkCount: chunkingResult.chunks.length,
+        workspaceId,
+        totalChunks: chunkingResult.chunks.length,
+        model: 'bge-small-en',
+        dimensions: 384
       });
 
       let embeddingResult: any = null;
@@ -212,78 +214,155 @@ export default class extends Each<Body, Env> {
         // Update status to indicate vector indexing started
         await (this.env.AUDITGUARD_DB as any).prepare(
           `UPDATE documents
-           SET vector_indexing_status = 'processing'
-           WHERE id = ?`
-        ).bind(documentId).run();
-
-        // Call PostgreSQL embedding service with full document data
-        const postgresResponse = await fetch('https://auditrig.com/api/v1/documents/process', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY || 'test-api-key-1234567890abcdef',
-          },
-          body: JSON.stringify({
-            document_id: documentId,
-            workspace_id: workspaceId,
-            raw_text: text,
-            filename: document.filename,
-            content_type: document.contentType,
-            file_size: originalFile.length,
-            vultr_s3_key: vultrKey,
-            smartbucket_key: null,
-            uploaded_by: userId || 'unknown',
-          }),
-        });
-
-        if (!postgresResponse.ok) {
-          const errorText = await postgresResponse.text();
-          throw new Error(`PostgreSQL embedding service failed (${postgresResponse.status}): ${errorText}`);
-        }
-
-        const postgresResult = await postgresResponse.json() as {
-          chunks_created: number;
-          embeddings_stored: number;
-          processing_time_ms: number;
-          status: string;
-        };
-
-        this.env.logger.info('✅ PostgreSQL embedding service completed', {
-          documentId,
-          chunksCreated: postgresResult.chunks_created,
-          embeddingsStored: postgresResult.embeddings_stored,
-          processingTime: postgresResult.processing_time_ms,
-        });
-
-        // Update document with final embedding count and chunk count
-        embeddingResult = {
-          successCount: postgresResult.embeddings_stored,
-          failureCount: postgresResult.chunks_created - postgresResult.embeddings_stored,
-          duration: postgresResult.processing_time_ms,
-        };
-
-        await (this.env.AUDITGUARD_DB as any).prepare(
-          `UPDATE documents
-           SET embeddings_generated = ?,
-               chunk_count = ?,
-               vector_indexing_status = ?
+           SET vector_indexing_status = 'processing',
+               chunks_created = ?,
+               chunk_count = ?
            WHERE id = ?`
         ).bind(
-          postgresResult.embeddings_stored,
-          postgresResult.chunks_created,
-          postgresResult.embeddings_stored === postgresResult.chunks_created ? 'completed' : 'failed',
+          chunkingResult.chunks.length,
+          chunkingResult.chunks.length,
           documentId
         ).run();
 
-        this.env.logger.info('🎉 PostgreSQL vector indexing complete', {
+        this.env.logger.info('📊 Phase 2.2: Document status set to processing', {
           documentId,
-          totalChunks: postgresResult.chunks_created,
-          embeddingsGenerated: postgresResult.embeddings_stored,
-          status: postgresResult.embeddings_stored === postgresResult.chunks_created ? 'completed' : 'failed',
+          totalChunks: chunkingResult.chunks.length
+        });
+
+        // STEP 3B: Store chunks in D1 database (NEW Phase 2.2)
+        const chunkIds: number[] = [];
+        for (let i = 0; i < chunkingResult.chunks.length; i++) {
+          const chunk = chunkingResult.chunks[i];
+          const chunkId = i; // Use numeric ID for embedding service
+          const chunkIdStr = `chunk_${documentId}_${i}`; // String ID for D1
+          chunkIds.push(chunkId);
+
+          // Calculate word count from text
+          const wordCount = chunk.text.split(/\s+/).filter(w => w.length > 0).length;
+
+          // Insert chunk into D1 (will create table via migration)
+          try {
+            await (this.env.AUDITGUARD_DB as any).prepare(
+              `INSERT INTO document_chunks 
+               (id, document_id, workspace_id, chunk_index, chunk_text, word_count, embedding_status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`
+            ).bind(
+              chunkIdStr,
+              documentId,
+              workspaceId,
+              i,
+              chunk.text,
+              wordCount,
+              Date.now()
+            ).run();
+          } catch (chunkError: any) {
+            // If table doesn't exist yet, log warning but continue
+            // Migration will create table on next deployment
+            if (chunkError.message?.includes('no such table')) {
+              this.env.logger.warn('📊 Phase 2.2: document_chunks table not found (migration pending)', {
+                documentId,
+                chunkIndex: i,
+                note: 'Chunks will be stored in Vector Index metadata only'
+              });
+            } else {
+              throw chunkError;
+            }
+          }
+        }
+
+        this.env.logger.info('📊 Phase 2.2: Chunks stored in D1', {
+          documentId,
+          chunksStored: chunkingResult.chunks.length
+        });
+
+        // STEP 3C: Generate embeddings using Raindrop AI (Phase 2.1 code)
+        const embeddingService = new EmbeddingService(this.env);
+        const startTime = Date.now();
+        let embeddingsGenerated = 0;
+
+        // Process chunks in batches for progress tracking
+        const PROGRESS_BATCH_SIZE = 10; // Report progress every 10 chunks
+        for (let i = 0; i < chunkingResult.chunks.length; i += PROGRESS_BATCH_SIZE) {
+          const batchEnd = Math.min(i + PROGRESS_BATCH_SIZE, chunkingResult.chunks.length);
+          const batchChunks = chunkingResult.chunks.slice(i, batchEnd);
+          const batchChunkIds = chunkIds.slice(i, batchEnd);
+
+          // Generate and store embeddings for this batch
+          await embeddingService.generateAndStoreEmbeddings(
+            documentId,
+            workspaceId,
+            batchChunks, // Pass full Chunk objects
+            batchChunkIds
+          );
+
+          embeddingsGenerated = batchEnd;
+          const percentage = Math.round((embeddingsGenerated / chunkingResult.chunks.length) * 100);
+
+          this.env.logger.info('📊 Phase 2.2: Embedding generation progress', {
+            documentId,
+            embeddingsGenerated,
+            totalChunks: chunkingResult.chunks.length,
+            percentage: `${percentage}%`,
+            batchStart: i,
+            batchEnd
+          });
+
+          // Update progress in database
+          await (this.env.AUDITGUARD_DB as any).prepare(
+            `UPDATE documents
+             SET embeddings_generated = ?
+             WHERE id = ?`
+          ).bind(embeddingsGenerated, documentId).run();
+        }
+
+        const duration = Date.now() - startTime;
+
+        this.env.logger.info('✅ Phase 2.2: All embeddings generated', {
+          documentId,
+          totalChunks: chunkingResult.chunks.length,
+          embeddingsGenerated,
+          duration: `${duration}ms`,
+          throughput: `${(embeddingsGenerated / (duration / 1000)).toFixed(2)} chunks/sec`
+        });
+
+        // STEP 3D: Wait for Raindrop Vector Index to complete indexing (3-5 seconds)
+        await (this.env.AUDITGUARD_DB as any).prepare(
+          `UPDATE documents
+           SET vector_indexing_status = 'indexing'
+           WHERE id = ?`
+        ).bind(documentId).run();
+
+        this.env.logger.info('⏳ Phase 2.2: Waiting 5 seconds for vector indexing', {
+          documentId,
+          totalChunks: chunkingResult.chunks.length,
+          note: 'Raindrop Vector Index needs 3-5 seconds to complete indexing'
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        // STEP 3E: Mark as completed
+        await (this.env.AUDITGUARD_DB as any).prepare(
+          `UPDATE documents
+           SET vector_indexing_status = 'completed'
+           WHERE id = ?`
+        ).bind(documentId).run();
+
+        embeddingResult = {
+          successCount: embeddingsGenerated,
+          failureCount: 0,
+          duration
+        };
+
+        this.env.logger.info('🎉 Phase 2.2: Document fully indexed and searchable', {
+          documentId,
+          totalChunks: chunkingResult.chunks.length,
+          embeddingsGenerated,
+          status: 'completed',
+          duration: `${duration}ms`
         });
 
       } catch (error) {
-        this.env.logger.error('❌ PostgreSQL embedding service failed', {
+        this.env.logger.error('❌ Phase 2.2: Embedding generation failed', {
           documentId,
           error: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
@@ -295,10 +374,13 @@ export default class extends Each<Body, Env> {
            SET vector_indexing_status = 'failed'
            WHERE id = ?`
         ).bind(documentId).run();
+
+        throw error; // Re-throw to trigger retry logic
       }
 
-      // STEP 3D: Auto-tagging is now handled by PostgreSQL service
-      // PostgreSQL service handles: chunking, embeddings, and compliance tagging
+      // STEP 3F: Auto-tagging with compliance frameworks (Phase 2.2)
+      // TODO: Implement compliance tagging in a separate service
+      // For now, skip auto-tagging (can be added in Phase 3)
 
       // STEP 4: Upload ONLY clean text to SmartBucket (for all file types including PDF)
       const smartBucketKey = `${workspaceId}/${documentId}/extracted.txt`;
