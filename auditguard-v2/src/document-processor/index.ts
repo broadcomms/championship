@@ -51,6 +51,12 @@ export default class extends Each<Body, Env> {
         return;
       }
 
+      // REPROCESS FLOW: Full pipeline reprocessing (delete old data first)
+      if (action === 'reprocess' && vultrKey) {
+        await this.processReprocessing(documentId, workspaceId, userId, vultrKey, message);
+        return;
+      }
+
       // NEW FLOW: Text extraction + SmartBucket indexing
       if (action === 'extract_and_index' && vultrKey) {
         await this.processNewDocument(documentId, workspaceId, userId, vultrKey, message);
@@ -444,13 +450,14 @@ export default class extends Each<Body, Env> {
           frameworkId: enrichmentResult.complianceFrameworkId,
         });
 
-        // Update database with enriched metadata
+        // CRITICAL FIX: Update database with enriched metadata AND fully_completed flag
         await (this.env.AUDITGUARD_DB as any).prepare(
           `UPDATE documents
            SET title = ?,
                description = ?,
                category = ?,
                compliance_framework_id = ?,
+               fully_completed = 1,
                updated_at = ?
            WHERE id = ?`
         ).bind(
@@ -462,7 +469,7 @@ export default class extends Each<Body, Env> {
           documentId
         ).run();
 
-        this.env.logger.info('✅ Enriched metadata saved to database', {
+        this.env.logger.info('✅ Enriched metadata saved and document marked as fully completed', {
           documentId,
           title: enrichmentResult.title,
           category: enrichmentResult.category,
@@ -475,7 +482,26 @@ export default class extends Each<Body, Env> {
           error: enrichmentError instanceof Error ? enrichmentError.message : String(enrichmentError),
           stack: enrichmentError instanceof Error ? enrichmentError.stack : undefined,
         });
-        // Continue processing even if enrichment fails
+
+        // CRITICAL FIX: Still mark as fully_completed even if enrichment fails
+        // This prevents infinite polling
+        try {
+          await (this.env.AUDITGUARD_DB as any).prepare(
+            `UPDATE documents
+             SET fully_completed = 1,
+                 updated_at = ?
+             WHERE id = ?`
+          ).bind(Date.now(), documentId).run();
+
+          this.env.logger.info('⚠️ Document marked as fully completed despite enrichment failure', {
+            documentId,
+          });
+        } catch (updateError) {
+          this.env.logger.error('❌ Failed to set fully_completed flag', {
+            documentId,
+            error: updateError instanceof Error ? updateError.message : String(updateError),
+          });
+        }
       }
 
       // STEP 6: Update database with final processing results
@@ -508,6 +534,114 @@ export default class extends Each<Body, Env> {
       this.env.logger.error('Text extraction failed', {
         documentId,
         error: error instanceof Error ? error.message : String(error),
+      });
+
+      await this.env.DOCUMENT_SERVICE.updateProcessingStatus(documentId, 'failed');
+      throw error;
+    }
+  }
+
+  /**
+   * REPROCESS FLOW: Full pipeline reprocessing
+   * Deletes old chunks/embeddings, then runs complete extraction → chunking → embedding → indexing flow
+   */
+  private async processReprocessing(
+    documentId: string,
+    workspaceId: string,
+    userId: string,
+    vultrKey: string,
+    message: Message<Body>
+  ): Promise<void> {
+    this.env.logger.info('🔄 Starting FULL document reprocessing', {
+      documentId,
+      workspaceId,
+      vultrKey,
+      note: 'Will delete old data and run complete pipeline',
+    });
+
+    try {
+      // STEP 0: Clean up old data before reprocessing
+      this.env.logger.info('Cleaning up old document data', {
+        documentId,
+      });
+
+      // Delete old chunks from D1
+      try {
+        const deleteResult = await (this.env.AUDITGUARD_DB as any).prepare(
+          `DELETE FROM document_chunks WHERE document_id = ?`
+        ).bind(documentId).run();
+
+        this.env.logger.info('Deleted old chunks from D1', {
+          documentId,
+          deletedCount: deleteResult.changes || 0,
+        });
+      } catch (deleteError) {
+        this.env.logger.warn('Failed to delete old chunks (may not exist)', {
+          documentId,
+          error: deleteError instanceof Error ? deleteError.message : String(deleteError),
+        });
+      }
+
+      // Delete old vectors from Vector Index
+      try {
+        // Get all vector IDs for this document
+        const chunks = await (this.env.AUDITGUARD_DB as any).prepare(
+          `SELECT vector_id FROM document_chunks WHERE document_id = ? AND vector_id IS NOT NULL`
+        ).bind(documentId).all();
+
+        const vectorIds = chunks.results?.map((c: any) => c.vector_id).filter(Boolean) || [];
+
+        if (vectorIds.length > 0) {
+          // Delete from Vector Index in batches of 50
+          for (let i = 0; i < vectorIds.length; i += 50) {
+            const batch = vectorIds.slice(i, Math.min(i + 50, vectorIds.length));
+            await this.env.DOCUMENT_EMBEDDINGS.deleteByIds(batch);
+          }
+
+          this.env.logger.info('Deleted old vectors from Vector Index', {
+            documentId,
+            deletedCount: vectorIds.length,
+          });
+        }
+      } catch (vectorDeleteError) {
+        this.env.logger.warn('Failed to delete old vectors', {
+          documentId,
+          error: vectorDeleteError instanceof Error ? vectorDeleteError.message : String(vectorDeleteError),
+        });
+      }
+
+      // Reset document metadata for reprocessing
+      await (this.env.AUDITGUARD_DB as any).prepare(
+        `UPDATE documents
+         SET processing_status = 'processing',
+             text_extracted = 0,
+             chunk_count = 0,
+             chunks_created = 0,
+             embeddings_generated = 0,
+             vector_indexing_status = 'pending',
+             extraction_status = 'pending',
+             fully_completed = 0,
+             updated_at = ?
+         WHERE id = ?`
+      ).bind(Date.now(), documentId).run();
+
+      this.env.logger.info('✅ Old data cleaned up, starting fresh processing', {
+        documentId,
+      });
+
+      // STEP 1-9: Run the exact same flow as processNewDocument
+      // This ensures consistency between upload and reprocess flows
+      await this.processNewDocument(documentId, workspaceId, userId, vultrKey, message);
+
+      this.env.logger.info('🎉 Document reprocessing completed successfully', {
+        documentId,
+      });
+
+    } catch (error) {
+      this.env.logger.error('Document reprocessing failed', {
+        documentId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       });
 
       await this.env.DOCUMENT_SERVICE.updateProcessingStatus(documentId, 'failed');
@@ -569,22 +703,10 @@ export default class extends Each<Body, Env> {
 
     try {
       // PHASE 2.2: Update status to "processing" with progress tracking
-      const progressResult = await (this.env.AUDITGUARD_DB as any).prepare(
-        `SELECT chunks_created, embeddings_generated
-         FROM documents
-         WHERE id = ?`
-      ).bind(documentId).first();
-
-      const currentProgress = progressResult?.embeddings_generated || 0;
-      const totalChunks = progressResult?.chunks_created || 0;
-
-      this.env.logger.info('📊 Embedding progress before processing', {
+      this.env.logger.info('📊 Starting embedding generation for chunk', {
         documentId,
         chunkId,
         chunkIndex,
-        currentProgress,
-        totalChunks,
-        percentage: totalChunks > 0 ? Math.round((currentProgress / totalChunks) * 100) : 0,
       });
 
       // Use embedding service (static import to avoid worker environment issues)
@@ -625,28 +747,14 @@ export default class extends Each<Body, Env> {
         success: result.successCount > 0,
       });
 
-      // PHASE 2.2: Recalculate embeddings_generated from actual chunk statuses (avoid double-counting on retries)
-      const countResult = await (this.env.AUDITGUARD_DB as any).prepare(
-        `SELECT COUNT(*) as count FROM document_chunks
-         WHERE document_id = ? AND embedding_status = 'completed'`
-      ).bind(documentId).first();
-
-      const completedCount = countResult?.count || 0;
-
+      // CRITICAL FIX: Use atomic increment instead of recount
+      // This is more efficient and prevents race conditions
       await (this.env.AUDITGUARD_DB as any).prepare(
         `UPDATE documents
-         SET embeddings_generated = ?,
+         SET embeddings_generated = embeddings_generated + 1,
              updated_at = ?
          WHERE id = ?`
-      ).bind(completedCount, Date.now(), documentId).run();
-
-      this.env.logger.info('📈 Updated embeddings_generated counter from database', {
-        documentId,
-        chunkId,
-        completedCount,
-        totalChunks,
-        percentage: totalChunks > 0 ? Math.round((completedCount / totalChunks) * 100) : 0,
-      });
+      ).bind(Date.now(), documentId).run();
 
       // PHASE 2.2: Check if all embeddings are complete and update status accordingly
       const doc = await (this.env.AUDITGUARD_DB as any).prepare(
@@ -654,6 +762,17 @@ export default class extends Each<Body, Env> {
          FROM documents
          WHERE id = ?`
       ).bind(documentId).first();
+
+      const completedCount = doc?.embeddings_generated || 0;
+      const totalChunks = doc?.chunks_created || 0;
+
+      this.env.logger.info('📈 Atomically incremented embeddings_generated counter', {
+        documentId,
+        chunkId,
+        newCount: completedCount,
+        totalChunks,
+        percentage: totalChunks > 0 ? Math.round((completedCount / totalChunks) * 100) : 0,
+      });
 
       if (doc && doc.embeddings_generated >= doc.chunks_created) {
         // PHASE 2.2: All embeddings complete - transition to "indexing" status

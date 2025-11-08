@@ -526,43 +526,67 @@ export default class extends Service<Env> {
           );
         }
 
-        this.env.logger.info('Starting document reprocessing', {
+        this.env.logger.info('Starting FULL document reprocessing', {
           documentId,
           workspaceId,
           userId: user.userId,
           vultrKey: document.vultrKey,
-          storageKey: document.storageKey,
+          note: 'Will run complete pipeline: extract → chunk → embed → index → enrich',
         });
 
-        // Call DOCUMENT_SERVICE.reProcessDocument() for lightweight AI re-enrichment
-        // This ONLY re-generates title/description (fast, reliable)
-        // Future phases: Add re-chunking, re-embedding, etc. one by one
+        // Update status to pending for reprocessing
+        // CRITICAL FIX: Also reset fully_completed so progress indicator shows
         try {
-          const result = await this.env.DOCUMENT_SERVICE.reProcessDocument(
-            documentId,
-            workspaceId
-          );
+          await (this.env.AUDITGUARD_DB as any).prepare(
+            `UPDATE documents
+             SET processing_status = 'pending',
+                 fully_completed = 0,
+                 updated_at = ?
+             WHERE id = ?`
+          ).bind(Date.now(), documentId).run();
 
-          this.env.logger.info('✅ Document reprocessed successfully', {
+          this.env.logger.info('✅ Document status reset for reprocessing', {
             documentId,
-            title: result.title,
-            descriptionLength: result.description.length,
+            status: 'pending',
+            fullyCompleted: false,
+          });
+        } catch (statusError) {
+          this.env.logger.warn('Failed to update status to pending', {
+            documentId,
+            error: statusError instanceof Error ? statusError.message : String(statusError),
+          });
+        }
+
+        // Send to processing queue for FULL pipeline reprocessing
+        try {
+          await this.env.DOCUMENT_PROCESSING_QUEUE.send({
+            documentId,
+            workspaceId,
+            userId: user.userId,
+            vultrKey: document.vultrKey,
+            action: 'reprocess',  // NEW: Triggers full reprocessing flow
+            frameworkId: document.complianceFrameworkId,
+          });
+
+          this.env.logger.info('✅ Document queued for full reprocessing', {
+            documentId,
+            workspaceId,
+            action: 'reprocess',
           });
 
           return new Response(
             JSON.stringify({
               success: true,
-              message: 'Document reprocessed successfully',
+              message: 'Document queued for full reprocessing (extract → chunk → embed → index → enrich)',
               documentId,
-              title: result.title,
-              description: result.description,
+              processing: true,
             }),
             {
               headers: { 'Content-Type': 'application/json', ...corsHeaders },
             }
           );
         } catch (error) {
-          this.env.logger.error('Document reprocessing failed', {
+          this.env.logger.error('Failed to queue document for reprocessing', {
             documentId,
             error: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined,
@@ -571,7 +595,7 @@ export default class extends Service<Env> {
           return new Response(
             JSON.stringify({
               success: false,
-              error: 'Failed to reprocess document',
+              error: 'Failed to queue document for reprocessing',
               details: error instanceof Error ? error.message : String(error),
             }),
             {

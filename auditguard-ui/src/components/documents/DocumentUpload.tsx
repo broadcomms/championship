@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
 import { Button } from '@/components/common/Button';
 import { DocumentCategory, ComplianceFrameworkInfo } from '@/types';
@@ -21,6 +22,7 @@ const CATEGORY_OPTIONS: { value: DocumentCategory; label: string }[] = [
 ];
 
 export function DocumentUpload({ workspaceId, onSuccess, onClose }: DocumentUploadProps) {
+  const router = useRouter();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [category, setCategory] = useState<DocumentCategory>('other');
   const [filename, setFilename] = useState('');
@@ -80,7 +82,12 @@ export function DocumentUpload({ workspaceId, onSuccess, onClose }: DocumentUplo
       setSelectedFile(null);
       setFilename('');
       setFrameworkId(undefined);
+
+      // Call onSuccess callback if provided (for backward compatibility)
       onSuccess?.();
+
+      // Redirect to document details page to show processing progress
+      router.push(`/workspaces/${workspaceId}/documents/${document.id}`);
     }
   };
 

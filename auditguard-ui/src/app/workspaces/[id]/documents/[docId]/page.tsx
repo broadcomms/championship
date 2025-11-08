@@ -148,11 +148,12 @@ export default function DocumentDetailsPage() {
         return;
       }
 
-      // Success - show success message
-      setSuccessMessage('Document reprocessed successfully! Title and description have been updated.');
-      
-      // Refresh document to get updated title/description
-      await fetchDocument();
+      // Success - document queued for full reprocessing
+      setSuccessMessage('Document queued for full reprocessing. The progress indicator below will show the processing status.');
+
+      // CRITICAL FIX: Restart polling to get real-time updates
+      // Polling may have stopped when document was previously completed
+      startPolling();
     } catch (err: any) {
       setError(err.error || err.message || 'Failed to process document');
     } finally {
@@ -260,7 +261,9 @@ export default function DocumentDetailsPage() {
                   ✎ Edit
                 </Button>
               )}
-              {document.processingStatus === 'completed' && (
+
+              {/* IMPROVED: Only show Reprocess when FULLY completed */}
+              {document.fullyCompleted && (
                 <Button
                   variant="outline"
                   onClick={handleProcess}
@@ -270,14 +273,18 @@ export default function DocumentDetailsPage() {
                   {isProcessing ? 'Reprocessing...' : '↻ Reprocess'}
                 </Button>
               )}
-              {document.processingStatus !== 'completed' && (
+
+              {/* IMPROVED: Show Process button when not fully completed */}
+              {!document.fullyCompleted && document.processingStatus !== 'processing' && (
                 <Button
                   variant="primary"
                   onClick={handleProcess}
                   loading={isProcessing}
                   disabled={isProcessing}
                 >
-                  {isProcessing ? 'Processing...' : document.processingStatus === 'processing' ? '⚙ Retry Processing' : '⚙ Process Document'}
+                  {isProcessing ? 'Processing...' :
+                   document.processingStatus === 'failed' ? '⚙ Retry Processing' :
+                   '⚙ Process Document'}
                 </Button>
               )}
             </div>
@@ -349,8 +356,8 @@ export default function DocumentDetailsPage() {
           </div>
         )}
 
-        {/* Phase 5: Enhanced Processing Progress */}
-        {(document.processingStatus === 'processing' || document.processingStatus === 'pending') && (
+        {/* IMPROVED: Always show ProcessingProgress for non-failed, non-fully-completed documents */}
+        {document.processingStatus !== 'failed' && !document.fullyCompleted && (
           <div className="mb-8 rounded-lg bg-white p-6 shadow">
             <h2 className="mb-4 text-lg font-semibold text-gray-900">Processing Status</h2>
             <ProcessingProgress
@@ -361,6 +368,7 @@ export default function DocumentDetailsPage() {
               vectorIndexingStatus={document.vectorIndexingStatus}
               pageCount={document.pageCount}
               wordCount={document.wordCount}
+              fullyCompleted={document.fullyCompleted}
             />
           </div>
         )}

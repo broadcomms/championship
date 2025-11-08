@@ -75,6 +75,7 @@ export interface Document {
   embeddingsGenerated?: number;
   vectorIndexingStatus?: 'pending' | 'processing' | 'indexing' | 'completed' | 'partial' | 'failed'; // Phase 2.4: Added 'indexing' status
   complianceFrameworkId?: number;
+  fullyCompleted?: boolean; // CRITICAL FIX: Tracks when ALL processing (including AI enrichment) is complete
 }
 
 // Phase 4 & 5: Compliance Framework Types
