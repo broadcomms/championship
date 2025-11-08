@@ -10,6 +10,7 @@ export interface ExtractedText {
   text: string;
   pageCount?: number;
   wordCount: number;
+  characterCount: number;
   metadata?: {
     extractedFrom: string;
     originalSize: number;
@@ -100,12 +101,14 @@ export class TextExtractionService {
       // Clean the extracted text (IMPORTANT: Even for MD and TXT!)
       const cleanedText = this.cleanText(extractedText);
       const wordCount = this.countWords(cleanedText);
+      const characterCount = cleanedText.length;
 
       this.env.logger?.info('Text extraction and cleaning completed', {
         filename,
         originalLength: extractedText.length,
         cleanedLength: cleanedText.length,
         wordCount,
+        characterCount,
         pageCount,
         reductionPercent: ((1 - cleanedText.length / extractedText.length) * 100).toFixed(1),
       });
@@ -114,6 +117,7 @@ export class TextExtractionService {
         text: cleanedText,
         pageCount,
         wordCount,
+        characterCount,
         metadata: {
           extractedFrom: contentType,
           originalSize,

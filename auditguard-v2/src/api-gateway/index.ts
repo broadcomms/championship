@@ -504,6 +504,25 @@ export default class extends Service<Env> {
         });
       }
 
+      // Match /api/workspaces/:id/documents/:documentId/processing-steps
+      const processingStepsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/processing-steps$/);
+      if (processingStepsMatch && processingStepsMatch[1] && processingStepsMatch[2] && request.method === 'GET') {
+        const workspaceId = processingStepsMatch[1];
+        const documentId = processingStepsMatch[2];
+        const user = await this.validateSession(request);
+
+        // Get processing steps from document service
+        const steps = await this.env.DOCUMENT_SERVICE.getProcessingSteps(documentId);
+
+        return new Response(
+          JSON.stringify({ steps }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          }
+        );
+      }
+
       // Match /api/workspaces/:id/documents/:documentId/process
       const processMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/process$/);
       if (processMatch && processMatch[1] && processMatch[2] && request.method === 'POST') {

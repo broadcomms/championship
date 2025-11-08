@@ -120,9 +120,33 @@ export function DocumentChunksViewer({
   const content = (
     <><div className="p-6">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Document Chunks ({chunks.length})
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Document Chunks ({chunks.length})
+          </h2>
+          <div className="group relative">
+            <svg
+              className="h-4 w-4 text-gray-400 cursor-help"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <div className="invisible group-hover:visible absolute left-0 top-6 z-10 w-64 rounded-lg bg-gray-900 p-3 text-xs text-white shadow-lg">
+              <p className="font-semibold mb-1">About Chunk Overlap</p>
+              <p>
+                Chunks overlap by ~128 tokens to preserve context for semantic search.
+                The sum of chunk word counts may exceed the document word count.
+              </p>
+            </div>
+          </div>
+        </div>
         <div className="text-sm text-gray-600">
           {indexedCount} / {chunks.length} indexed
         </div>
@@ -154,7 +178,9 @@ export function DocumentChunksViewer({
                   <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
                     <span>{chunk.tokenCount} tokens</span>
                     <span>•</span>
-                    <span>{chunk.chunkSize} chars</span>
+                    <span>{chunk.chunkSize} words</span>
+                    <span>•</span>
+                    <span>{chunk.content.length} chars</span>
                     {chunk.embeddingStatus === 'completed' && (
                       <>
                         <span>•</span>

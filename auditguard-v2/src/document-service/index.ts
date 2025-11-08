@@ -761,6 +761,59 @@ export default class extends Service<Env> {
   }
 
   /**
+   * Get processing steps for a document
+   * Returns ordered list of processing steps with their current status
+   */
+  async getProcessingSteps(documentId: string): Promise<Array<{
+    id: string;
+    documentId: string;
+    stepName: string;
+    stepOrder: number;
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    startedAt?: number;
+    completedAt?: number;
+    progressCurrent?: number;
+    progressTotal?: number;
+    metadata?: any;
+    errorMessage?: string;
+    createdAt: number;
+    updatedAt: number;
+  }>> {
+    try {
+      const result = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT * FROM document_processing_steps
+         WHERE document_id = ?
+         ORDER BY step_order ASC`
+      ).bind(documentId).all();
+
+      return (result.results || []).map((row: any) => ({
+        id: row.id,
+        documentId: row.document_id,
+        stepName: row.step_name,
+        stepOrder: row.step_order,
+        status: row.status,
+        startedAt: row.started_at,
+        completedAt: row.completed_at,
+        progressCurrent: row.progress_current,
+        progressTotal: row.progress_total,
+        metadata: row.metadata ? JSON.parse(row.metadata) : null,
+        errorMessage: row.error_message,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+    } catch (error) {
+      // If table doesn't exist yet, return empty array
+      if (error instanceof Error && error.message?.includes('no such table')) {
+        this.env.logger.warn('Processing steps table not found - migration pending', {
+          documentId,
+        });
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Verify if SmartBucket has finished indexing a document
    * Tests by attempting to retrieve chunks from the document
    * @returns Object with isComplete flag and estimated progress percentage
@@ -1375,14 +1428,14 @@ Respond with ONLY a JSON object in this exact format:
     });
 
     const textExtractor = new TextExtractionService(this.env);
-    const { text, pageCount, wordCount, metadata } = await textExtractor.extractText(
+    const { text, pageCount, wordCount, characterCount, metadata } = await textExtractor.extractText(
       fileBuffer,
       document.content_type,
       document.filename
     );
 
     // Validate extraction quality
-    const validation = textExtractor.validateExtraction({ text, pageCount, wordCount, metadata });
+    const validation = textExtractor.validateExtraction({ text, pageCount, wordCount, characterCount, metadata });
     if (!validation.isValid) {
       this.env.logger.warn('⚠️ Text extraction quality warnings', {
         documentId,
@@ -1411,6 +1464,7 @@ Respond with ONLY a JSON object in this exact format:
       .set({
         extracted_text: text,
         word_count: wordCount,
+        character_count: text.length,
         page_count: pageCount || null,
         extraction_status: 'completed',
         updated_at: Date.now(),

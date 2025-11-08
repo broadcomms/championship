@@ -6,6 +6,7 @@ import { ChunkingService } from '../chunking-service';
 import { ComplianceTaggingService } from '../compliance-tagging-service';
 import { EmbeddingService } from '../embedding-service';
 import { enrichDocument, type EnrichmentInput } from '../common/ai-enrichment';
+import { ProcessingStepTracker } from '../common/processing-step-tracker';
 
 export interface Body {
   documentId: string;
@@ -121,6 +122,10 @@ export default class extends Each<Body, Env> {
     // Get document metadata from database
     const document = await this.env.DOCUMENT_SERVICE.getDocumentMetadata(documentId);
 
+    // Initialize step tracker
+    const stepTracker = new ProcessingStepTracker(this.env.AUDITGUARD_DB, this.env.logger);
+    await stepTracker.initializeSteps(documentId);
+
     try {
       // STEP 1: Download original file from Vultr S3
       await this.env.DOCUMENT_SERVICE.updateProcessingStatus(documentId, 'processing');
@@ -140,6 +145,8 @@ export default class extends Each<Body, Env> {
       });
 
       // STEP 2: Extract clean text
+      await stepTracker.startStep(documentId, 'extraction');
+
       this.env.logger.info('Extracting text from document', {
         documentId,
         contentType: document.contentType,
@@ -147,14 +154,14 @@ export default class extends Each<Body, Env> {
       });
 
       const textExtractor = new TextExtractionService(this.env);
-      const { text, pageCount, wordCount, metadata } = await textExtractor.extractText(
+      const { text, pageCount, wordCount, characterCount, metadata } = await textExtractor.extractText(
         originalFile,
         document.contentType,
         document.filename
       );
 
       // Validate extraction quality
-      const validation = textExtractor.validateExtraction({ text, pageCount, wordCount, metadata });
+      const validation = textExtractor.validateExtraction({ text, pageCount, wordCount, characterCount, metadata });
       if (!validation.isValid) {
         this.env.logger.warn('Text extraction quality warnings', {
           documentId,
@@ -171,7 +178,11 @@ export default class extends Each<Body, Env> {
         warnings: validation.warnings,
       });
 
+      await stepTracker.completeStep(documentId, 'extraction', { wordCount, pageCount, characterCount });
+
       // STEP 3A: Chunk the text for vector embeddings
+      await stepTracker.startStep(documentId, 'chunking');
+
       this.env.logger.info('Starting text chunking for vector embeddings', {
         documentId,
         textLength: text.length,
@@ -201,6 +212,8 @@ export default class extends Each<Body, Env> {
         averageChunkSize: chunkingResult.averageChunkSize,
         warnings: chunkValidation.warnings,
       });
+
+      await stepTracker.completeStep(documentId, 'chunking', { chunkCount: chunkingResult.totalChunks });
 
       // ============================================================================
       // PHASE 2.2: DIRECT RAINDROP AI EMBEDDING GENERATION (NO EXTERNAL API)
@@ -242,15 +255,16 @@ export default class extends Each<Body, Env> {
           const chunkIdStr = `chunk_${documentId}_${i}`; // String ID for D1
           chunkIds.push(chunkIdStr);
 
-          // Calculate word count from text
+          // Calculate word count and character count from text
           const wordCount = chunk.text.split(/\s+/).filter(w => w.length > 0).length;
+          const characterCount = chunk.text.length;
 
           // Insert chunk into D1 (will create table via migration)
           try {
             await (this.env.AUDITGUARD_DB as any).prepare(
-              `INSERT INTO document_chunks 
-               (id, document_id, workspace_id, chunk_index, chunk_text, word_count, embedding_status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`
+              `INSERT INTO document_chunks
+               (id, document_id, workspace_id, chunk_index, chunk_text, word_count, character_count, embedding_status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`
             ).bind(
               chunkIdStr,
               documentId,
@@ -258,6 +272,7 @@ export default class extends Each<Body, Env> {
               i,
               chunk.text,
               wordCount,
+              characterCount,
               Date.now()
             ).run();
           } catch (chunkError: any) {
@@ -281,6 +296,8 @@ export default class extends Each<Body, Env> {
         });
 
         // STEP 3C: Generate embeddings using Raindrop AI (Phase 2.1 code)
+        await stepTracker.startStep(documentId, 'embedding');
+
         const embeddingService = new EmbeddingService(this.env);
         const startTime = Date.now();
         let embeddingsGenerated = 0;
@@ -318,6 +335,9 @@ export default class extends Each<Body, Env> {
              SET embeddings_generated = ?
              WHERE id = ?`
           ).bind(embeddingsGenerated, documentId).run();
+
+          // Update step tracker progress
+          await stepTracker.updateStepProgress(documentId, 'embedding', embeddingsGenerated, chunkingResult.chunks.length);
         }
 
         const duration = Date.now() - startTime;
@@ -330,7 +350,11 @@ export default class extends Each<Body, Env> {
           throughput: `${(embeddingsGenerated / (duration / 1000)).toFixed(2)} chunks/sec`
         });
 
+        await stepTracker.completeStep(documentId, 'embedding', { embeddingsGenerated });
+
         // STEP 3D: Wait for Raindrop Vector Index to complete indexing (3-5 seconds)
+        await stepTracker.startStep(documentId, 'indexing');
+
         await (this.env.AUDITGUARD_DB as any).prepare(
           `UPDATE documents
            SET vector_indexing_status = 'indexing'
@@ -351,6 +375,8 @@ export default class extends Each<Body, Env> {
            SET vector_indexing_status = 'completed'
            WHERE id = ?`
         ).bind(documentId).run();
+
+        await stepTracker.completeStep(documentId, 'indexing');
 
         embeddingResult = {
           successCount: embeddingsGenerated,
@@ -419,6 +445,8 @@ export default class extends Each<Body, Env> {
       // STEP 5: AI ENRICHMENT - Generate title, description, category, and detect compliance framework
       // ⚠️ CRITICAL FIX: This MUST run BEFORE marking status as 'completed'
       // Otherwise UI polling stops before enrichment data is available
+      await stepTracker.startStep(documentId, 'enrichment');
+
       this.env.logger.info('🤖 Starting AI enrichment for document metadata', {
         documentId,
         wordCount,
@@ -474,6 +502,12 @@ export default class extends Each<Body, Env> {
           title: enrichmentResult.title,
           category: enrichmentResult.category,
           framework: enrichmentResult.complianceFrameworkId,
+        });
+
+        await stepTracker.completeStep(documentId, 'enrichment', {
+          title: enrichmentResult.title,
+          category: enrichmentResult.category,
+          frameworkId: enrichmentResult.complianceFrameworkId,
         });
 
       } catch (enrichmentError) {
@@ -558,6 +592,10 @@ export default class extends Each<Body, Env> {
       vultrKey,
       note: 'Will delete old data and run complete pipeline',
     });
+
+    // Reset processing steps for reprocessing
+    const stepTracker = new ProcessingStepTracker(this.env.AUDITGUARD_DB, this.env.logger);
+    await stepTracker.resetSteps(documentId);
 
     try {
       // STEP 0: Clean up old data before reprocessing
