@@ -52,7 +52,7 @@ export class OptimizedEmbeddingService {
     documentId: string,
     workspaceId: string,
     chunks: Chunk[],
-    chunkIds: number[],
+    chunkIds: string[],
     frameworkId?: number,
     config: Partial<OptimizedEmbeddingConfig> = {}
   ): Promise<BatchEmbeddingResult> {
@@ -201,16 +201,16 @@ export class OptimizedEmbeddingService {
    */
   private async checkCache(
     chunks: Chunk[],
-    chunkIds: number[]
+    chunkIds: string[]
   ): Promise<{
     cachedResults: any[];
     uncachedChunks: Chunk[];
-    uncachedIds: number[];
+    uncachedIds: string[];
     uncachedIndices: number[];
   }> {
     const cachedResults: any[] = [];
     const uncachedChunks: Chunk[] = [];
-    const uncachedIds: number[] = [];
+    const uncachedIds: string[] = [];
     const uncachedIndices: number[] = [];
 
     const { embeddings, cacheHits } = await this.cacheService.getBatchEmbeddings(
@@ -246,7 +246,7 @@ export class OptimizedEmbeddingService {
     documentId: string,
     workspaceId: string,
     chunks: Chunk[],
-    chunkIds: number[],
+    chunkIds: string[],
     chunkIndices: number[],
     frameworkId: number | undefined,
     config: OptimizedEmbeddingConfig
@@ -255,7 +255,7 @@ export class OptimizedEmbeddingService {
     const parallelBatches = config.parallelBatches!;
 
     // Split into batches
-    const batches: Array<{ chunks: Chunk[]; ids: number[]; indices: number[] }> = [];
+    const batches: Array<{ chunks: Chunk[]; ids: string[]; indices: number[] }> = [];
 
     for (let i = 0; i < chunks.length; i += batchSize) {
       batches.push({

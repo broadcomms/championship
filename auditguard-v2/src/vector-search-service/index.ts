@@ -20,7 +20,7 @@ export interface VectorSearchRequest {
 
 export interface VectorSearchResult {
   documentId: string;
-  chunkId: number;
+  chunkId: string;
   chunkIndex: number;
   score: number;                    // Similarity score (0-1)
   text: string;                     // Chunk text
@@ -283,7 +283,7 @@ export class VectorSearchService {
             if (document) {
               results.push({
                 documentId,
-                chunkId: 0, // SmartBucket doesn't have chunk IDs
+                chunkId: '', // SmartBucket doesn't have chunk IDs
                 chunkIndex: 0,
                 score: result.score || 0.8, // SmartBucket score
                 text: result.text || '',
@@ -388,7 +388,7 @@ export class VectorSearchService {
   /**
    * Get chunk data from database
    */
-  private async getChunkData(chunkId: number): Promise<any> {
+  private async getChunkData(chunkId: string): Promise<any> {
     try {
       const result = await (this.env.AUDITGUARD_DB as any).prepare(
         `SELECT id, content, start_char, end_char, token_count

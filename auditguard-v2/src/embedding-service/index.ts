@@ -15,7 +15,7 @@ export interface EmbeddingConfig {
 }
 
 export interface EmbeddingResult {
-  chunkId: number;          // Database chunk ID
+  chunkId: string;          // Database chunk ID
   vectorId: string;         // Vector index ID
   embedding: number[];      // 384-dimensional vector (all-MiniLM-L6-v2)
   success: boolean;
@@ -33,7 +33,7 @@ export interface BatchEmbeddingResult {
 
 export interface VectorMetadata {
   documentId: string;
-  chunkId: number;
+  chunkId: string;
   chunkIndex: number;
   workspaceId: string;
   frameworkId?: number;
@@ -69,7 +69,7 @@ export class EmbeddingService {
     documentId: string,
     workspaceId: string,
     chunks: Chunk[],
-    chunkIds: number[],
+    chunkIds: string[],
     frameworkId?: number,
     config: Partial<EmbeddingConfig> = {}
   ): Promise<BatchEmbeddingResult> {
@@ -183,7 +183,7 @@ export class EmbeddingService {
     documentId: string,
     workspaceId: string,
     chunks: Chunk[],
-    chunkIds: number[],
+    chunkIds: string[],
     startIndex: number,
     frameworkId: number | undefined,
     config: EmbeddingConfig
@@ -395,29 +395,25 @@ export class EmbeddingService {
    * PHASE 2: Simplified - Vector Index already stores embeddings
    */
   private async storeInDatabase(
-    chunkId: number,
+    chunkId: string,
     embedding: number[],
     vectorId: string
   ): Promise<void> {
     try {
-      // Convert embedding array to binary format for storage (Workers-compatible)
-      const embeddingBuffer = new Float32Array(embedding);
-      // Use Uint8Array instead of Buffer (works in Workers environment)
-      const embeddingBlob = new Uint8Array(embeddingBuffer.buffer);
-
-      // Update chunk with embedding data using Raindrop D1 API
+      // PHASE 2.2: Store only metadata in D1, actual embedding is in Vector Index
+      // Update chunk with vector_id and status using Raindrop D1 API
       await (this.env.AUDITGUARD_DB as any).prepare(
         `UPDATE document_chunks
-         SET vector_embedding = ?,
-             vector_id = ?,
-             embedding_status = 'completed'
+         SET vector_id = ?,
+             embedding_status = 'completed',
+             updated_at = ?
          WHERE id = ?`
-      ).bind(embeddingBlob, vectorId, chunkId).run();
+      ).bind(vectorId, Date.now(), chunkId).run();
 
-      this.env.logger.info('Embedding stored in database', {
+      this.env.logger.info('Embedding metadata stored in database', {
         chunkId,
         vectorId,
-        embeddingSize: embeddingBlob.length,
+        embeddingDimensions: embedding.length,
       });
 
     } catch (error) {

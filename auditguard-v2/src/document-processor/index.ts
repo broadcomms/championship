@@ -18,7 +18,7 @@ export interface Body {
 
   // Embedding generation fields
   type?: string;  // 'generate_embedding' for individual chunk processing
-  chunkId?: number;
+  chunkId?: string;
   chunkText?: string;
   chunkIndex?: number;
 }
@@ -230,12 +230,11 @@ export default class extends Each<Body, Env> {
         });
 
         // STEP 3B: Store chunks in D1 database (NEW Phase 2.2)
-        const chunkIds: number[] = [];
+        const chunkIds: string[] = [];
         for (let i = 0; i < chunkingResult.chunks.length; i++) {
           const chunk = chunkingResult.chunks[i];
-          const chunkId = i; // Use numeric ID for embedding service
           const chunkIdStr = `chunk_${documentId}_${i}`; // String ID for D1
-          chunkIds.push(chunkId);
+          chunkIds.push(chunkIdStr);
 
           // Calculate word count from text
           const wordCount = chunk.text.split(/\s+/).filter(w => w.length > 0).length;
@@ -411,38 +410,9 @@ export default class extends Each<Body, Env> {
         smartBucketKey,
       });
 
-      // STEP 5: Update database with final processing results
-      await this.env.DOCUMENT_SERVICE.updateDocumentProcessing(documentId, {
-        textExtracted: true,
-        chunkCount: chunkingResult.totalChunks,  // Custom chunks created
-        processingStatus: 'completed',  // All processing complete (extraction, chunking, embeddings)
-        processedAt: Date.now(),
-        extractedTextKey: smartBucketKey,
-        extractedText: text,  // Store full text in database for immediate access
-        pageCount: pageCount,
-        wordCount: wordCount,
-      });
-
-      this.env.logger.info('✅ Document processing COMPLETED successfully', {
-        documentId,
-        wordCount,
-        pageCount,
-        chunkCount: chunkingResult.totalChunks,
-        embeddingsGenerated: embeddingResult?.successCount || 0,
-        smartBucketKey,
-        status: 'completed',
-      });
-
-      // STEP 6: Run AI enrichment (generate title and description)
-      // This MUST happen immediately after text extraction, before chunking
-      this.env.logger.info('🤖 Starting AI enrichment immediately after text extraction', {
-        documentId,
-        workspaceId,
-        textLength: text.length,
-        wordCount: wordCount,
-      });
-
-      // STEP 6: AI ENRICHMENT - Generate title, description, category, and detect compliance framework
+      // STEP 5: AI ENRICHMENT - Generate title, description, category, and detect compliance framework
+      // ⚠️ CRITICAL FIX: This MUST run BEFORE marking status as 'completed'
+      // Otherwise UI polling stops before enrichment data is available
       this.env.logger.info('🤖 Starting AI enrichment for document metadata', {
         documentId,
         wordCount,
@@ -507,6 +477,29 @@ export default class extends Each<Body, Env> {
         });
         // Continue processing even if enrichment fails
       }
+
+      // STEP 6: Update database with final processing results
+      // ⚠️ CRITICAL: This is done AFTER enrichment so UI sees enrichment data
+      await this.env.DOCUMENT_SERVICE.updateDocumentProcessing(documentId, {
+        textExtracted: true,
+        chunkCount: chunkingResult.totalChunks,  // Custom chunks created
+        processingStatus: 'completed',  // All processing complete (extraction, chunking, embeddings)
+        processedAt: Date.now(),
+        extractedTextKey: smartBucketKey,
+        extractedText: text,  // Store full text in database for immediate access
+        pageCount: pageCount,
+        wordCount: wordCount,
+      });
+
+      this.env.logger.info('✅ Document processing COMPLETED successfully', {
+        documentId,
+        wordCount,
+        pageCount,
+        chunkCount: chunkingResult.totalChunks,
+        embeddingsGenerated: embeddingResult?.successCount || 0,
+        smartBucketKey,
+        status: 'completed',
+      });
 
       // Acknowledge success - SmartBucket will continue indexing in background
       message.ack();

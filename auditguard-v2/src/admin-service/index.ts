@@ -665,82 +665,72 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
-    this.env.logger.info('Getting vector index statistics from PostgreSQL', { adminUserId });
+    this.env.logger.info('Getting vector index statistics from D1', { adminUserId });
 
     try {
-      // Call PostgreSQL admin API
-      const response = await fetch(
-        `${this.env.LOCAL_EMBEDDING_SERVICE_URL}/api/v1/admin/vector-stats`,
-        {
-          method: 'GET',
-          headers: {
-            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const db = this.getDb();
 
-      if (!response.ok) {
-        throw new Error(`PostgreSQL API error: ${response.status}`);
-      }
+      // Get chunk statistics from D1 database using raw SQL
+      const chunkStats = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN embedding_status = 'completed' THEN 1 ELSE 0 END) as completed
+        FROM document_chunks`
+      ).first();
 
-      const data = await response.json() as {
-        totalChunks: number;
-        chunksCompleted: number;
-        chunksPending: number;
-        chunksProcessing: number;
-        chunksFailed: number;
-        completionPercentage: number;
-        recentDocuments: Array<{
-          document_id: string;
-          filename: string;
-          uploaded_at: number;
-          chunk_count: number;
-          embeddings_generated: number;
-          status: string;
-        }>;
-        indexName: string;
-        dimensions: number;
-        metric: string;
-      };
+      const totalVectors = Number(chunkStats?.total || 0);
+      const completedVectors = Number(chunkStats?.completed || 0);
 
-      // Extract sample vectors from recent documents
-      const sampleVectors = data.recentDocuments.slice(0, 10).map((doc) => ({
-        id: `${doc.document_id}_emb`,
-        documentId: doc.document_id,
-        chunkIndex: 0, // Not available in summary API
-        hasEmbedding: doc.embeddings_generated > 0,
-        embeddingStatus: doc.status,
+      // Get sample vectors from recent documents
+      const recentChunks = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT
+          dc.id,
+          dc.document_id,
+          dc.chunk_index,
+          dc.embedding_status,
+          dc.vector_id,
+          d.filename
+        FROM document_chunks dc
+        INNER JOIN documents d ON d.id = dc.document_id
+        ORDER BY dc.created_at DESC
+        LIMIT 10`
+      ).all();
+
+      const sampleVectors = (recentChunks.results || []).map((chunk: any) => ({
+        id: chunk.vector_id || `${chunk.document_id}_chunk_${chunk.chunk_index}`,
+        documentId: chunk.document_id,
+        chunkIndex: chunk.chunk_index,
+        hasEmbedding: chunk.embedding_status === 'completed',
+        embeddingStatus: chunk.embedding_status || 'pending',
       }));
 
       await this.logAdminAction(adminUserId, 'view_vector_stats', 'vector_index', null, {
-        totalVectors: data.chunksCompleted,
-        databaseVectors: data.chunksCompleted,
-        source: 'postgresql',
+        totalVectors: completedVectors,
+        databaseVectors: totalVectors,
+        source: 'raindrop_d1',
       });
 
-      this.env.logger.info('Vector index statistics retrieved from PostgreSQL', {
+      this.env.logger.info('Vector index statistics retrieved from D1', {
         adminUserId,
-        totalVectors: data.chunksCompleted,
-        totalChunks: data.totalChunks,
-        pending: data.chunksPending,
-        failed: data.chunksFailed,
+        totalVectors: totalVectors,
+        completedVectors: completedVectors,
+        sampleCount: sampleVectors.length,
       });
 
       return {
-        indexName: data.indexName,
-        dimensions: data.dimensions,
-        metric: data.metric,
-        totalVectors: data.chunksCompleted,
-        databaseVectors: data.chunksCompleted,
-        mismatch: 0, // PostgreSQL is single source of truth
+        indexName: 'document-embeddings',
+        dimensions: 384, // bge-small-en produces 384-dimensional vectors
+        metric: 'cosine', // Raindrop Vector Index uses cosine similarity
+        totalVectors: completedVectors,
+        databaseVectors: totalVectors,
+        mismatch: 0, // D1 is single source of truth
         sampleVectors,
       };
     } catch (error) {
-      this.env.logger.error('Failed to get vector stats from PostgreSQL', {
+      this.env.logger.error('Failed to get vector stats from D1', {
         error: error instanceof Error ? error.message : String(error),
       });
-      throw new Error('Failed to retrieve vector statistics from PostgreSQL');
+      throw new Error('Failed to retrieve vector statistics from D1');
     }
   }
 
@@ -778,122 +768,111 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
-    this.env.logger.info('Getting embedding status dashboard from PostgreSQL', { adminUserId });
+    this.env.logger.info('Getting embedding status dashboard from D1', { adminUserId });
 
     try {
-      // Call PostgreSQL admin API
-      const response = await fetch(
-        `${this.env.LOCAL_EMBEDDING_SERVICE_URL}/api/v1/admin/embedding-summary`,
-        {
-          method: 'GET',
-          headers: {
-            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      // Get document statistics using raw SQL
+      const docStats = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN embeddings_generated = 1 THEN 1 ELSE 0 END) as withEmbeddings
+        FROM documents`
+      ).first();
 
-      if (!response.ok) {
-        throw new Error(`PostgreSQL API error: ${response.status}`);
-      }
+      const totalDocs = Number(docStats?.total || 0);
+      const docsWithEmbeddings = Number(docStats?.withEmbeddings || 0);
 
-      const data = await response.json() as {
-        summary: {
-          totalDocuments: number;
-          documentsWithEmbeddings: number;
-          totalChunks: number;
-          chunksCompleted: number;
-          chunksPending: number;
-          chunksProcessing: number;
-          chunksFailed: number;
-          completionPercentage: number;
-        };
-        recentDocuments: Array<{
-          document_id: string;
-          filename: string;
-          uploaded_at: number;
-          chunk_count: number;
-          embeddings_generated: number;
-          status: string;
-        }>;
-      };
+      // Get chunk statistics using raw SQL to avoid type issues
+      const chunksStats = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN embedding_status = 'completed' THEN 1 ELSE 0 END) as completed,
+          SUM(CASE WHEN embedding_status = 'pending' THEN 1 ELSE 0 END) as pending,
+          SUM(CASE WHEN embedding_status = 'failed' THEN 1 ELSE 0 END) as failed
+        FROM document_chunks`
+      ).first();
 
-      // Get failed chunks from separate endpoint
-      let failedChunks: Array<{
-        chunkId: number;
-        documentId: string;
-        chunkIndex: number;
-        error: string;
-      }> = [];
+      const totalChunks = Number(chunksStats?.total || 0);
+      const chunksCompleted = Number(chunksStats?.completed || 0);
+      const chunksPending = Number(chunksStats?.pending || 0);
+      const chunksFailed = Number(chunksStats?.failed || 0);
+      const completionPercentage = totalChunks > 0 ? Math.round((chunksCompleted / totalChunks) * 100) : 0;
 
-      try {
-        const failedResponse = await fetch(
-          `${this.env.LOCAL_EMBEDDING_SERVICE_URL}/api/v1/admin/failed-chunks?limit=50`,
-          {
-            method: 'GET',
-            headers: {
-              'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+      // Get recent documents with embedding counts
+      const recentDocs = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT
+          d.id,
+          d.filename,
+          d.uploaded_at,
+          d.chunk_count,
+          COUNT(CASE WHEN dc.embedding_status = 'completed' THEN 1 END) as embeddings_generated,
+          CASE
+            WHEN COUNT(CASE WHEN dc.embedding_status = 'completed' THEN 1 END) = d.chunk_count THEN 'completed'
+            WHEN COUNT(CASE WHEN dc.embedding_status = 'completed' THEN 1 END) > 0 THEN 'partial'
+            ELSE 'pending'
+          END as status
+        FROM documents d
+        LEFT JOIN document_chunks dc ON d.id = dc.document_id
+        GROUP BY d.id
+        ORDER BY d.uploaded_at DESC
+        LIMIT 10`
+      ).all();
 
-        if (failedResponse.ok) {
-          const failedData = await failedResponse.json() as {
-            failedChunks: Array<{
-              chunk_id: number;
-              document_id: string;
-              chunk_index: number;
-              chunk_text: string;
-              embedding_status: string;
-            }>;
-          };
+      // Get failed chunks
+      const failedChunksData = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT id, document_id, chunk_index
+        FROM document_chunks
+        WHERE embedding_status = 'failed'
+        LIMIT 50`
+      ).all();
 
-          failedChunks = failedData.failedChunks.map((c) => ({
-            chunkId: c.chunk_id,
-            documentId: c.document_id,
-            chunkIndex: c.chunk_index,
-            error: 'Embedding generation failed - check logs',
-          }));
-        }
-      } catch (error) {
-        this.env.logger.warn('Could not fetch failed chunks', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+      const failedChunks = (failedChunksData.results || []).map((c: any) => ({
+        chunkId: c.id,
+        documentId: c.document_id,
+        chunkIndex: c.chunk_index,
+        error: 'Embedding generation failed - check logs',
+      }));
 
       await this.logAdminAction(adminUserId, 'view_embedding_status', 'embeddings', null, {
-        totalChunks: data.summary.totalChunks,
-        completed: data.summary.chunksCompleted,
-        completionPercentage: data.summary.completionPercentage,
-        source: 'postgresql',
+        totalChunks,
+        completed: chunksCompleted,
+        completionPercentage,
+        source: 'raindrop_d1',
       });
 
-      this.env.logger.info('Embedding status retrieved from PostgreSQL', {
+      this.env.logger.info('Embedding status retrieved from D1', {
         adminUserId,
-        totalChunks: data.summary.totalChunks,
-        completed: data.summary.chunksCompleted,
-        pending: data.summary.chunksPending,
-        failed: data.summary.chunksFailed,
+        totalChunks,
+        completed: chunksCompleted,
+        pending: chunksPending,
+        failed: chunksFailed,
       });
 
       return {
-        summary: data.summary,
-        recentDocuments: data.recentDocuments.map((d) => ({
-          documentId: d.document_id,
+        summary: {
+          totalDocuments: totalDocs,
+          documentsWithEmbeddings: docsWithEmbeddings,
+          totalChunks,
+          chunksCompleted,
+          chunksPending,
+          chunksFailed,
+          completionPercentage,
+        },
+        recentDocuments: (recentDocs.results || []).map((d: any) => ({
+          documentId: d.id,
           filename: d.filename,
           uploadedAt: d.uploaded_at,
           chunkCount: d.chunk_count,
-          embeddingsGenerated: d.embeddings_generated,
+          embeddingsGenerated: Number(d.embeddings_generated || 0),
           status: d.status,
         })),
         failedChunks,
       };
     } catch (error) {
-      this.env.logger.error('Failed to get embedding status from PostgreSQL', {
+      this.env.logger.error('Failed to get embedding status from D1', {
         error: error instanceof Error ? error.message : String(error),
       });
-      throw new Error('Failed to retrieve embedding status from PostgreSQL');
+      throw new Error('Failed to retrieve embedding status from D1');
     }
   }
 
@@ -922,88 +901,67 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
-    this.env.logger.info('Testing vector search from PostgreSQL', { adminUserId, query, topK });
+    this.env.logger.info('Testing vector search using Raindrop AI + Vector Index', { adminUserId, query, topK });
+
+    const startTime = Date.now();
 
     try {
-      // Call PostgreSQL admin test search endpoint
-      const response = await fetch(
-        `${this.env.LOCAL_EMBEDDING_SERVICE_URL}/api/v1/admin/test-search`,
-        {
-          method: 'POST',
-          headers: {
-            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            query,
-            limit: topK,
-          }),
-        }
-      );
+      // Generate query embedding using Raindrop AI
+      const queryEmbeddingResponse = await this.env.AI.run('bge-small-en', {
+        text: [query]
+      } as any);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.env.logger.error('PostgreSQL test search failed', {
-          status: response.status,
-          error: errorText,
-        });
+      const queryEmbedding = Array.isArray(queryEmbeddingResponse)
+        ? queryEmbeddingResponse[0]
+        : (queryEmbeddingResponse as any).data[0];
 
-        return {
-          query,
-          results: [],
-          searchTime: 0,
-          error: `Search failed: ${response.status} - ${errorText}`,
-        };
+      if (!Array.isArray(queryEmbedding) || queryEmbedding.length !== 384) {
+        throw new Error('Invalid query embedding generated');
       }
 
-      const data = await response.json() as {
-        query: string;
-        results: Array<{
-          vectorId: string;
-          chunkId: string;
-          documentId: string;
-          chunkIndex: number;
-          text: string;
-          filename: string;
-          workspaceId: string;
-          score: number;
-          similarity: number;
-          distance: number;
-        }>;
-        count: number;
-        searchTimeMs: number;
-      };
+      // Query Raindrop Vector Index
+      const vectorResults = await this.env.DOCUMENT_EMBEDDINGS.query(queryEmbedding, {
+        topK,
+        returnMetadata: 'all',
+      });
+
+      const searchTime = Date.now() - startTime;
+
+      // Format results
+      const results = (vectorResults.matches || []).map((match: any) => ({
+        vectorId: match.id,
+        score: match.score,
+        documentId: match.metadata?.documentId || 'unknown',
+        chunkIndex: match.metadata?.chunkIndex || 0,
+        text: (match.metadata?.text || 'No text available').substring(0, 500), // Truncate text for response size
+      }));
 
       // Log the search test
       await this.logAdminAction(adminUserId, 'test_vector_search', 'vector_index', null, {
         query,
         topK,
-        resultsCount: data.count,
-        searchTimeMs: data.searchTimeMs,
-        source: 'postgresql',
+        resultsCount: results.length,
+        searchTimeMs: searchTime,
+        source: 'raindrop_vector_index',
       });
 
-      this.env.logger.info('Vector search test completed from PostgreSQL', {
+      this.env.logger.info('Vector search test completed using Raindrop', {
         adminUserId,
         query,
-        resultsCount: data.count,
-        searchTimeMs: data.searchTimeMs,
+        resultsCount: results.length,
+        searchTimeMs: searchTime,
       });
 
       return {
-        query: data.query,
-        results: data.results.map((r) => ({
-          vectorId: r.vectorId,
-          score: r.score,
-          documentId: r.documentId,
-          chunkIndex: r.chunkIndex,
-          text: r.text.substring(0, 500), // Truncate text for response size
-        })),
-        searchTime: data.searchTimeMs,
+        query,
+        results,
+        searchTime,
       };
 
     } catch (error) {
-      this.env.logger.error('Vector search test failed', {
+      const searchTime = Date.now() - startTime;
+
+      this.env.logger.error('Raindrop vector search test failed', {
         adminUserId,
         query,
         error: error instanceof Error ? error.message : String(error),
@@ -1012,7 +970,7 @@ export default class extends Service<Env> {
       return {
         query,
         results: [],
-        searchTime: 0,
+        searchTime,
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
@@ -1039,99 +997,87 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
-    const serviceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'http://localhost:8080';
-
-    this.env.logger.info('Checking embedding service health', {
+    this.env.logger.info('Checking Raindrop AI embedding service health', {
       adminUserId,
-      serviceUrl,
     });
 
     try {
-      // Check /health endpoint with 5 second timeout
-      const healthResponse = await fetch(`${serviceUrl}/health`, {
-        signal: AbortSignal.timeout(5000),
-      });
+      // Test Raindrop AI with a simple embedding request
+      const testText = 'Health check test';
+      const startTime = Date.now();
 
-      if (!healthResponse.ok) {
-        await this.logAdminAction(adminUserId, 'view_service_health', 'embedding_service', null, {
-          status: 'unhealthy',
-          statusCode: healthResponse.status,
-        });
+      const response = await this.env.AI.run('bge-small-en', {
+        text: [testText]
+      } as any);
 
-        return {
-          url: serviceUrl,
-          status: 'unhealthy',
-          modelName: 'unknown',
-          dimensions: 0,
-          totalRequests: 0,
-          totalEmbeddings: 0,
-          totalErrors: 0,
-          avgLatencyMs: 0,
-          lastChecked: Date.now(),
-          error: `Service returned status ${healthResponse.status}`,
-        };
+      const latency = Date.now() - startTime;
+
+      // Validate response
+      const embedding = Array.isArray(response) ? response[0] : (response as any).data?.[0];
+
+      if (!Array.isArray(embedding) || embedding.length !== 384) {
+        throw new Error(`Invalid embedding: expected 384 dimensions, got ${embedding?.length}`);
       }
 
-      // Try to get metrics
-      let metrics: any = {};
-      try {
-        const metricsResponse = await fetch(`${serviceUrl}/metrics`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        if (metricsResponse.ok) {
-          metrics = await metricsResponse.json();
-        }
-      } catch (metricsError) {
-        // Metrics endpoint might not exist, that's okay
-        this.env.logger.warn('Could not fetch metrics', {
-          error: metricsError instanceof Error ? metricsError.message : String(metricsError),
-        });
-      }
+      // Get usage statistics from D1
+      const stats = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT
+          COUNT(*) as total_chunks,
+          SUM(CASE WHEN embedding_status = 'completed' THEN 1 ELSE 0 END) as completed,
+          SUM(CASE WHEN embedding_status = 'failed' THEN 1 ELSE 0 END) as failed
+        FROM document_chunks`
+      ).first();
 
       await this.logAdminAction(adminUserId, 'view_service_health', 'embedding_service', null, {
         status: 'healthy',
+        model: 'bge-small-en',
+        latencyMs: latency,
+        source: 'raindrop_ai',
       });
 
-      this.env.logger.info('Embedding service is healthy', {
+      this.env.logger.info('Raindrop AI health check passed', {
         adminUserId,
-        serviceUrl,
+        model: 'bge-small-en',
+        latencyMs: latency,
+        dimensions: 384,
+        totalEmbeddings: stats?.completed || 0,
       });
 
       return {
-        url: serviceUrl,
+        url: 'Raindrop AI (native)',
         status: 'healthy',
-        modelName: metrics.model_name || 'all-MiniLM-L6-v2',
-        dimensions: metrics.dimensions || 384,
-        totalRequests: metrics.total_requests || 0,
-        totalEmbeddings: metrics.total_embeddings || 0,
-        totalErrors: metrics.total_errors || 0,
-        avgLatencyMs: metrics.avg_latency_ms || 0,
+        modelName: 'bge-small-en',
+        dimensions: 384,
+        totalRequests: Number(stats?.total_chunks || 0),
+        totalEmbeddings: Number(stats?.completed || 0),
+        totalErrors: Number(stats?.failed || 0),
+        avgLatencyMs: latency,
         lastChecked: Date.now(),
       };
 
     } catch (error) {
       await this.logAdminAction(adminUserId, 'view_service_health', 'embedding_service', null, {
-        status: 'unknown',
+        status: 'unhealthy',
         error: error instanceof Error ? error.message : String(error),
+        source: 'raindrop_ai',
       });
 
-      this.env.logger.error('Could not connect to embedding service', {
+      this.env.logger.error('Raindrop AI health check failed', {
         adminUserId,
-        serviceUrl,
         error: error instanceof Error ? error.message : String(error),
       });
 
       return {
-        url: serviceUrl,
-        status: 'unknown',
-        modelName: 'unknown',
-        dimensions: 0,
+        url: 'Raindrop AI (native)',
+        status: 'unhealthy',
+        modelName: 'bge-small-en',
+        dimensions: 384,
         totalRequests: 0,
         totalEmbeddings: 0,
         totalErrors: 0,
         avgLatencyMs: 0,
         lastChecked: Date.now(),
-        error: error instanceof Error ? error.message : 'Could not connect to service',
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -2803,70 +2749,95 @@ export default class extends Service<Env> {
         sampleIds: validDocumentIds.slice(0, 5),
       });
 
-      const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
+      // Step 2: Find orphaned chunks in D1 (chunks whose document_id is not in valid documents)
+      const orphanedChunks = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT id, document_id, vector_id
+        FROM document_chunks
+        WHERE document_id NOT IN (SELECT id FROM documents)`
+      ).all();
 
-      // Step 2: Send valid document IDs to PostgreSQL cleanup endpoint
-      const cleanupResponse = await fetch(`${embeddingServiceUrl}/api/v1/admin/cleanup/orphaned-embeddings`, {
-        method: 'POST',
-        headers: {
-          'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          validDocumentIds,
-        }),
+      const orphanedCount = orphanedChunks.results?.length || 0;
+      const orphanedVectorIds = (orphanedChunks.results || [])
+        .filter((chunk: any) => chunk.vector_id)
+        .map((chunk: any) => chunk.vector_id);
+
+      this.env.logger.info('Found orphaned chunks in D1', {
+        orphanedChunks: orphanedCount,
+        orphanedVectorIds: orphanedVectorIds.length,
       });
 
-      if (!cleanupResponse.ok) {
-        const errorText = await cleanupResponse.text();
-        this.env.logger.error('PostgreSQL cleanup failed', {
-          status: cleanupResponse.status,
-          error: errorText,
-        });
-        throw new Error(`PostgreSQL cleanup failed: ${errorText}`);
+      let deletedFromVectorIndex = 0;
+      let deletedFromD1 = 0;
+      let errors = 0;
+
+      // Step 3: Delete orphaned vectors from Raindrop Vector Index (in batches of 50)
+      if (orphanedVectorIds.length > 0) {
+        const BATCH_SIZE = 50;
+        for (let i = 0; i < orphanedVectorIds.length; i += BATCH_SIZE) {
+          const batch = orphanedVectorIds.slice(i, i + BATCH_SIZE);
+          try {
+            await this.env.DOCUMENT_EMBEDDINGS.deleteByIds(batch);
+            deletedFromVectorIndex += batch.length;
+            this.env.logger.info('Deleted vector batch from Vector Index', {
+              batchNumber: Math.floor(i / BATCH_SIZE) + 1,
+              batchSize: batch.length,
+            });
+          } catch (error) {
+            errors++;
+            this.env.logger.error('Failed to delete vector batch', {
+              error: error instanceof Error ? error.message : String(error),
+              batchSize: batch.length,
+            });
+          }
+        }
       }
 
-      const result = await cleanupResponse.json() as {
-        totalEmbeddings: number;
-        validDocuments: number;
-        orphanedEmbeddings: number;
-        deletedEmbeddings: number;
-        deletedChunks: number;
-        deletedDocuments: number;
-        errors: number;
-        success: boolean;
-      };
+      // Step 4: Delete orphaned chunks from D1
+      if (orphanedCount > 0) {
+        const deleteResult = await (this.env.AUDITGUARD_DB as any).prepare(
+          `DELETE FROM document_chunks
+          WHERE document_id NOT IN (SELECT id FROM documents)`
+        ).run();
+
+        deletedFromD1 = deleteResult.meta?.changes || 0;
+
+        this.env.logger.info('Deleted orphaned chunks from D1', {
+          deletedChunks: deletedFromD1,
+        });
+      }
+
+      // Get final stats
+      const totalEmbeddings = await (this.env.AUDITGUARD_DB as any).prepare(
+        `SELECT COUNT(*) as count FROM document_chunks WHERE embedding_status = 'completed'`
+      ).first();
 
       // Log the action
       await this.logAdminAction(adminUserId, 'cleanup_orphaned_vectors', 'embeddings', null, {
-        d1ValidDocuments: validDocumentIds.length,
-        postgresValidDocuments: result.validDocuments,
-        totalEmbeddings: result.totalEmbeddings,
-        orphanedEmbeddings: result.orphanedEmbeddings,
-        deletedEmbeddings: result.deletedEmbeddings,
-        deletedChunks: result.deletedChunks,
-        deletedDocuments: result.deletedDocuments,
+        validDocuments: validDocumentIds.length,
+        orphanedEmbeddings: orphanedCount,
+        deletedFromVectorIndex: deletedFromVectorIndex,
+        deletedFromD1: deletedFromD1,
+        errors,
+        source: 'raindrop_native',
       });
 
-      this.env.logger.info('PostgreSQL cleanup completed', {
-        d1ValidDocuments: validDocumentIds.length,
-        postgresValidDocuments: result.validDocuments,
-        totalEmbeddings: result.totalEmbeddings,
-        orphanedEmbeddings: result.orphanedEmbeddings,
-        deletedEmbeddings: result.deletedEmbeddings,
-        deletedChunks: result.deletedChunks,
-        deletedDocuments: result.deletedDocuments,
-        errors: result.errors,
+      this.env.logger.info('Orphaned vector cleanup completed', {
+        validDocuments: validDocumentIds.length,
+        totalEmbeddings: totalEmbeddings?.count || 0,
+        orphanedEmbeddings: orphanedCount,
+        deletedFromVectorIndex,
+        deletedFromD1,
+        errors,
       });
 
       return {
-        totalEmbeddings: result.totalEmbeddings,
-        validDocuments: validDocumentIds.length, // Return D1 count as source of truth
-        orphanedEmbeddings: result.orphanedEmbeddings,
-        deletedEmbeddings: result.deletedEmbeddings,
-        deletedChunks: result.deletedChunks,
-        deletedDocuments: result.deletedDocuments || 0,
-        errors: result.errors,
+        totalEmbeddings: Number(totalEmbeddings?.count || 0),
+        validDocuments: validDocumentIds.length,
+        orphanedEmbeddings: orphanedCount,
+        deletedEmbeddings: deletedFromVectorIndex,
+        deletedChunks: deletedFromD1,
+        deletedDocuments: 0, // We don't delete documents, only chunks
+        errors,
       };
     } catch (error) {
       this.env.logger.error('Failed to cleanup orphaned vectors', {

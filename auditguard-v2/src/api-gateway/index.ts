@@ -1901,7 +1901,7 @@ export default class extends Service<Env> {
             'test-doc-123',
             'test-workspace',
             [testChunk],
-            [999]  // Fake chunk ID
+            ['chunk_test-doc-123_0']  // Fake chunk ID (now string)
           );
 
           this.env.logger.info('Test embedding completed', { result });
