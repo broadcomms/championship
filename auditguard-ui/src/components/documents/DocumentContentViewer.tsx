@@ -309,6 +309,12 @@ function InfoTab({ document }: InfoTabProps) {
                 <span className="font-medium text-gray-900">{document.wordCount.toLocaleString()}</span>
               </div>
             )}
+            {document.characterCount && (
+              <div className="flex justify-between border-b border-gray-100 pb-2">
+                <span className="text-gray-600">Character Count</span>
+                <span className="font-medium text-gray-900">{document.characterCount.toLocaleString()}</span>
+              </div>
+            )}
             {document.pageCount && (
               <div className="flex justify-between border-b border-gray-100 pb-2">
                 <span className="text-gray-600">Page Count</span>

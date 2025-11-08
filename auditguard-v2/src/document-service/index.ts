@@ -310,6 +310,7 @@ export default class extends Service<Env> {
     textExtracted: boolean;
     chunkCount: number;
     wordCount?: number;
+    characterCount?: number;
     pageCount?: number;
     chunksCreated?: number;
     embeddingsGenerated?: number;
@@ -354,6 +355,7 @@ export default class extends Service<Env> {
         'documents.text_extracted',
         'documents.chunk_count',
         'documents.word_count' as any,
+        'documents.character_count' as any,
         'documents.page_count' as any,
         'documents.chunks_created' as any,
         'documents.embeddings_generated' as any,
@@ -391,6 +393,7 @@ export default class extends Service<Env> {
       textExtracted: document.text_extracted === 1,
       chunkCount: realChunkCount,
       wordCount: document.word_count,
+      characterCount: document.character_count,
       pageCount: document.page_count,
       chunksCreated: document.chunks_created,
       embeddingsGenerated: document.embeddings_generated,

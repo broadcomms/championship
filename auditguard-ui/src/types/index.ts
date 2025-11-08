@@ -71,6 +71,7 @@ export interface Document {
   chunkCount: number;
   pageCount?: number;
   wordCount?: number;
+  characterCount?: number;
   chunksCreated?: number; // Phase 5: Custom vector chunks created
   embeddingsGenerated?: number;
   vectorIndexingStatus?: 'pending' | 'processing' | 'indexing' | 'completed' | 'partial' | 'failed'; // Phase 2.4: Added 'indexing' status
