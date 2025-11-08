@@ -69,6 +69,56 @@ export default class extends Service<Env> {
     return response;
   }
 
+  /**
+   * SECURITY FIX: Safe JSON parsing with validation
+   * Prevents crashes from malformed JSON or missing required fields
+   */
+  private async safeParseJSON<T = any>(
+    request: Request,
+    requiredFields?: string[]
+  ): Promise<{ success: true; data: T } | { success: false; error: string; status: number }> {
+    try {
+      const body = await request.json() as Record<string, unknown>;
+
+      // Validate required fields if specified
+      if (requiredFields && requiredFields.length > 0) {
+        const missingFields = requiredFields.filter(field => !(field in body));
+
+        if (missingFields.length > 0) {
+          return {
+            success: false,
+            error: `Missing required fields: ${missingFields.join(', ')}`,
+            status: 400,
+          };
+        }
+
+        // Validate field types are not null/undefined
+        const nullFields = requiredFields.filter(field => body[field] === null || body[field] === undefined);
+        if (nullFields.length > 0) {
+          return {
+            success: false,
+            error: `Required fields cannot be null: ${nullFields.join(', ')}`,
+            status: 400,
+          };
+        }
+      }
+
+      return { success: true, data: body as T };
+
+    } catch (error) {
+      this.env.logger.error('Failed to parse JSON request body', {
+        error: error instanceof Error ? error.message : String(error),
+        path: new URL(request.url).pathname,
+      });
+
+      return {
+        success: false,
+        error: 'Invalid JSON in request body',
+        status: 400,
+      };
+    }
+  }
+
   async fetch(request: Request): Promise<Response> {
     const startTime = Date.now();
     const url = new URL(request.url);
@@ -158,7 +208,18 @@ export default class extends Service<Env> {
       // Manual Enrichment Test - No auth for debugging
       if (path === '/api/test-enrichment' && request.method === 'POST') {
         try {
-          const body = await request.json() as { documentId: string; workspaceId: string };
+          // CRITICAL FIX: Safe JSON parsing with field validation
+          const parseResult = await this.safeParseJSON<{ documentId: string; workspaceId: string }>(
+            request,
+            ['documentId', 'workspaceId']
+          );
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
 
           this.env.logger.info('Manual enrichment test started', {
             documentId: body.documentId,
@@ -252,7 +313,19 @@ export default class extends Service<Env> {
 
       // ====== AUTH ENDPOINTS ======
       if (path === '/api/auth/register' && request.method === 'POST') {
-        const body = (await request.json()) as { email: string; password: string; name: string };
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const result = await this.safeParseJSON<{ email: string; password: string; name: string }>(
+          request,
+          ['email', 'password', 'name']
+        );
+        if (!result.success) {
+          return new Response(JSON.stringify({ error: (result as any).error }), {
+            status: (result as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = result.data;
+
         // Register the user
         await this.env.AUTH_SERVICE.register(body);
 
@@ -272,7 +345,19 @@ export default class extends Service<Env> {
       }
 
       if (path === '/api/auth/login' && request.method === 'POST') {
-        const body = (await request.json()) as { email: string; password: string };
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{ email: string; password: string }>(
+          request,
+          ['email', 'password']
+        );
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
         const result = await this.env.AUTH_SERVICE.login(body);
 
         const response = new Response(JSON.stringify(result), {
@@ -313,7 +398,19 @@ export default class extends Service<Env> {
       // ====== WORKSPACE ENDPOINTS ======
       if (path === '/api/workspaces' && request.method === 'POST') {
         const user = await this.validateSession(request);
-        const body = (await request.json()) as { name: string; description?: string };
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{ name: string; description?: string }>(
+          request,
+          ['name'] // Only name is required
+        );
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
         const result = await this.env.WORKSPACE_SERVICE.createWorkspace({
           ...body,
           userId: user.userId,
@@ -346,7 +443,19 @@ export default class extends Service<Env> {
         }
 
         if (request.method === 'PUT') {
-          const body = (await request.json()) as { name?: string; description?: string };
+          // CRITICAL FIX: Safe JSON parsing with field validation
+          const parseResult = await this.safeParseJSON<{ name?: string; description?: string }>(
+            request
+            // No required fields - all optional
+          );
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
+
           const result = await this.env.WORKSPACE_SERVICE.updateWorkspace(workspaceId, user.userId, body);
           return new Response(JSON.stringify(result), {
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -373,7 +482,19 @@ export default class extends Service<Env> {
         }
 
         if (request.method === 'POST') {
-          const body = (await request.json()) as { email: string; role: 'admin' | 'member' | 'viewer' };
+          // CRITICAL FIX: Safe JSON parsing with field validation
+          const parseResult = await this.safeParseJSON<{ email: string; role: 'admin' | 'member' | 'viewer' }>(
+            request,
+            ['email', 'role']
+          );
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
+
           const result = await this.env.WORKSPACE_SERVICE.addMember(workspaceId, user.userId, body);
           return new Response(JSON.stringify(result), {
             status: 201,
@@ -390,7 +511,19 @@ export default class extends Service<Env> {
         const user = await this.validateSession(request);
 
         if (request.method === 'PUT') {
-          const body = (await request.json()) as { role: 'admin' | 'member' | 'viewer' };
+          // CRITICAL FIX: Safe JSON parsing with field validation
+          const parseResult = await this.safeParseJSON<{ role: 'admin' | 'member' | 'viewer' }>(
+            request,
+            ['role']
+          );
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
+
           const result = await this.env.WORKSPACE_SERVICE.updateMemberRole(
             workspaceId,
             user.userId,
@@ -458,13 +591,21 @@ export default class extends Service<Env> {
             });
           } else {
             // Handle JSON upload (base64 encoded file)
-            const body = (await request.json()) as {
+            // CRITICAL FIX: Safe JSON parsing with field validation
+            const parseResult = await this.safeParseJSON<{
               file: string;
               filename: string;
               contentType: string;
               category?: 'policy' | 'procedure' | 'evidence' | 'other';
               frameworkId?: number;
-            };
+            }>(request, ['file', 'filename', 'contentType']);
+            if (!parseResult.success) {
+              return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+                status: (parseResult as any).status,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              });
+            }
+            const body = parseResult.data;
 
             // Decode base64 file
             const fileBuffer = Uint8Array.from(atob(body.file), (c) => c.charCodeAt(0));
@@ -696,11 +837,19 @@ export default class extends Service<Env> {
         const user = await this.validateSession(request);
 
         try {
-          const body = await request.json() as {
+          // CRITICAL FIX: Safe JSON parsing with field validation
+          const parseResult = await this.safeParseJSON<{
             extractedText: string;
             wordCount: number;
             pageCount?: number;
-          };
+          }>(request, ['extractedText', 'wordCount']);
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
 
           this.env.logger.info('💾 Saving extracted text to D1 (from frontend)', {
             documentId,
@@ -816,18 +965,19 @@ export default class extends Service<Env> {
         const workspaceId = documentSearchMatch[1];
         const user = await this.validateSession(request);
 
-        const body = (await request.json()) as {
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           query: string;
           page?: number;
           pageSize?: number;
-        };
-
-        if (!body.query) {
-          return new Response(JSON.stringify({ error: 'Query is required' }), {
-            status: 400,
+        }>(request, ['query']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
+        const body = parseResult.data;
 
         // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
         const result = await this.env.DOCUMENT_SERVICE.searchDocuments(
@@ -850,7 +1000,15 @@ export default class extends Service<Env> {
         const documentId = documentChatMatch[2];
         const user = await this.validateSession(request);
 
-        const body = (await request.json()) as { question: string };
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{ question: string }>(request, ['question']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
 
         if (!body.question) {
           return new Response(JSON.stringify({ error: 'Question is required' }), {
@@ -878,10 +1036,18 @@ export default class extends Service<Env> {
         const workspaceId = documentChunksMatch[1];
         const user = await this.validateSession(request);
 
-        const body = (await request.json()) as {
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           query: string;
           documentId?: string;
-        };
+        }>(request, ['query']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
 
         if (!body.query) {
           return new Response(JSON.stringify({ error: 'Query is required' }), {
@@ -909,11 +1075,19 @@ export default class extends Service<Env> {
         const workspaceId = searchPaginateMatch[1];
         const user = await this.validateSession(request);
 
-        const body = (await request.json()) as {
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           requestId: string;
           page: number;
           pageSize?: number;
-        };
+        }>(request, ['requestId', 'page']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
 
         if (!body.requestId || body.page === undefined) {
           return new Response(JSON.stringify({ error: 'RequestId and page are required' }), {
@@ -942,18 +1116,19 @@ export default class extends Service<Env> {
         const workspaceId = searchSummarizeMatch[1];
         const user = await this.validateSession(request);
 
-        const body = (await request.json()) as {
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           requestId: string;
           page: number;
           pageSize?: number;
-        };
-
-        if (!body.requestId || body.page === undefined) {
-          return new Response(JSON.stringify({ error: 'RequestId and page are required' }), {
-            status: 400,
+        }>(request, ['requestId', 'page']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
+        const body = parseResult.data;
 
         // @ts-expect-error - Raindrop Framework v0.9.1 stub type generation bug
         const result = await this.env.DOCUMENT_SERVICE.summarizeSearchPage(
@@ -975,12 +1150,20 @@ export default class extends Service<Env> {
         const workspaceId = multimodalSearchMatch[1];
         const user = await this.validateSession(request);
 
-        const body = (await request.json()) as {
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           text?: string;
           images?: string;
           audio?: string;
           contentTypes?: string[];
-        };
+        }>(request);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
 
         if (!body.text && !body.images && !body.audio) {
           return new Response(JSON.stringify({ error: 'At least one search criterion is required' }), {
@@ -1007,7 +1190,8 @@ export default class extends Service<Env> {
         const workspaceId = vectorSearchMatch[1];
         const user = await this.validateSession(request);
 
-        const body = (await request.json()) as {
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           query: string;
           frameworkId?: number;
           topK?: number;
@@ -1015,14 +1199,14 @@ export default class extends Service<Env> {
           includeChunks?: boolean;
           page?: number;
           pageSize?: number;
-        };
-
-        if (!body.query) {
-          return new Response(JSON.stringify({ error: 'Query is required' }), {
-            status: 400,
+        }>(request, ['query']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
+        const body = parseResult.data;
 
         const result = await this.env.DOCUMENT_SERVICE.vectorSearch(
           workspaceId,
@@ -1096,10 +1280,18 @@ export default class extends Service<Env> {
         }
 
         if (request.method === 'PUT') {
-          const body = (await request.json()) as {
+          // CRITICAL FIX: Safe JSON parsing with field validation
+          const parseResult = await this.safeParseJSON<{
             filename?: string;
             category?: 'policy' | 'procedure' | 'evidence' | 'other';
-          };
+          }>(request);
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
           const result = await this.env.DOCUMENT_SERVICE.updateMetadata(documentId, workspaceId, user.userId, body);
           return new Response(JSON.stringify(result), {
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -1120,9 +1312,17 @@ export default class extends Service<Env> {
         const documentId = complianceMatch[2];
         const user = await this.validateSession(request);
 
-        const body = (await request.json()) as {
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           framework: 'GDPR' | 'SOC2' | 'HIPAA' | 'PCI_DSS' | 'ISO_27001' | 'NIST_CSF' | 'CCPA' | 'FERPA' | 'GLBA' | 'FISMA' | 'PIPEDA' | 'COPPA' | 'SOX';
-        };
+        }>(request, ['framework']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
 
         const result = await this.env.COMPLIANCE_SERVICE.runComplianceCheck({
           documentId,
@@ -1221,14 +1421,15 @@ export default class extends Service<Env> {
         const documentId = assignFrameworkMatch[2];
         const user = await this.validateSession(request);
 
-        const body = (await request.json()) as { frameworkId: number };
-
-        if (!body.frameworkId) {
-          return new Response(JSON.stringify({ error: 'Framework ID is required' }), {
-            status: 400,
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{ frameworkId: number }>(request, ['frameworkId']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
+        const body = parseResult.data;
 
         await this.env.DOCUMENT_SERVICE.assignFrameworkToDocument(
           documentId,
@@ -1271,17 +1472,18 @@ export default class extends Service<Env> {
         const chunkId = parseInt(tagChunkMatch[2], 10);
         const user = await this.validateSession(request);
 
-        const body = (await request.json()) as {
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           frameworkId: number;
           relevanceScore?: number;
-        };
-
-        if (!body.frameworkId) {
-          return new Response(JSON.stringify({ error: 'Framework ID is required' }), {
-            status: 400,
+        }>(request, ['frameworkId']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
+        const body = parseResult.data;
 
         await this.env.DOCUMENT_SERVICE.tagChunk(
           workspaceId,
@@ -1387,10 +1589,18 @@ export default class extends Service<Env> {
         const issueId = issueUpdateMatch[2];
         const user = await this.validateSession(request);
 
-        const body = (await request.json()) as {
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           status: 'open' | 'in_progress' | 'resolved' | 'dismissed';
           assignedTo?: string;
-        };
+        }>(request, ['status']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
 
         const result = await this.env.ANALYTICS_SERVICE.updateIssueStatus(
           issueId,
@@ -1412,10 +1622,18 @@ export default class extends Service<Env> {
         const workspaceId = assistantChatMatch[1];
         const user = await this.validateSession(request);
 
-        const body = (await request.json()) as {
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           message: string;
           sessionId?: string;
-        };
+        }>(request, ['message']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
 
         if (!body.message) {
           return new Response(JSON.stringify({ error: 'Message is required' }), {
@@ -1491,10 +1709,18 @@ export default class extends Service<Env> {
         }
 
         if (request.method === 'POST') {
-          const body = (await request.json()) as {
+          // CRITICAL FIX: Safe JSON parsing with field validation
+          const parseResult = await this.safeParseJSON<{
             planId: string;
             paymentMethodId?: string;
-          };
+          }>(request, ['planId']);
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
           const result = await this.env.BILLING_SERVICE.createSubscription(user.userId, {
             workspaceId,
             planId: body.planId,
@@ -1507,7 +1733,15 @@ export default class extends Service<Env> {
         }
 
         if (request.method === 'PUT') {
-          const body = (await request.json()) as { planId: string };
+          // CRITICAL FIX: Safe JSON parsing with field validation
+          const parseResult = await this.safeParseJSON<{ planId: string }>(request, ['planId']);
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
           const result = await this.env.BILLING_SERVICE.updateSubscription(user.userId, {
             workspaceId,
             planId: body.planId,
@@ -1518,7 +1752,15 @@ export default class extends Service<Env> {
         }
 
         if (request.method === 'DELETE') {
-          const body = (await request.json()) as { cancelAtPeriodEnd?: boolean };
+          // CRITICAL FIX: Safe JSON parsing with field validation
+          const parseResult = await this.safeParseJSON<{ cancelAtPeriodEnd?: boolean }>(request);
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
           const result = await this.env.BILLING_SERVICE.cancelSubscription(user.userId, {
             workspaceId,
             cancelAtPeriodEnd: body.cancelAtPeriodEnd ?? true,
@@ -1610,7 +1852,16 @@ export default class extends Service<Env> {
       if (adminSettingMatch && adminSettingMatch[1] && request.method === 'PUT') {
         const key = adminSettingMatch[1];
         const user = await this.validateSession(request);
-        const body = (await request.json()) as { value: string };
+
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{ value: string }>(request, ['value']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
 
         const result = await this.env.ADMIN_SERVICE.updateSystemSetting(user.userId, key, body.value);
         return new Response(JSON.stringify(result), {
@@ -1977,14 +2228,16 @@ export default class extends Service<Env> {
       // POST /api/admin/analytics/query
       if (path === '/api/admin/analytics/query' && request.method === 'POST') {
         const user = await this.validateSession(request);
-        const body = (await request.json()) as { query: string };
 
-        if (!body.query) {
-          return new Response(JSON.stringify({ error: 'Query is required' }), {
-            status: 400,
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{ query: string }>(request, ['query']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
+        const body = parseResult.data;
 
         const result = await this.env.ADMIN_SERVICE.queryAnalytics(user.userId, body.query);
         return new Response(JSON.stringify(result), {
@@ -1995,18 +2248,20 @@ export default class extends Service<Env> {
       // POST /api/admin/create - Create new admin user (super_admin only)
       if (path === '/api/admin/create' && request.method === 'POST') {
         const user = await this.validateSession(request);
-        const body = (await request.json()) as {
+
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           userId: string;
           role: 'super_admin' | 'support' | 'billing_admin';
           permissions: string[];
-        };
-
-        if (!body.userId || !body.role) {
-          return new Response(JSON.stringify({ error: 'userId and role are required' }), {
-            status: 400,
+        }>(request, ['userId', 'role', 'permissions']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
+        const body = parseResult.data;
 
         const result = await this.env.ADMIN_SERVICE.createAdmin(user.userId, {
           userId: body.userId,
@@ -2034,14 +2289,16 @@ export default class extends Service<Env> {
       // POST /api/admin/database/query - Execute SQL SELECT query
       if (path === '/api/admin/database/query' && request.method === 'POST') {
         const user = await this.validateSession(request);
-        const body = (await request.json()) as { sql: string };
 
-        if (!body.sql) {
-          return new Response(JSON.stringify({ error: 'SQL query is required' }), {
-            status: 400,
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{ sql: string }>(request, ['sql']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
+        const body = parseResult.data;
 
         const result = await this.env.ADMIN_SERVICE.executeQuery(user.userId, body.sql);
         return new Response(JSON.stringify(result), {
@@ -2097,14 +2354,16 @@ export default class extends Service<Env> {
       // POST /api/admin/vectors/search-test - Test vector search functionality
       if (path === '/api/admin/vectors/search-test' && request.method === 'POST') {
         const user = await this.validateSession(request);
-        const body = (await request.json()) as { query: string; topK?: number };
 
-        if (!body.query) {
-          return new Response(JSON.stringify({ error: 'Query text is required' }), {
-            status: 400,
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{ query: string; topK?: number }>(request, ['query']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
+        const body = parseResult.data;
 
         const result = await this.env.ADMIN_SERVICE.testVectorSearch(
           user.userId,
@@ -2169,9 +2428,18 @@ export default class extends Service<Env> {
       if (deleteObjectsMatch && deleteObjectsMatch[1] && request.method === 'DELETE') {
         const bucketName = deleteObjectsMatch[1];
         const user = await this.validateSession(request);
-        const body = (await request.json()) as { keys: string[] };
 
-        if (!body.keys || !Array.isArray(body.keys)) {
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{ keys: string[] }>(request, ['keys']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        if (!Array.isArray(body.keys)) {
           return new Response(JSON.stringify({ error: 'keys array is required' }), {
             status: 400,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -2194,14 +2462,16 @@ export default class extends Service<Env> {
       if (searchBucketMatch && searchBucketMatch[1] && request.method === 'POST') {
         const bucketName = searchBucketMatch[1];
         const user = await this.validateSession(request);
-        const body = (await request.json()) as { query: string; limit?: number };
 
-        if (!body.query) {
-          return new Response(JSON.stringify({ error: 'query is required' }), {
-            status: 400,
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{ query: string; limit?: number }>(request, ['query']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
+        const body = parseResult.data;
 
         const result = await this.env.ADMIN_SERVICE.searchBucket(
           user.userId,
@@ -2220,7 +2490,16 @@ export default class extends Service<Env> {
       if (cleanupBucketMatch && cleanupBucketMatch[1] && request.method === 'POST') {
         const bucketName = cleanupBucketMatch[1];
         const user = await this.validateSession(request);
-        const body = (await request.json().catch(() => ({}))) as { dryRun?: boolean };
+
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{ dryRun?: boolean }>(request);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
 
         const result = await this.env.ADMIN_SERVICE.cleanupOrphanedObjects(
           user.userId,
@@ -2322,10 +2601,19 @@ export default class extends Service<Env> {
       // POST /api/admin/backup/create - Create full database backup
       if (path === '/api/admin/backup/create' && request.method === 'POST') {
         const user = await this.validateSession(request);
-        const body = (await request.json().catch(() => ({}))) as {
+
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           includeTables?: string[];
           excludeTables?: string[];
-        };
+        }>(request);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
 
         const result = await this.env.ADMIN_SERVICE.createBackup(user.userId, body);
 
@@ -2367,20 +2655,22 @@ export default class extends Service<Env> {
       // POST /api/admin/backup/import - Import backup data
       if (path === '/api/admin/backup/import' && request.method === 'POST') {
         const user = await this.validateSession(request);
-        const body = (await request.json()) as {
+
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
           backupData: string;
           dryRun?: boolean;
           overwrite?: boolean;
           includeTables?: string[];
           excludeTables?: string[];
-        };
-
-        if (!body.backupData) {
-          return new Response(JSON.stringify({ error: 'backupData is required' }), {
-            status: 400,
+        }>(request, ['backupData']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           });
         }
+        const body = parseResult.data;
 
         const result = await this.env.ADMIN_SERVICE.importBackup(user.userId, body.backupData, {
           dryRun: body.dryRun,

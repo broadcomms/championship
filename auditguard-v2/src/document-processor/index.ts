@@ -785,51 +785,46 @@ export default class extends Each<Body, Env> {
         success: result.successCount > 0,
       });
 
-      // CRITICAL FIX: Use atomic increment instead of recount
-      // This is more efficient and prevents race conditions
-      await (this.env.AUDITGUARD_DB as any).prepare(
+      // CRITICAL RACE CONDITION FIX: Use compare-and-swap pattern
+      // This ensures only ONE worker transitions to 'indexing' status
+      const updateResult = await (this.env.AUDITGUARD_DB as any).prepare(
         `UPDATE documents
-         SET embeddings_generated = embeddings_generated + 1,
-             updated_at = ?
-         WHERE id = ?`
-      ).bind(Date.now(), documentId).run();
+         SET
+           embeddings_generated = embeddings_generated + 1,
+           vector_indexing_status = CASE
+             WHEN embeddings_generated + 1 >= chunks_created AND vector_indexing_status = 'processing'
+             THEN 'indexing'
+             ELSE vector_indexing_status
+           END,
+           updated_at = ?
+         WHERE id = ?
+         RETURNING embeddings_generated, chunks_created, vector_indexing_status`
+      ).bind(Date.now(), documentId).first();
 
-      // PHASE 2.2: Check if all embeddings are complete and update status accordingly
-      const doc = await (this.env.AUDITGUARD_DB as any).prepare(
-        `SELECT chunks_created, embeddings_generated, vector_indexing_status
-         FROM documents
-         WHERE id = ?`
-      ).bind(documentId).first();
-
-      const completedCount = doc?.embeddings_generated || 0;
-      const totalChunks = doc?.chunks_created || 0;
+      const completedCount = updateResult?.embeddings_generated || 0;
+      const totalChunks = updateResult?.chunks_created || 0;
+      const newStatus = updateResult?.vector_indexing_status;
 
       this.env.logger.info('📈 Atomically incremented embeddings_generated counter', {
         documentId,
         chunkId,
         newCount: completedCount,
         totalChunks,
+        newStatus,
         percentage: totalChunks > 0 ? Math.round((completedCount / totalChunks) * 100) : 0,
       });
 
-      if (doc && doc.embeddings_generated >= doc.chunks_created) {
-        // PHASE 2.2: All embeddings complete - transition to "indexing" status
-        // Raindrop Vector Index needs 3-5 seconds for indexing to complete
-        await (this.env.AUDITGUARD_DB as any).prepare(
-          `UPDATE documents
-           SET vector_indexing_status = 'indexing',
-               updated_at = ?
-           WHERE id = ?`
-        ).bind(Date.now(), documentId).run();
-
-        this.env.logger.info('⏳ All embeddings generated - starting indexing delay (3-5s)', {
+      // CRITICAL FIX: Only the UPDATE that transitioned to 'indexing' will execute this block
+      // All other concurrent workers will skip it (idempotent)
+      if (newStatus === 'indexing' && completedCount >= totalChunks) {
+        this.env.logger.info('⏳ This worker won the race - handling indexing completion', {
           documentId,
-          totalEmbeddings: doc.embeddings_generated,
-          totalChunks: doc.chunks_created,
+          totalEmbeddings: completedCount,
+          totalChunks,
           status: 'indexing',
         });
 
-        // Wait for indexing to complete (3-5 seconds as per Phase 1 tests)
+        // Wait for vector indexing to complete (3-5 seconds as per Phase 1 tests)
         await new Promise(resolve => setTimeout(resolve, 5000));
 
         // Mark as completed after indexing delay
@@ -837,34 +832,33 @@ export default class extends Each<Body, Env> {
           `UPDATE documents
            SET vector_indexing_status = 'completed',
                updated_at = ?
-           WHERE id = ?`
+           WHERE id = ? AND vector_indexing_status = 'indexing'`
         ).bind(Date.now(), documentId).run();
 
         this.env.logger.info('🎉 Vector indexing completed - document is now searchable', {
           documentId,
-          totalEmbeddings: doc.embeddings_generated,
-          totalChunks: doc.chunks_created,
+          totalEmbeddings: completedCount,
+          totalChunks,
           status: 'completed',
         });
-      } else {
-        // PHASE 2.2: Still processing - ensure status is correct
-        if (doc && doc.vector_indexing_status !== 'processing') {
-          await (this.env.AUDITGUARD_DB as any).prepare(
-            `UPDATE documents
-             SET vector_indexing_status = 'processing',
-                 updated_at = ?
-             WHERE id = ?`
-          ).bind(Date.now(), documentId).run();
-        }
-
+      } else if (newStatus === 'processing') {
+        // Still processing - this is expected for most chunks
         this.env.logger.info('📊 Embedding progress updated', {
           documentId,
-          embeddingsGenerated: doc?.embeddings_generated || 0,
-          totalChunks: doc?.chunks_created || 0,
-          percentage: doc && doc.chunks_created > 0 
-            ? Math.round((doc.embeddings_generated / doc.chunks_created) * 100) 
+          embeddingsGenerated: completedCount,
+          totalChunks,
+          percentage: totalChunks > 0
+            ? Math.round((completedCount / totalChunks) * 100)
             : 0,
           status: 'processing',
+        });
+      } else {
+        // Status is 'indexing' or 'completed' - another worker is/has handled it
+        this.env.logger.info('📊 Embedding counter updated, another worker handling completion', {
+          documentId,
+          embeddingsGenerated: completedCount,
+          totalChunks,
+          status: newStatus,
         });
       }
 

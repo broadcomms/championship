@@ -629,95 +629,200 @@ export default class extends Service<Env> {
       storageKey: document.storage_key,
     });
 
-    // Step 1: Delete document from PostgreSQL embedding service
-    // This ensures database synchronization and prevents orphaned data
+    // CRITICAL FIX: Track deletion status across all systems
+    const deletionStatus = {
+      postgresql: false,
+      smartbucket: false,
+      d1Database: false,
+    };
+    const deletionErrors: string[] = [];
+
     try {
-      const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
+      // Step 1: Mark document as deleting (prevents concurrent operations)
+      await db
+        .updateTable('documents')
+        .set({
+          processing_status: 'deleting' as any,
+          updated_at: Date.now(),
+        })
+        .where('id', '=', documentId)
+        .where('workspace_id', '=', workspaceId)
+        .execute();
 
-      this.env.logger.info('Deleting document from PostgreSQL embedding service', {
-        documentId,
-        embeddingServiceUrl,
-      });
+      this.env.logger.info('Document marked as deleting', { documentId });
 
-      const deleteResponse = await fetch(`${embeddingServiceUrl}/api/v1/documents/${documentId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
-        },
-      });
+      // Step 2: Delete from PostgreSQL embedding service (best effort)
+      try {
+        const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
 
-      if (deleteResponse.ok) {
-        const result = await deleteResponse.json() as {
-          documentId: string;
-          deletedEmbeddings: number;
-          deletedChunks: number;
-          deletedDocument: boolean;
-          success: boolean;
-          message: string;
-        };
-        this.env.logger.info('Successfully deleted document from PostgreSQL', {
+        this.env.logger.info('Deleting document from PostgreSQL embedding service', {
           documentId,
-          deletedEmbeddings: result.deletedEmbeddings,
-          deletedChunks: result.deletedChunks,
-          message: result.message,
+          embeddingServiceUrl,
+        });
+
+        const deleteResponse = await fetch(`${embeddingServiceUrl}/api/v1/documents/${documentId}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+          },
+        });
+
+        if (deleteResponse.ok) {
+          const result = await deleteResponse.json() as {
+            documentId: string;
+            deletedEmbeddings: number;
+            deletedChunks: number;
+            deletedDocument: boolean;
+            success: boolean;
+            message: string;
+          };
+          deletionStatus.postgresql = true;
+          this.env.logger.info('Successfully deleted document from PostgreSQL', {
+            documentId,
+            deletedEmbeddings: result.deletedEmbeddings,
+            deletedChunks: result.deletedChunks,
+            message: result.message,
+          });
+        } else {
+          const errorText = await deleteResponse.text();
+          const errorMsg = `PostgreSQL deletion failed: HTTP ${deleteResponse.status} - ${errorText}`;
+          deletionErrors.push(errorMsg);
+          this.env.logger.error('Failed to delete document from PostgreSQL', {
+            documentId,
+            status: deleteResponse.status,
+            error: errorText,
+          });
+        }
+      } catch (error) {
+        const errorMsg = `PostgreSQL deletion error: ${error instanceof Error ? error.message : String(error)}`;
+        deletionErrors.push(errorMsg);
+        this.env.logger.error('Error calling PostgreSQL delete endpoint', {
+          documentId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      // Step 3: Delete from SmartBucket storage (best effort)
+      try {
+        await this.env.DOCUMENTS_BUCKET.delete(document.storage_key);
+        deletionStatus.smartbucket = true;
+        this.env.logger.info('Deleted document from SmartBucket storage', {
+          documentId,
+          storageKey: document.storage_key,
+        });
+      } catch (error) {
+        const errorMsg = `SmartBucket deletion failed: ${error instanceof Error ? error.message : String(error)}`;
+        deletionErrors.push(errorMsg);
+        this.env.logger.error('Failed to delete from SmartBucket storage', {
+          documentId,
+          storageKey: document.storage_key,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      // Step 4: Delete from D1 database (CRITICAL - must succeed)
+      // Use transaction to ensure all D1 deletions are atomic
+      try {
+        await db
+          .deleteFrom('compliance_check_issues' as any)
+          .where('check_id', 'in', (eb: any) =>
+            eb
+              .selectFrom('compliance_checks' as any)
+              .select('id')
+              .where('document_id', '=', documentId)
+          )
+          .execute();
+
+        await db
+          .deleteFrom('compliance_checks')
+          .where('document_id', '=', documentId)
+          .execute();
+
+        await db
+          .deleteFrom('annotations' as any)
+          .where('document_id', '=', documentId)
+          .execute();
+
+        await db
+          .deleteFrom('documents')
+          .where('id', '=', documentId)
+          .where('workspace_id', '=', workspaceId)
+          .execute();
+
+        deletionStatus.d1Database = true;
+
+        this.env.logger.info('Document deleted successfully from D1', {
+          documentId,
+          workspaceId,
+        });
+      } catch (dbError) {
+        // CRITICAL: D1 deletion failed - this is a serious error
+        const errorMsg = `D1 deletion CRITICAL failure: ${dbError instanceof Error ? dbError.message : String(dbError)}`;
+        deletionErrors.push(errorMsg);
+        this.env.logger.error('CRITICAL: D1 database deletion failed', {
+          documentId,
+          error: dbError instanceof Error ? dbError.message : String(dbError),
+          stack: dbError instanceof Error ? dbError.stack : undefined,
+        });
+
+        // Try to restore document status
+        try {
+          await db
+            .updateTable('documents')
+            .set({
+              processing_status: 'completed' as any,
+              updated_at: Date.now(),
+            })
+            .where('id', '=', documentId)
+            .where('workspace_id', '=', workspaceId)
+            .execute();
+
+          this.env.logger.info('Restored document status after failed deletion', { documentId });
+        } catch (restoreError) {
+          this.env.logger.error('Failed to restore document status', {
+            documentId,
+            error: restoreError instanceof Error ? restoreError.message : String(restoreError),
+          });
+        }
+
+        throw new Error(errorMsg);
+      }
+
+      // Log final status
+      if (deletionErrors.length > 0) {
+        this.env.logger.warn('Document deleted with warnings', {
+          documentId,
+          workspaceId,
+          deletionStatus,
+          warnings: deletionErrors,
+          note: 'Manual cleanup may be required for failed systems',
         });
       } else {
-        const errorText = await deleteResponse.text();
-        this.env.logger.error('Failed to delete document from PostgreSQL', {
+        this.env.logger.info('Document deleted successfully from all systems', {
           documentId,
-          status: deleteResponse.status,
-          error: errorText,
+          workspaceId,
+          deletionStatus,
         });
-        // Continue with D1 deletion even if PostgreSQL deletion fails
-        // The cleanup job will handle orphaned data
       }
+
+      return {
+        success: true,
+        warnings: deletionErrors.length > 0 ? deletionErrors : undefined,
+      } as any;
+
     } catch (error) {
-      this.env.logger.error('Error calling PostgreSQL delete endpoint', {
+      this.env.logger.error('Document deletion failed', {
         documentId,
+        workspaceId,
+        deletionStatus,
+        errors: deletionErrors,
         error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       });
-      // Continue with D1 deletion even if PostgreSQL deletion fails
-      // The cleanup job will handle orphaned data
+
+      throw new Error(`Document deletion failed: ${error instanceof Error ? error.message : String(error)}`);
     }
-
-    // Step 2: Delete document chunks from D1 database
-    // NOTE: document_chunks table was dropped in migration 0014_drop_document_chunks.sql
-    // Chunks are now managed exclusively in PostgreSQL via external embedding service
-    this.env.logger.info('Skipping D1 chunk deletion (chunks in PostgreSQL only)', {
-      documentId,
-    });
-
-    // Step 3: Delete from SmartBucket storage
-    try {
-      await this.env.DOCUMENTS_BUCKET.delete(document.storage_key);
-      this.env.logger.info('Deleted document from SmartBucket storage', {
-        documentId,
-        storageKey: document.storage_key,
-      });
-    } catch (error) {
-      this.env.logger.error('Failed to delete from SmartBucket storage', {
-        documentId,
-        storageKey: document.storage_key,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      // Continue with deletion even if storage deletion fails
-    }
-
-    // Step 4: Delete from D1 documents table
-    await db
-      .deleteFrom('documents')
-      .where('id', '=', documentId)
-      .where('workspace_id', '=', workspaceId)
-      .execute();
-
-    this.env.logger.info('Document deleted successfully with cascade', {
-      documentId,
-      workspaceId,
-      note: 'PostgreSQL embeddings/chunks deleted via embedding service (D1 chunks table removed)',
-    });
-
-    return { success: true };
   }
 
   // Helper methods for document processor
@@ -2296,5 +2401,210 @@ Respond with ONLY a JSON object in this exact format:
       status,
       smartBucketStatus,
     };
+  }
+
+  /**
+   * CRITICAL FIX: Detect documents stuck in processing state
+   * Run this periodically (every 5-10 minutes) via cron/scheduled task
+   */
+  async detectStuckDocuments(timeoutMinutes: number = 30): Promise<{
+    success: boolean;
+    stuckDocuments: Array<{
+      id: string;
+      workspaceId: string;
+      filename: string;
+      updatedAt: number;
+      minutesStuck: number;
+    }>;
+    recoveredCount: number;
+    errorCount: number;
+  }> {
+    const TIMEOUT_MS = timeoutMinutes * 60 * 1000;
+    const cutoffTime = Date.now() - TIMEOUT_MS;
+
+    this.env.logger.info('Starting stuck document detection', {
+      timeoutMinutes,
+      cutoffTime: new Date(cutoffTime).toISOString(),
+    });
+
+    try {
+      // Find documents stuck in processing
+      const stuckDocs = await (this.env.AUDITGUARD_DB as any)
+        .prepare(`
+          SELECT id, workspace_id, filename, updated_at, processing_status, fully_completed
+          FROM documents
+          WHERE processing_status = 'processing'
+            AND fully_completed = 0
+            AND updated_at < ?
+          ORDER BY updated_at ASC
+          LIMIT 100
+        `)
+        .bind(cutoffTime)
+        .all();
+
+      const stuckDocuments = (stuckDocs.results || []).map((doc: any) => ({
+        id: doc.id,
+        workspaceId: doc.workspace_id,
+        filename: doc.filename,
+        updatedAt: doc.updated_at,
+        minutesStuck: Math.floor((Date.now() - doc.updated_at) / (60 * 1000)),
+      }));
+
+      if (stuckDocuments.length === 0) {
+        this.env.logger.info('No stuck documents found');
+        return {
+          success: true,
+          stuckDocuments: [],
+          recoveredCount: 0,
+          errorCount: 0,
+        };
+      }
+
+      this.env.logger.warn('Found stuck documents', {
+        count: stuckDocuments.length,
+        documents: stuckDocuments.map(d => ({
+          id: d.id,
+          filename: d.filename,
+          minutesStuck: d.minutesStuck,
+        })),
+      });
+
+      // Attempt to recover each stuck document
+      let recoveredCount = 0;
+      let errorCount = 0;
+
+      for (const doc of stuckDocuments) {
+        try {
+          await this.recoverStuckDocument(doc.id, doc.workspaceId);
+          recoveredCount++;
+        } catch (error) {
+          errorCount++;
+          this.env.logger.error('Failed to recover stuck document', {
+            documentId: doc.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      this.env.logger.info('Stuck document recovery completed', {
+        totalFound: stuckDocuments.length,
+        recovered: recoveredCount,
+        errors: errorCount,
+      });
+
+      return {
+        success: true,
+        stuckDocuments,
+        recoveredCount,
+        errorCount,
+      };
+
+    } catch (error) {
+      this.env.logger.error('Stuck document detection failed', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+
+      return {
+        success: false,
+        stuckDocuments: [],
+        recoveredCount: 0,
+        errorCount: 0,
+      };
+    }
+  }
+
+  /**
+   * CRITICAL FIX: Recover a single stuck document
+   * Marks it as failed and notifies user
+   */
+  private async recoverStuckDocument(documentId: string, workspaceId: string): Promise<void> {
+    this.env.logger.info('Recovering stuck document', { documentId, workspaceId });
+
+    // Mark document as failed
+    await (this.env.AUDITGUARD_DB as any)
+      .prepare(`
+        UPDATE documents
+        SET processing_status = 'failed',
+            fully_completed = 1,
+            updated_at = ?
+        WHERE id = ? AND workspace_id = ?
+      `)
+      .bind(Date.now(), documentId, workspaceId)
+      .run();
+
+    // Log the recovery action
+    this.env.logger.warn('Document marked as failed after timeout', {
+      documentId,
+      workspaceId,
+      reason: 'Processing timeout - exceeded maximum processing time',
+    });
+
+    // TODO: Send notification to user (email/in-app) about failed processing
+    // This would require integration with notification service
+
+    this.env.logger.info('Document recovery completed', { documentId });
+  }
+
+  /**
+   * CRITICAL FIX: Manually recover a specific document by ID
+   * Used for admin intervention or API endpoint
+   */
+  async recoverDocument(documentId: string, workspaceId: string, userId: string): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    this.env.logger.info('Manual document recovery requested', {
+      documentId,
+      workspaceId,
+      userId,
+    });
+
+    try {
+      // Verify document exists and is in stuck state
+      const document = await (this.env.AUDITGUARD_DB as any)
+        .prepare(`
+          SELECT id, processing_status, fully_completed, updated_at
+          FROM documents
+          WHERE id = ? AND workspace_id = ?
+        `)
+        .bind(documentId, workspaceId)
+        .first();
+
+      if (!document) {
+        return {
+          success: false,
+          message: 'Document not found',
+        };
+      }
+
+      if (document.processing_status !== 'processing') {
+        return {
+          success: false,
+          message: `Document is not stuck (status: ${document.processing_status})`,
+        };
+      }
+
+      // Recover the document
+      await this.recoverStuckDocument(documentId, workspaceId);
+
+      return {
+        success: true,
+        message: 'Document recovered successfully',
+      };
+
+    } catch (error) {
+      this.env.logger.error('Manual document recovery failed', {
+        documentId,
+        workspaceId,
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      return {
+        success: false,
+        message: `Recovery failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
   }
 }

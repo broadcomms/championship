@@ -592,25 +592,45 @@ export default class extends Service<Env> {
       pageSize,
     });
 
-    // Get total count
+    // SECURITY FIX: Get valid column names from table schema to prevent SQL injection
+    const schemaResult = await (this.env.AUDITGUARD_DB as any)
+      .prepare(`PRAGMA table_info(${tableName})`)
+      .all();
+
+    const validColumns = schemaResult.results?.map((col: any) => col.name) || [];
+
+    // SECURITY FIX: Validate orderBy against valid columns
+    let safeOrderBy = 'rowid'; // Default safe ordering column
+    if (options.orderBy && validColumns.includes(options.orderBy)) {
+      safeOrderBy = options.orderBy;
+    } else if (options.orderBy) {
+      this.env.logger.warn('Invalid orderBy column attempted', {
+        tableName,
+        attemptedColumn: options.orderBy,
+        validColumns,
+      });
+    }
+
+    // SECURITY FIX: Whitelist orderDir to prevent injection
+    const safeOrderDir = options.orderDir === 'DESC' ? 'DESC' : 'ASC';
+
+    // Get total count - tableName is already validated to exist
     const countResult = await (this.env.AUDITGUARD_DB as any)
       .prepare(`SELECT COUNT(*) as count FROM ${tableName}`)
       .first();
 
     const totalRows = countResult?.count || 0;
 
-    // Build query with optional ordering
-    let query = `SELECT * FROM ${tableName}`;
+    // SECURITY FIX: Build query with validated parameters
+    // Note: SQLite doesn't support parameterized table names or column names
+    // But we've validated both against the schema
+    const query = `SELECT * FROM ${tableName} ORDER BY ${safeOrderBy} ${safeOrderDir} LIMIT ? OFFSET ?`;
 
-    if (options.orderBy) {
-      const orderDir = options.orderDir || 'ASC';
-      query += ` ORDER BY ${options.orderBy} ${orderDir}`;
-    }
-
-    query += ` LIMIT ${pageSize} OFFSET ${offset}`;
-
-    // Get paginated data
-    const result = await (this.env.AUDITGUARD_DB as any).prepare(query).all();
+    // Get paginated data with parameterized limit/offset
+    const result = await (this.env.AUDITGUARD_DB as any)
+      .prepare(query)
+      .bind(pageSize, offset)
+      .all();
     const rows = result.results || [];
 
     // Get column names
