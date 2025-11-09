@@ -653,7 +653,7 @@ export default class extends Service<Env> {
 
       // Step 2: Delete from PostgreSQL embedding service (best effort)
       try {
-        const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
+        const embeddingServiceUrl = (this.env as any).LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
 
         this.env.logger.info('Deleting document from PostgreSQL embedding service', {
           documentId,
@@ -664,7 +664,7 @@ export default class extends Service<Env> {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+            'X-API-Key': (this.env as any).EMBEDDING_SERVICE_API_KEY || '',
           },
         });
 
@@ -1217,13 +1217,13 @@ Respond with ONLY a JSON object in this exact format:
 
       try {
         // Get all chunks from PostgreSQL via API
-        const embeddingServiceUrl = this.env.LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
+        const embeddingServiceUrl = (this.env as any).LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
         const chunksResponse = await fetch(
           `${embeddingServiceUrl}/api/v1/documents/${documentId}/chunks`,
           {
             method: 'GET',
             headers: {
-              'X-API-Key': this.env.EMBEDDING_SERVICE_API_KEY,
+              'X-API-Key': (this.env as any).EMBEDDING_SERVICE_API_KEY || '',
               'Content-Type': 'application/json',
             },
           }
@@ -1305,7 +1305,7 @@ Respond with ONLY a JSON object in this exact format:
           error: embeddingError instanceof Error ? embeddingError.message : String(embeddingError),
           errorStack: embeddingError instanceof Error ? embeddingError.stack : undefined,
           errorType: embeddingError?.constructor?.name,
-          LOCAL_EMBEDDING_SERVICE_URL: this.env.LOCAL_EMBEDDING_SERVICE_URL || 'NOT SET',
+          LOCAL_EMBEDDING_SERVICE_URL: (this.env as any).LOCAL_EMBEDDING_SERVICE_URL || 'NOT SET',
         });
         // Don't throw - we still want to mark the document as processed
         // But log prominently so we can debug

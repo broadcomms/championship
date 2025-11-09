@@ -1350,6 +1350,62 @@ export default class extends Service<Env> {
         });
       }
 
+      // PHASE 1.4: Match /api/workspaces/:id/compliance/batch (start batch check)
+      const batchCreateMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/compliance\/batch$/);
+      if (batchCreateMatch && batchCreateMatch[1] && request.method === 'POST') {
+        const workspaceId = batchCreateMatch[1];
+        const user = await this.validateSession(request);
+
+        // CRITICAL FIX: Safe JSON parsing with field validation
+        const parseResult = await this.safeParseJSON<{
+          documentIds: string[];
+          framework: string;
+        }>(request, ['documentIds', 'framework']);
+
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const { documentIds, framework } = parseResult.data;
+
+        // Validate documentIds is an array
+        if (!Array.isArray(documentIds) || documentIds.length === 0) {
+          return new Response(JSON.stringify({ error: 'documentIds must be a non-empty array' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.COMPLIANCE_SERVICE.runBatchComplianceCheck({
+          documentIds,
+          workspaceId,
+          userId: user.userId,
+          framework: framework as any,
+        });
+
+        return new Response(JSON.stringify(result), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // PHASE 1.4: Match /api/workspaces/:id/compliance/batch/:batchId (get batch status)
+      const batchStatusMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/compliance\/batch\/([^\/]+)$/);
+      if (batchStatusMatch && batchStatusMatch[1] && batchStatusMatch[2] && request.method === 'GET') {
+        const workspaceId = batchStatusMatch[1];
+        const batchId = batchStatusMatch[2];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.COMPLIANCE_SERVICE.getBatchStatus(batchId, workspaceId, user.userId);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/workspaces/:id/compliance/:checkId
       const checkMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/compliance\/([^\/]+)$/);
       if (checkMatch && checkMatch[1] && checkMatch[2] && request.method === 'GET') {
@@ -1558,6 +1614,92 @@ export default class extends Service<Env> {
 
         return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // PHASE 1.2.1: Match /api/workspaces/:id/analytics/maturity
+      const maturityMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/analytics\/maturity$/);
+      if (maturityMatch && maturityMatch[1] && request.method === 'GET') {
+        const workspaceId = maturityMatch[1];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.ANALYTICS_SERVICE.calculateMaturityLevel(workspaceId, user.userId);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // PHASE 1.2.2: Match /api/workspaces/:id/analytics/framework/:framework
+      const frameworkMaturityMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/analytics\/framework\/([^\/]+)$/);
+      if (frameworkMaturityMatch && frameworkMaturityMatch[1] && frameworkMaturityMatch[2] && request.method === 'GET') {
+        const workspaceId = frameworkMaturityMatch[1];
+        const framework = frameworkMaturityMatch[2];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.ANALYTICS_SERVICE.getFrameworkMaturity(workspaceId, user.userId, framework);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // PHASE 1.3.2: Match /api/workspaces/:id/reports/executive
+      const executiveReportMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/reports\/executive$/);
+      if (executiveReportMatch && executiveReportMatch[1] && request.method === 'POST') {
+        const workspaceId = executiveReportMatch[1];
+        const user = await this.validateSession(request);
+
+        // Parse optional parameters
+        const parseResult = await this.safeParseJSON<{
+          startDate?: number;
+          endDate?: number;
+          frameworks?: string[];
+        }>(request, []);
+
+        const options = parseResult.success ? parseResult.data : {};
+
+        const result = await this.env.REPORTING_SERVICE.generateExecutiveSummary(workspaceId, user.userId, options);
+
+        return new Response(JSON.stringify(result), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // PHASE 1.3.4: Match /api/workspaces/:id/reports/export/:format
+      const exportMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/reports\/export\/([^\/]+)$/);
+      if (exportMatch && exportMatch[1] && exportMatch[2] && request.method === 'POST') {
+        const workspaceId = exportMatch[1];
+        const format = exportMatch[2] as 'json' | 'csv';
+        const user = await this.validateSession(request);
+
+        if (format !== 'json' && format !== 'csv') {
+          return new Response(JSON.stringify({ error: 'Invalid export format. Use json or csv' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        // Parse optional parameters
+        const parseResult = await this.safeParseJSON<{
+          includeIssues?: boolean;
+          includeChecks?: boolean;
+          frameworks?: string[];
+          startDate?: number;
+          endDate?: number;
+        }>(request, []);
+
+        const options = parseResult.success ? parseResult.data : {};
+
+        const result = await this.env.REPORTING_SERVICE.exportComplianceData(workspaceId, user.userId, format, options);
+
+        return new Response(result.data, {
+          headers: {
+            'Content-Type': result.contentType,
+            'Content-Disposition': `attachment; filename="${result.filename}"`,
+            ...corsHeaders,
+          },
         });
       }
 

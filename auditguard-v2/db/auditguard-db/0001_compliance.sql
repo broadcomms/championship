@@ -1,5 +1,5 @@
 -- Compliance checks table
-CREATE TABLE compliance_checks (
+CREATE TABLE IF NOT EXISTS compliance_checks (
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL,
     workspace_id TEXT NOT NULL,
@@ -16,7 +16,7 @@ CREATE TABLE compliance_checks (
 );
 
 -- Compliance issues table
-CREATE TABLE compliance_issues (
+CREATE TABLE IF NOT EXISTS compliance_issues (
     id TEXT PRIMARY KEY,
     check_id TEXT NOT NULL,
     document_id TEXT NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE compliance_issues (
 );
 
 -- Document chunks table for semantic search
-CREATE TABLE document_chunks (
+CREATE TABLE IF NOT EXISTS document_chunks (
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL,
     workspace_id TEXT NOT NULL,
@@ -50,10 +50,10 @@ ALTER TABLE documents ADD COLUMN text_extracted INTEGER DEFAULT 0;
 ALTER TABLE documents ADD COLUMN chunk_count INTEGER DEFAULT 0;
 
 -- Indexes for performance
-CREATE INDEX idx_compliance_checks_document_id ON compliance_checks(document_id);
-CREATE INDEX idx_compliance_checks_workspace_id ON compliance_checks(workspace_id);
-CREATE INDEX idx_compliance_checks_framework ON compliance_checks(framework);
-CREATE INDEX idx_compliance_issues_check_id ON compliance_issues(check_id);
-CREATE INDEX idx_compliance_issues_severity ON compliance_issues(severity);
-CREATE INDEX idx_document_chunks_document_id ON document_chunks(document_id);
-CREATE INDEX idx_document_chunks_workspace_id ON document_chunks(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_checks_document_id ON compliance_checks(document_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_checks_workspace_id ON compliance_checks(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_checks_framework ON compliance_checks(framework);
+CREATE INDEX IF NOT EXISTS idx_compliance_issues_check_id ON compliance_issues(check_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_issues_severity ON compliance_issues(severity);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_document_id ON document_chunks(document_id);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_workspace_id ON document_chunks(workspace_id);
