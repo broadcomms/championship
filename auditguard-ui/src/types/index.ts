@@ -362,6 +362,144 @@ export interface Annotation {
 }
 
 // ==================
+// PHASE 1: Enhanced Compliance Types
+// ==================
+
+// Phase 1.1.1: Batch Compliance Checking
+export interface BatchComplianceCheck {
+  batchId: string;
+  workspaceId: string;
+  framework: ComplianceFramework;
+  total: number;
+  completed: number;
+  processing: number;
+  failed: number;
+  createdAt: number;
+  checks: Array<{
+    checkId: string;
+    documentId: string;
+    status: CheckStatus;
+    overallScore: number | null;
+  }>;
+}
+
+// Phase 1.2.1: CMMI Maturity Model
+export type MaturityLevelName =
+  | 'Initial'
+  | 'Managed'
+  | 'Defined'
+  | 'Quantitatively Managed'
+  | 'Optimizing';
+
+export interface MaturityLevel {
+  level: 1 | 2 | 3 | 4 | 5;
+  name: MaturityLevelName;
+  score: number; // 0-100
+  description: string;
+  characteristics: string[];
+  nextSteps: string[];
+}
+
+// Phase 1.2.2: Framework Maturity Assessment
+export interface FrameworkControl {
+  id: string;
+  category: string;
+  description: string;
+  covered: boolean;
+  issuesFound: number;
+  criticalIssues: number;
+}
+
+export interface GapAnalysisItem {
+  controlId: string;
+  category: string;
+  description: string;
+  severity: IssueSeverity;
+  recommendation: string;
+  effort: 'low' | 'medium' | 'high';
+}
+
+export interface FrameworkMaturity {
+  framework: ComplianceFramework;
+  overallCoverage: number; // 0-100
+  totalControls: number;
+  coveredControls: number;
+  gaps: GapAnalysisItem[];
+  strengths: string[];
+  recommendations: string[];
+  controlDetails: FrameworkControl[];
+}
+
+// Phase 1.3: Reporting & Executive Summary
+export interface RiskItem {
+  category: string;
+  severity: IssueSeverity;
+  count: number;
+  description: string;
+}
+
+export interface FrameworkScoreItem {
+  framework: ComplianceFramework;
+  score: number;
+  status: 'compliant' | 'needs_improvement' | 'non_compliant';
+  coverage: number;
+}
+
+export interface RecommendationItem {
+  priority: IssueSeverity;
+  title: string;
+  description: string;
+  estimatedEffort: string;
+}
+
+export interface ExecutiveSummary {
+  workspaceId: string;
+  generatedAt: number;
+  reportPeriod: {
+    startDate: number;
+    endDate: number;
+  };
+  overview: {
+    overallScore: number;
+    maturityLevel: number;
+    totalDocuments: number;
+    documentsChecked: number;
+    coveragePercentage: number;
+    totalIssues: number;
+    criticalIssues: number;
+  };
+  keyFindings: string[];
+  topRisks: RiskItem[];
+  frameworkSummary: FrameworkScoreItem[];
+  recommendations: RecommendationItem[];
+  trends: {
+    scoreChange: number;
+    issueChange: number;
+    coverageChange: number;
+  };
+}
+
+// Phase 1.3.4: Data Export Types
+export type ExportFormat = 'json' | 'csv';
+
+export interface ExportOptions {
+  frameworks?: ComplianceFramework[];
+  startDate?: number;
+  endDate?: number;
+  includeChecks?: boolean;
+  includeIssues?: boolean;
+}
+
+export interface ExportData {
+  exportId: string;
+  workspaceId: string;
+  format: ExportFormat;
+  generatedAt: number;
+  data: string; // JSON string or CSV string
+  filename: string;
+}
+
+// ==================
 // API Response Types
 // ==================
 

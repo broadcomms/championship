@@ -136,7 +136,7 @@ export default class extends Service<Env> {
         category: input.category || null,
         compliance_framework_id: input.frameworkId || null,  // Phase 4: Framework support
         vultr_key: vultrKey,  // Vultr S3 key for original file
-        storage_key: '',  // Will be set to extracted text key after processing
+        storage_key: 'pending_extraction',  // Placeholder until text extraction completes
         extraction_status: 'pending',  // Text extraction pending
         uploaded_by: input.userId,
         uploaded_at: now,

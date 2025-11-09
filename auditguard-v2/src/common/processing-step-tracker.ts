@@ -174,7 +174,7 @@ export class ProcessingStepTracker {
         `UPDATE document_processing_steps
          SET status = 'completed',
              completed_at = ?,
-             metadata = ?,
+             meta_info = ?,
              updated_at = ?
          WHERE document_id = ? AND step_name = ?`
       ).bind(
@@ -245,7 +245,7 @@ export class ProcessingStepTracker {
         completedAt: row.completed_at,
         progressCurrent: row.progress_current,
         progressTotal: row.progress_total,
-        metadata: row.metadata ? JSON.parse(row.metadata) : null,
+        metadata: row.meta_info ? JSON.parse(row.meta_info) : null,
         errorMessage: row.error_message,
         createdAt: row.created_at,
         updatedAt: row.updated_at,

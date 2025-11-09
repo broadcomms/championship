@@ -18,6 +18,18 @@ export interface ExtractedText {
   };
 }
 
+/**
+ * Timeout wrapper for promises
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => 
+      setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
+}
+
 export class TextExtractionService {
   private env: any;
 
@@ -49,11 +61,19 @@ export class TextExtractionService {
       if (contentType === 'application/pdf' || filename.endsWith('.pdf')) {
         this.env.logger?.info('Extracting text from PDF with unpdf', { filename });
 
-        // Load PDF using unpdf (Worker-compatible PDF.js)
-        const pdf = await getDocumentProxy(new Uint8Array(file));
+        // Load PDF using unpdf (Worker-compatible PDF.js) with 30s timeout
+        const pdf = await withTimeout(
+          getDocumentProxy(new Uint8Array(file)),
+          30000,
+          'PDF loading'
+        );
 
-        // Extract all text with mergePages option
-        const result = await unpdfExtractText(pdf, { mergePages: true });
+        // Extract all text with mergePages option - 60s timeout for large PDFs
+        const result = await withTimeout(
+          unpdfExtractText(pdf, { mergePages: true }),
+          60000,
+          'PDF text extraction'
+        );
         extractedText = result.text;
         pageCount = result.totalPages;
 

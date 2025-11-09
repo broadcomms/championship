@@ -385,15 +385,18 @@ export default class extends Service<Env> {
 
     this.env.logger.info('Getting database schema', { adminUserId });
 
-    // D1 doesn't allow sqlite_master queries, so we maintain a known list of tables
-    const knownTables = [
-      'users', 'sessions', 'workspaces', 'workspace_members', 'documents',
-      'document_chunks', 'compliance_checks', 'compliance_frameworks',
-      'compliance_tags', 'subscriptions', 'invoices', 'payment_methods',
-      'api_keys', 'audit_logs', 'system_settings', 'admin_users',
-      'admin_audit_log', 'error_logs', 'embeddings_queue', 'vector_metadata',
-      'search_queries', 'usage_metrics'
-    ];
+    // Query sqlite_master to get actual tables that exist
+    const tablesResult = await (this.env.AUDITGUARD_DB as any)
+      .prepare(`
+        SELECT name FROM sqlite_master
+        WHERE type='table'
+        AND name NOT LIKE '_cf_%'
+        AND name NOT LIKE 'sqlite_%'
+        ORDER BY name
+      `)
+      .all();
+
+    const knownTables = (tablesResult.results || []).map((t: any) => t.name);
 
     // For each table, get column info and row count
     const schemaInfo = [];
@@ -2389,20 +2392,7 @@ export default class extends Service<Env> {
     this.env.logger.info('Getting migration status', { adminUserId });
 
     try {
-      // Known migrations list (in Cloudflare Workers we can't read filesystem)
-      // This should be updated whenever new migrations are added
-      const knownMigrations = [
-        { version: 1, name: '001_initial_schema', description: 'Initial database schema' },
-        { version: 2, name: '002_add_sessions', description: 'Add sessions table' },
-        { version: 3, name: '003_add_workspaces', description: 'Add workspaces and members tables' },
-        { version: 4, name: '004_add_documents', description: 'Add documents and chunks tables' },
-        { version: 5, name: '005_add_compliance', description: 'Add compliance checks and frameworks' },
-        { version: 6, name: '006_add_billing', description: 'Add subscriptions and billing tables' },
-        { version: 7, name: '007_add_admin', description: 'Add admin users and audit log tables' },
-        { version: 8, name: '008_add_embeddings', description: 'Add embeddings queue and vector metadata' },
-      ];
-
-      // Check which tables exist to determine which migrations have been applied
+      // Check which tables exist in the database
       const tablesResult = await (this.env.AUDITGUARD_DB as any)
         .prepare(`
           SELECT name FROM sqlite_master
@@ -2413,75 +2403,38 @@ export default class extends Service<Env> {
         `)
         .all();
 
-      const existingTables = new Set(
-        (tablesResult.results || []).map((t: any) => t.name)
-      );
+      const existingTables = (tablesResult.results || []).map((t: any) => t.name);
+      const tableCount = existingTables.length;
 
-      // Map migrations to status based on table existence
-      const migrations = knownMigrations.map((migration) => {
-        let isApplied = false;
-
-        // Simple heuristic: check if key tables from each migration exist
-        switch (migration.version) {
-          case 1: // Initial schema
-            isApplied = existingTables.has('users');
-            break;
-          case 2: // Sessions
-            isApplied = existingTables.has('sessions');
-            break;
-          case 3: // Workspaces
-            isApplied = existingTables.has('workspaces') && existingTables.has('workspace_members');
-            break;
-          case 4: // Documents
-            isApplied = existingTables.has('documents') && existingTables.has('document_chunks');
-            break;
-          case 5: // Compliance
-            isApplied = existingTables.has('compliance_checks') && existingTables.has('compliance_frameworks');
-            break;
-          case 6: // Billing
-            isApplied = existingTables.has('subscriptions') && existingTables.has('invoices');
-            break;
-          case 7: // Admin
-            isApplied = existingTables.has('admin_users') && existingTables.has('admin_audit_log');
-            break;
-          case 8: // Embeddings
-            isApplied = existingTables.has('embeddings_queue') && existingTables.has('vector_metadata');
-            break;
-          default:
-            isApplied = false;
-        }
-
-        return {
-          name: migration.name,
-          version: migration.version,
-          appliedAt: isApplied ? Date.now() : null, // We don't have actual timestamps
-          status: isApplied ? ('applied' as const) : ('pending' as const),
-          description: migration.description,
-        };
-      });
-
-      // Calculate current version and pending count
-      const appliedMigrations = migrations.filter((m) => m.status === 'applied');
-      const currentVersion = appliedMigrations.length > 0
-        ? Math.max(...appliedMigrations.map((m) => m.version))
-        : 0;
-      const pendingMigrations = migrations.filter((m) => m.status === 'pending').length;
+      // Single consolidated schema migration
+      const migrations = [
+        {
+          name: '0000_init_schema',
+          version: 1,
+          appliedAt: tableCount > 0 ? Date.now() : null,
+          status: (tableCount > 0 ? 'applied' : 'pending') as 'applied' | 'pending',
+          description: `Consolidated database schema (${tableCount} tables created)`,
+        },
+      ];
 
       await this.logAdminAction(adminUserId, 'view_migration_status', 'database', null, {
-        currentVersion,
-        pendingMigrations,
+        currentVersion: tableCount > 0 ? 1 : 0,
+        pendingMigrations: tableCount > 0 ? 0 : 1,
+        tableCount,
+        tables: existingTables,
       });
 
       this.env.logger.info('Migration status retrieved', {
         adminUserId,
-        currentVersion,
-        pendingMigrations,
+        currentVersion: tableCount > 0 ? 1 : 0,
+        pendingMigrations: tableCount > 0 ? 0 : 1,
+        tableCount,
       });
 
       return {
         migrations,
-        currentVersion,
-        pendingMigrations,
+        currentVersion: tableCount > 0 ? 1 : 0,
+        pendingMigrations: tableCount > 0 ? 0 : 1,
       };
     } catch (error) {
       this.env.logger.error('Failed to get migration status', {
