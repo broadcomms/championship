@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { ReportGeneratorModal } from '@/components/reporting';
+import { FileText } from 'lucide-react';
 import type {
   ComplianceCheckListItem,
   MaturityLevel,
@@ -57,6 +59,7 @@ export default function CompliancePage(props: PageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showNewCheck, setShowNewCheck] = useState(false);
+  const [showReportGenerator, setShowReportGenerator] = useState(false);
 
   // Fetch dashboard data
   useEffect(() => {
@@ -144,12 +147,21 @@ export default function CompliancePage(props: PageProps) {
             <h1 className="text-3xl font-bold text-gray-900">Compliance Dashboard</h1>
             <p className="text-gray-500 mt-1">Monitor and manage compliance across your workspace</p>
           </div>
-          <button
-            onClick={() => setShowNewCheck(!showNewCheck)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
-            {showNewCheck ? 'Cancel' : 'New Check'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowReportGenerator(true)}
+              className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <FileText className="h-4 w-4" />
+              Generate Report
+            </button>
+            <button
+              onClick={() => setShowNewCheck(!showNewCheck)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              {showNewCheck ? 'Cancel' : 'New Check'}
+            </button>
+          </div>
         </div>
 
         {/* New Check Form */}
@@ -299,6 +311,13 @@ export default function CompliancePage(props: PageProps) {
             )}
           </div>
         </div>
+
+        {/* Report Generator Modal */}
+        <ReportGeneratorModal
+          workspaceId={workspaceId}
+          isOpen={showReportGenerator}
+          onClose={() => setShowReportGenerator(false)}
+        />
       </div>
       </div>
     </AppLayout>

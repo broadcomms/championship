@@ -128,3 +128,69 @@ export const SEVERITY_LABELS: Record<IssueSeverity, string> = {
   low: 'Low',
   info: 'Info',
 };
+
+// ==================
+// Reporting Types (Phase 3)
+// ==================
+
+export type ReportFormat = 'json' | 'csv';
+export type ReportType = 'compliance_data' | 'executive_summary';
+
+export interface ReportGenerationRequest {
+  workspaceId: string;
+  frameworks?: string[];
+  startDate?: string; // ISO date string
+  endDate?: string; // ISO date string
+  includeChecks?: boolean;
+  includeIssues?: boolean;
+  format: ReportFormat;
+}
+
+export interface ExecutiveSummaryRequest {
+  workspaceId: string;
+  frameworks?: string[];
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface ExecutiveSummary {
+  workspaceId: string;
+  generatedAt: number;
+  overview: {
+    totalDocuments: number;
+    totalChecks: number;
+    totalIssues: number;
+    averageScore: number;
+    riskLevel: string;
+  };
+  keyFindings: string[]; // AI-generated insights
+  topRisks: {
+    category: string;
+    count: number;
+    severity: IssueSeverity;
+  }[];
+  frameworkCompliance: {
+    framework: string;
+    score: number;
+    issueCount: number;
+    riskLevel: string;
+  }[];
+  recommendations: {
+    priority: 'critical' | 'high' | 'medium' | 'low';
+    title: string;
+    description: string;
+    effort: 'low' | 'medium' | 'high';
+  }[];
+  trends: {
+    scoreChange: number;
+    issueChange: number;
+    period: string;
+  } | null;
+}
+
+export interface ReportExportResponse {
+  format: ReportFormat;
+  generatedAt: number;
+  data: string; // JSON string or CSV content
+  filename: string;
+}

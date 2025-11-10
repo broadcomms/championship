@@ -9,8 +9,10 @@ import { ProcessingIndicator } from '@/components/documents/ProcessingIndicator'
 import { DocumentUpload } from '@/components/documents/DocumentUpload';
 import { VectorSearch } from '@/components/documents/VectorSearch';
 import { ComponentErrorBoundary } from '@/components/common/ErrorBoundary';
+import { ReportGeneratorModal } from '@/components/reporting';
 import { useDocuments } from '@/hooks/useDocuments';
 import { DocumentCategory } from '@/types';
+import { FileText } from 'lucide-react';
 
 type SortField = 'filename' | 'uploadedAt' | 'fileSize';
 type SortDirection = 'asc' | 'desc';
@@ -24,6 +26,7 @@ export default function DocumentsPage() {
   const { documents, isLoading, error, refetch } = useDocuments(workspaceId);
 
   const [showUpload, setShowUpload] = useState(false);
+  const [showReportGenerator, setShowReportGenerator] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [categoryFilter, setCategoryFilter] = useState<DocumentCategory | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('uploadedAt');
@@ -119,9 +122,18 @@ export default function DocumentsPage() {
               </p>
             </div>
           </div>
-          <Button variant="primary" onClick={() => setShowUpload(!showUpload)}>
-            {showUpload ? '✕ Cancel' : '+ Upload Document'}
-          </Button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowReportGenerator(true)}
+              className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <FileText className="h-4 w-4" />
+              Generate Report
+            </button>
+            <Button variant="primary" onClick={() => setShowUpload(!showUpload)}>
+              {showUpload ? '✕ Cancel' : '+ Upload Document'}
+            </Button>
+          </div>
         </div>
 
         {/* Upload Section */}
@@ -345,6 +357,13 @@ export default function DocumentsPage() {
             <VectorSearch workspaceId={workspaceId} />
           </ComponentErrorBoundary>
         )}
+
+        {/* Report Generator Modal */}
+        <ReportGeneratorModal
+          workspaceId={workspaceId}
+          isOpen={showReportGenerator}
+          onClose={() => setShowReportGenerator(false)}
+        />
       </div>
     </AppLayout>
   );
