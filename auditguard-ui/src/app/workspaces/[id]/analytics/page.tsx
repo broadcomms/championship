@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ReportGeneratorModal } from '@/components/reporting';
@@ -8,14 +8,78 @@ import { ComplianceReportsList } from '@/components/reporting/ComplianceReportsL
 import { ComplianceReportDetailModal } from '@/components/reporting/ComplianceReportDetailModal';
 import { FileText, TrendingUp, BarChart3 } from 'lucide-react';
 
+interface ReportStats {
+  totalReports: number;
+  avgScore: number;
+  trend: string;
+}
+
 export default function AnalyticsPage() {
   const params = useParams();
   const workspaceId = params.id as string;
   const [showReportGenerator, setShowReportGenerator] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [stats, setStats] = useState<ReportStats>({
+    totalReports: 0,
+    avgScore: 0,
+    trend: '-',
+  });
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Fetch report statistics
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/reports`, {
+          credentials: 'include',
+        });
+
+        if (!response.ok) return;
+
+        const reports = await response.json();
+        
+        if (reports.length === 0) {
+          setStats({ totalReports: 0, avgScore: 0, trend: '-' });
+          return;
+        }
+
+        // Calculate stats
+        const totalReports = reports.length;
+        const avgScore = Math.round(
+          reports.reduce((sum: number, r: any) => sum + (r.summary.overallScore || 0), 0) / totalReports
+        );
+
+        // Calculate trend (compare latest 3 vs previous 3)
+        let trend = '-';
+        if (reports.length >= 2) {
+          const latest = reports[0].summary.overallScore || 0;
+          const previous = reports[1].summary.overallScore || 0;
+          if (latest > previous) {
+            trend = `+${(latest - previous).toFixed(1)}%`;
+          } else if (latest < previous) {
+            trend = `${(latest - previous).toFixed(1)}%`;
+          } else {
+            trend = 'No change';
+          }
+        }
+
+        setStats({ totalReports, avgScore, trend });
+      } catch (error) {
+        console.error('Failed to fetch report stats:', error);
+      }
+    };
+
+    fetchStats();
+  }, [workspaceId, refreshKey]);
 
   const handleReportClick = (reportId: string) => {
     setSelectedReportId(reportId);
+  };
+
+  const handleReportGenerated = () => {
+    setShowReportGenerator(false);
+    // Trigger refresh by incrementing key
+    setRefreshKey(prev => prev + 1);
   };
 
   return (
@@ -48,7 +112,9 @@ export default function AnalyticsPage() {
                 </div>
                 <h3 className="text-sm font-medium text-gray-500">Total Reports</h3>
               </div>
-              <div className="text-2xl font-bold text-gray-900">-</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {stats.totalReports}
+              </div>
               <p className="text-xs text-gray-500 mt-1">Generated reports</p>
             </div>
 
@@ -59,7 +125,9 @@ export default function AnalyticsPage() {
                 </div>
                 <h3 className="text-sm font-medium text-gray-500">Avg Score</h3>
               </div>
-              <div className="text-2xl font-bold text-gray-900">-</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {stats.totalReports > 0 ? `${stats.avgScore}%` : '-'}
+              </div>
               <p className="text-xs text-gray-500 mt-1">Compliance score</p>
             </div>
 
@@ -70,13 +138,16 @@ export default function AnalyticsPage() {
                 </div>
                 <h3 className="text-sm font-medium text-gray-500">Trend</h3>
               </div>
-              <div className="text-2xl font-bold text-gray-900">-</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {stats.trend}
+              </div>
               <p className="text-xs text-gray-500 mt-1">Last 30 days</p>
             </div>
           </div>
 
           {/* Reports List */}
           <ComplianceReportsList
+            key={refreshKey}
             workspaceId={workspaceId}
             onReportClick={handleReportClick}
           />
@@ -85,7 +156,7 @@ export default function AnalyticsPage() {
           <ReportGeneratorModal
             workspaceId={workspaceId}
             isOpen={showReportGenerator}
-            onClose={() => setShowReportGenerator(false)}
+            onClose={handleReportGenerated}
           />
 
           {/* Report Detail Modal */}

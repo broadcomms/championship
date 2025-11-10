@@ -3,11 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { ComplianceIssuesList } from '@/components/compliance/ComplianceIssuesList';
+import { IssueDetailPanel } from '@/components/compliance/IssueDetailPanel';
 import type {
   ComplianceCheckListItem,
   MaturityLevel,
   RiskLevel,
 } from '@/types';
+import { IssueStatus } from '@/types/compliance';
 // TODO: Phase 1 workspace-level compliance features
 // import {
 //   ComplianceScoreGauge,
@@ -57,6 +60,7 @@ export default function CompliancePage(props: PageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showNewCheck, setShowNewCheck] = useState(false);
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
 
   // Fetch dashboard data
   useEffect(() => {
@@ -109,6 +113,20 @@ export default function CompliancePage(props: PageProps) {
       critical: 'text-red-700 bg-red-100 border-red-200',
     };
     return colors[level] || 'text-gray-700 bg-gray-100 border-gray-200';
+  };
+
+  const handleIssueClick = (issueId: string) => {
+    setSelectedIssueId(issueId);
+  };
+
+  const handleBulkAction = async (issueIds: string[], action: string) => {
+    console.log('Bulk action:', action, 'on issues:', issueIds);
+    // TODO: Implement bulk actions
+  };
+
+  const handleIssueStatusChange = (issueId: string, newStatus: IssueStatus) => {
+    console.log('Issue status changed:', issueId, newStatus);
+    // Refresh dashboard or update locally
   };
 
   if (loading) {
@@ -242,63 +260,21 @@ export default function CompliancePage(props: PageProps) {
           </div>
         )}
 
-        {/* Recent Checks */}
-        <div className="bg-white rounded-lg border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Compliance Checks</h2>
-          </div>
-          <div className="divide-y divide-gray-200">
-            {recentChecks.length > 0 ? (
-              recentChecks.map((check) => (
-                <button
-                  key={check.id}
-                  onClick={() => router.push(`/workspaces/${workspaceId}/compliance/${check.id}`)}
-                  className="w-full p-4 hover:bg-gray-50 transition-colors text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-medium text-gray-900 truncate">
-                        {check.documentName}
-                      </h4>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-xs text-gray-500">{check.framework}</span>
-                        <span className="text-xs text-gray-400">
-                          {new Date(check.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 ml-4">
-                      {check.overallScore !== null && (
-                        <div className="text-right">
-                          <div className="text-lg font-semibold text-gray-900">
-                            {check.overallScore}
-                          </div>
-                          <div className="text-xs text-gray-500">Score</div>
-                        </div>
-                      )}
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          check.status === 'completed'
-                            ? 'bg-green-100 text-green-800'
-                            : check.status === 'processing'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {check.status}
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              ))
-            ) : (
-              <div className="p-8 text-center text-gray-500">
-                <p>No compliance checks yet</p>
-                <p className="text-sm text-gray-400 mt-1">Run your first check to get started</p>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Compliance Issues Management */}
+        <ComplianceIssuesList
+          workspaceId={workspaceId}
+          onIssueClick={handleIssueClick}
+          onBulkAction={handleBulkAction}
+        />
+
+        {/* Issue Detail Panel */}
+        <IssueDetailPanel
+          workspaceId={workspaceId}
+          issueId={selectedIssueId}
+          isOpen={selectedIssueId !== null}
+          onClose={() => setSelectedIssueId(null)}
+          onStatusChange={handleIssueStatusChange}
+        />
       </div>
       </div>
     </AppLayout>

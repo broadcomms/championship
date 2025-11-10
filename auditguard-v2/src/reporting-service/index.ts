@@ -345,6 +345,162 @@ export default class extends Service<Env> {
   }
 
   /**
+   * Save a generated report to the database
+   */
+  async saveReport(
+    workspaceId: string,
+    userId: string,
+    report: {
+      name: string;
+      frameworks: string[];
+      reportPeriod: { startDate: number; endDate: number };
+      summary: any;
+    }
+  ): Promise<{ id: string; createdAt: number }> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    const reportId = `rep_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    const now = Date.now();
+
+    await db
+      .insertInto('compliance_reports')
+      .values({
+        id: reportId,
+        workspace_id: workspaceId,
+        name: report.name,
+        created_at: now,
+        created_by: userId,
+        frameworks: JSON.stringify(report.frameworks),
+        report_period: JSON.stringify(report.reportPeriod),
+        summary: JSON.stringify(report.summary),
+        status: 'completed',
+      })
+      .execute();
+
+    return { id: reportId, createdAt: now };
+  }
+
+  /**
+   * Get all saved reports for a workspace
+   */
+  async getReports(
+    workspaceId: string,
+    userId: string
+  ): Promise<Array<{
+    id: string;
+    name: string;
+    createdAt: number;
+    createdBy: string;
+    frameworks: string[];
+    reportPeriod: { startDate: number; endDate: number };
+    summary: {
+      overallScore: number;
+      totalIssues: number;
+      criticalIssues: number;
+      frameworks: Array<{ name: string; score: number }>;
+    };
+    status: string;
+  }>> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    const reports = await db
+      .selectFrom('compliance_reports')
+      .selectAll()
+      .where('workspace_id', '=', workspaceId)
+      .orderBy('created_at', 'desc')
+      .execute();
+
+    return reports.map((report) => ({
+      id: report.id,
+      name: report.name,
+      createdAt: report.created_at,
+      createdBy: report.created_by,
+      frameworks: JSON.parse(report.frameworks),
+      reportPeriod: JSON.parse(report.report_period),
+      summary: JSON.parse(report.summary),
+      status: report.status,
+    }));
+  }
+
+  /**
+   * Get a single saved report by ID
+   */
+  async getReport(
+    workspaceId: string,
+    userId: string,
+    reportId: string
+  ): Promise<{
+    id: string;
+    name: string;
+    createdAt: number;
+    createdBy: string;
+    frameworks: string[];
+    reportPeriod: { startDate: number; endDate: number };
+    summary: any;
+    status: string;
+  } | null> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    const report = await db
+      .selectFrom('compliance_reports')
+      .selectAll()
+      .where('workspace_id', '=', workspaceId)
+      .where('id', '=', reportId)
+      .executeTakeFirst();
+
+    if (!report) {
+      return null;
+    }
+
+    return {
+      id: report.id,
+      name: report.name,
+      createdAt: report.created_at,
+      createdBy: report.created_by,
+      frameworks: JSON.parse(report.frameworks),
+      reportPeriod: JSON.parse(report.report_period),
+      summary: JSON.parse(report.summary),
+      status: report.status,
+    };
+  }
+
+  /**
    * Generate AI-powered key findings
    */
   private async generateAIKeyFindings(dashboard: any, maturity: any, topRisks: any[]): Promise<string[]> {

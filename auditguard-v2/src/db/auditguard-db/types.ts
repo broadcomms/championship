@@ -279,6 +279,18 @@ export type document_compliance_cache = {
     expires_at: number | null;
 };
 
+export type compliance_reports = {
+    id: string;
+    workspace_id: string;
+    name: string;
+    created_at: number;
+    created_by: string;
+    frameworks: string; // JSON array
+    report_period: string; // JSON object
+    summary: string; // JSON object
+    status: string;
+};
+
 export type DB = {
     documents: documents;
     sessions: sessions;
@@ -287,6 +299,7 @@ export type DB = {
     workspaces: workspaces;
     compliance_checks: compliance_checks;
     compliance_issues: compliance_issues;
+    compliance_reports: compliance_reports;
     document_chunks: document_chunks;
     workspace_scores: workspace_scores;
     framework_scores: framework_scores;

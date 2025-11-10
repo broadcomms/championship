@@ -2116,6 +2116,74 @@ export default class extends Service<Env> {
         });
       }
 
+      // POST /api/workspaces/:id/reports - Save a generated report
+      const saveReportMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/reports$/);
+      if (saveReportMatch && saveReportMatch[1] && request.method === 'POST') {
+        const workspaceId = saveReportMatch[1];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          name: string;
+          frameworks: string[];
+          reportPeriod: { startDate: number; endDate: number };
+          summary: any;
+        }>(request, ['name', 'frameworks', 'reportPeriod', 'summary']);
+
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.REPORTING_SERVICE.saveReport(workspaceId, user.userId, parseResult.data);
+
+        return new Response(JSON.stringify(result), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/workspaces/:id/reports - Get all saved reports for a workspace
+      if (saveReportMatch && saveReportMatch[1] && request.method === 'GET') {
+        const workspaceId = saveReportMatch[1];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.REPORTING_SERVICE.getReports(workspaceId, user.userId);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/workspaces/:id/reports/:reportId - Get a single saved report
+      const getSingleReportMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/reports\/([^\/]+)$/);
+      if (
+        getSingleReportMatch &&
+        getSingleReportMatch[1] &&
+        getSingleReportMatch[2] &&
+        request.method === 'GET' &&
+        !getSingleReportMatch[2].startsWith('executive') &&
+        !getSingleReportMatch[2].startsWith('export')
+      ) {
+        const workspaceId = getSingleReportMatch[1];
+        const reportId = getSingleReportMatch[2];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.REPORTING_SERVICE.getReport(workspaceId, user.userId, reportId);
+
+        if (!result) {
+          return new Response(JSON.stringify({ error: 'Report not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/workspaces/:id/issues
       const workspaceIssuesMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues$/);
       if (workspaceIssuesMatch && workspaceIssuesMatch[1] && request.method === 'GET') {

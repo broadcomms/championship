@@ -102,6 +102,10 @@ export function ReportGeneratorModal({
           body: JSON.stringify({
             name: reportName,
             frameworks: selectedFrameworks.length > 0 ? selectedFrameworks : [],
+            reportPeriod: {
+              startDate: startDate || Date.now() - 30 * 24 * 60 * 60 * 1000,
+              endDate: endDate || Date.now(),
+            },
             summary,
           }),
         });
@@ -114,8 +118,7 @@ export function ReportGeneratorModal({
         setSuccess(true);
         setTimeout(() => {
           onClose();
-          // Reload page to show new report
-          window.location.reload();
+          // Don't reload - parent will refresh via key prop
         }, 1500);
       } else {
         // Generate data export
