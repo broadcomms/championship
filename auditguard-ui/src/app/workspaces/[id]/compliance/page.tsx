@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { AppLayout } from '@/components/layout/AppLayout';
 import type {
   ComplianceCheckListItem,
   MaturityLevel,
@@ -25,9 +26,9 @@ import {
  */
 
 interface PageProps {
-  params: Promise<{
+  params: {
     id: string;
-  }>;
+  };
 }
 
 interface Dashboard {
@@ -47,8 +48,7 @@ interface Dashboard {
 }
 
 export default function CompliancePage(props: PageProps) {
-  const params = use(props.params);
-  const workspaceId = params.id;
+  const workspaceId = props.params.id;
   const router = useRouter();
 
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -112,25 +112,30 @@ export default function CompliancePage(props: PageProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </AppLayout>
     );
   }
 
   if (error) {
     return (
-      <div className="p-8">
-        <div className="rounded-md bg-red-50 border border-red-200 p-4 text-red-800">
-          <p className="font-medium">Error Loading Dashboard</p>
-          <p className="text-sm mt-1">{error}</p>
+      <AppLayout>
+        <div className="p-8">
+          <div className="rounded-md bg-red-50 border border-red-200 p-4 text-red-800">
+            <p className="font-medium">Error Loading Dashboard</p>
+            <p className="text-sm mt-1">{error}</p>
+          </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <AppLayout>
+      <div className="p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -166,7 +171,7 @@ export default function CompliancePage(props: PageProps) {
             {/* Overall Score */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               <div className="flex justify-center">
-                <ComplianceScoreGauge score={dashboard.overallScore} size="small" showLabel={false} />
+                <ComplianceScoreGauge score={dashboard.overallScore ?? 0} size="small" showLabel={false} />
               </div>
               <p className="text-sm text-gray-500 text-center mt-2">Overall Score</p>
             </div>
@@ -176,10 +181,10 @@ export default function CompliancePage(props: PageProps) {
               <div className="text-center">
                 <span
                   className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-medium ${getRiskColor(
-                    dashboard.riskLevel
+                    dashboard.riskLevel ?? 'low'
                   )}`}
                 >
-                  {dashboard.riskLevel.toUpperCase()}
+                  {(dashboard.riskLevel ?? 'low').toUpperCase()}
                 </span>
                 <p className="text-sm text-gray-500 mt-4">Risk Level</p>
               </div>
@@ -189,10 +194,10 @@ export default function CompliancePage(props: PageProps) {
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               <div className="text-center">
                 <div className="text-3xl font-bold text-gray-900">
-                  {dashboard.coveragePercentage.toFixed(0)}%
+                  {(dashboard.coveragePercentage ?? 0).toFixed(0)}%
                 </div>
                 <p className="text-sm text-gray-500 mt-2">
-                  {dashboard.documentsChecked} of {dashboard.totalDocuments} documents
+                  {dashboard.documentsChecked ?? 0} of {dashboard.totalDocuments ?? 0} documents
                 </p>
                 <p className="text-xs text-gray-400 mt-1">Coverage</p>
               </div>
@@ -201,7 +206,7 @@ export default function CompliancePage(props: PageProps) {
             {/* Total Issues */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900">{dashboard.totalIssues}</div>
+                <div className="text-3xl font-bold text-gray-900">{dashboard.totalIssues ?? 0}</div>
                 <p className="text-sm text-gray-500 mt-2">Open Issues</p>
                 <p className="text-xs text-gray-400 mt-1">Across all frameworks</p>
               </div>
@@ -210,30 +215,32 @@ export default function CompliancePage(props: PageProps) {
         )}
 
         {/* Recent Activity */}
-        {dashboard && (
+        {dashboard?.recentActivity && (
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Recent Activity
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                ({dashboard.recentActivity.period})
-              </span>
+              {dashboard.recentActivity.period && (
+                <span className="text-sm font-normal text-gray-500 ml-2">
+                  ({dashboard.recentActivity.period})
+                </span>
+              )}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
                 <div className="text-2xl font-bold text-blue-900">
-                  {dashboard.recentActivity.documentsUploaded}
+                  {dashboard.recentActivity.documentsUploaded ?? 0}
                 </div>
                 <p className="text-sm text-blue-700 mt-1">Documents Uploaded</p>
               </div>
               <div className="p-4 bg-green-50 rounded-lg border border-green-100">
                 <div className="text-2xl font-bold text-green-900">
-                  {dashboard.recentActivity.checksCompleted}
+                  {dashboard.recentActivity.checksCompleted ?? 0}
                 </div>
                 <p className="text-sm text-green-700 mt-1">Checks Completed</p>
               </div>
               <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
                 <div className="text-2xl font-bold text-purple-900">
-                  {dashboard.recentActivity.issuesResolved}
+                  {dashboard.recentActivity.issuesResolved ?? 0}
                 </div>
                 <p className="text-sm text-purple-700 mt-1">Issues Resolved</p>
               </div>
@@ -299,6 +306,7 @@ export default function CompliancePage(props: PageProps) {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </AppLayout>
   );
 }

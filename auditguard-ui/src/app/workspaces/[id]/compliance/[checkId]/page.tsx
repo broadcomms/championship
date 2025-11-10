@@ -1,6 +1,6 @@
 'use client';
 
-import React, { use } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { ComplianceCheckResult } from '@/components/compliance';
 
@@ -13,15 +13,14 @@ import { ComplianceCheckResult } from '@/components/compliance';
  */
 
 interface PageProps {
-  params: Promise<{
+  params: {
     id: string;
     checkId: string;
-  }>;
+  };
 }
 
 export default function ComplianceCheckDetailPage(props: PageProps) {
-  const params = use(props.params);
-  const { id: workspaceId, checkId } = params;
+  const { id: workspaceId, checkId } = props.params;
   const router = useRouter();
 
   return (
