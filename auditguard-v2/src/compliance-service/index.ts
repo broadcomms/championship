@@ -101,8 +101,22 @@ export default class extends Service<Env> {
       })
       .execute();
 
-    // Trigger async compliance analysis
-    this.analyzeCompliance(checkId, input.documentId, input.workspaceId, input.framework, document.storage_key);
+    this.env.logger.info('🚀 Running compliance analysis SYNCHRONOUSLY for demo', {
+      checkId,
+      documentId: input.documentId,
+      framework: input.framework,
+    });
+    
+    // TEMPORARY: Run synchronously for championship demo
+    // TODO: Move to queue-based async processing for production
+    try {
+      await this.analyzeCompliance(checkId, input.documentId, input.workspaceId, input.framework, document.storage_key);
+    } catch (error) {
+      this.env.logger.error('❌ Compliance analysis failed', {
+        checkId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     return {
       checkId,
@@ -205,16 +219,27 @@ export default class extends Service<Env> {
     framework: string,
     storageKey: string
   ): Promise<void> {
+    this.env.logger.info('📊 Starting analyzeCompliance', {
+      checkId,
+      documentId,
+      framework,
+      storageKey,
+    });
+    
     try {
       const db = this.getDb();
 
       // Get document content from SmartBucket
+      this.env.logger.info('📂 Fetching document from SmartBucket', { storageKey });
       const file = await this.env.DOCUMENTS_BUCKET.get(storageKey);
       if (!file) {
         throw new Error('Document file not found in storage');
       }
 
       const content = await file.text();
+      this.env.logger.info('✅ Document fetched', {
+        contentLength: content.length,
+      });
 
       // Get document chunks if available
       const chunks = await db
@@ -223,10 +248,23 @@ export default class extends Service<Env> {
         .where('document_id', '=', documentId)
         .execute();
 
+      this.env.logger.info('📄 Document chunks retrieved', {
+        chunkCount: chunks.length,
+      });
+
       const documentText = chunks.length > 0 ? chunks.map((c) => c.content).join('\n\n') : content;
 
       // Run AI compliance analysis using SmartInference
+      this.env.logger.info('🤖 Starting AI compliance analysis', {
+        framework,
+        textLength: documentText.length,
+      });
+      
       const issues = await this.performAIComplianceAnalysis(documentText, framework);
+      
+      this.env.logger.info('✅ AI analysis completed', {
+        issuesFound: issues.length,
+      });
 
       // PHASE 1.1.3: Calculate priority and store issues in database
       for (const issue of issues) {
@@ -245,6 +283,7 @@ export default class extends Service<Env> {
             id: issueId,
             check_id: checkId,
             document_id: documentId,
+            workspace_id: workspaceId, // CRITICAL FIX: Add workspace_id for filtering
             severity: issue.severity,
             category: issue.category,
             title: issue.title,
@@ -278,8 +317,21 @@ export default class extends Service<Env> {
         })
         .where('id', '=', checkId)
         .execute();
+        
+      this.env.logger.info('✅✅✅ Compliance check completed successfully', {
+        checkId,
+        overallScore,
+        issuesFound: issues.length,
+      });
+      
     } catch (error) {
       // Mark check as failed
+      this.env.logger.error('❌❌❌ Compliance check failed', {
+        checkId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      
       const db = this.getDb();
       await db
         .updateTable('compliance_checks')
@@ -422,19 +474,38 @@ Format as JSON:
 
       this.env.logger.info('Running AI analysis', { framework, analysisType, model });
 
-      // Use AI for compliance analysis
-      const analysis = await this.env.AI.run(model, {
+      // Use AI for compliance analysis - FIXED: Match working AI enrichment pattern
+      const aiResponse = await this.env.AI.run(model, {
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt },
         ],
+        temperature: 0.2, // Lower temperature for consistent structured output
+        max_tokens: analysisType === 'quick' ? 400 : 800,
       });
 
-      // Parse AI response
-      const responseText = ('choices' in analysis && analysis.choices?.[0]?.message?.content) || '{}';
+      this.env.logger.info('AI response received', {
+        framework,
+        analysisType,
+        responseType: typeof aiResponse,
+      });
+
+      // Parse AI response - handle different response formats like ai-enrichment.ts does
+      let responseText: string;
+      if (typeof aiResponse === 'string') {
+        responseText = aiResponse;
+      } else if ((aiResponse as any).response) {
+        responseText = (aiResponse as any).response;
+      } else if ('choices' in (aiResponse as object) && (aiResponse as any).choices?.[0]?.message?.content) {
+        responseText = (aiResponse as any).choices[0].message.content;
+      } else {
+        responseText = JSON.stringify(aiResponse);
+      }
 
       try {
-        const result = JSON.parse(responseText);
+        // Clean up response - remove markdown code blocks if present
+        const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const result = JSON.parse(cleaned);
         if (result.issues && Array.isArray(result.issues)) {
           // Filter and enrich issues with confidence
           return result.issues
@@ -1003,6 +1074,344 @@ Format as JSON with: { score: number, issues: [{severity, category, title, descr
         createdAt: check.createdAt,
         completedAt: check.completedAt,
       })),
+    };
+  }
+
+  /**
+   * PHASE 2.2: Get Document Compliance Checks
+   * Retrieve all compliance checks for a specific document
+   */
+  async getDocumentComplianceChecks(
+    documentId: string,
+    workspaceId: string,
+    userId: string,
+    options?: {
+      framework?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<{
+    checks: Array<{
+      id: string;
+      framework: string;
+      status: string;
+      overallScore: number | null;
+      issuesFound: number;
+      createdAt: number;
+      completedAt: number | null;
+    }>;
+    total: number;
+  }> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    // Build query
+    let query = db
+      .selectFrom('compliance_checks')
+      .select([
+        'id',
+        'framework',
+        'status',
+        'overall_score',
+        'issues_found',
+        'created_at',
+        'completed_at',
+      ])
+      .where('document_id', '=', documentId)
+      .where('workspace_id', '=', workspaceId);
+
+    if (options?.framework) {
+      query = query.where('framework', '=', options.framework);
+    }
+
+    // Get total count
+    const countResult = await query
+      .select(db.fn.count('id').as('count'))
+      .executeTakeFirst();
+    const total = Number(countResult?.count || 0);
+
+    // Apply pagination
+    const limit = options?.limit || 20;
+    const offset = options?.offset || 0;
+
+    const checks = await query
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+      .offset(offset)
+      .execute();
+
+    return {
+      checks: checks.map((check) => ({
+        id: check.id,
+        framework: check.framework,
+        status: check.status,
+        overallScore: check.overall_score,
+        issuesFound: check.issues_found,
+        createdAt: check.created_at,
+        completedAt: check.completed_at,
+      })),
+      total,
+    };
+  }
+
+  /**
+   * PHASE 2.2: Get Latest Document Check
+   * Retrieve the most recent compliance check for a document
+   */
+  async getLatestDocumentCheck(
+    documentId: string,
+    workspaceId: string,
+    userId: string,
+    framework?: string
+  ): Promise<{
+    id: string;
+    framework: string;
+    status: string;
+    overallScore: number | null;
+    issuesFound: number;
+    createdAt: number;
+    completedAt: number | null;
+  } | null> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    let query = db
+      .selectFrom('compliance_checks')
+      .select([
+        'id',
+        'framework',
+        'status',
+        'overall_score',
+        'issues_found',
+        'created_at',
+        'completed_at',
+      ])
+      .where('document_id', '=', documentId)
+      .where('workspace_id', '=', workspaceId);
+
+    if (framework) {
+      query = query.where('framework', '=', framework);
+    }
+
+    const check = await query
+      .orderBy('created_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+
+    if (!check) {
+      return null;
+    }
+
+    return {
+      id: check.id,
+      framework: check.framework,
+      status: check.status,
+      overallScore: check.overall_score,
+      issuesFound: check.issues_found,
+      createdAt: check.created_at,
+      completedAt: check.completed_at,
+    };
+  }
+
+  /**
+   * PHASE 2.2: Update Compliance Cache
+   * Update the document_compliance_cache table after check completion
+   */
+  async updateComplianceCache(checkId: string): Promise<void> {
+    const db = this.getDb();
+
+    // Get check details
+    const check = await db
+      .selectFrom('compliance_checks')
+      .select([
+        'id',
+        'document_id',
+        'workspace_id',
+        'framework',
+        'overall_score',
+        'issues_found',
+        'created_at',
+      ])
+      .where('id', '=', checkId)
+      .where('status', '=', 'completed')
+      .executeTakeFirst();
+
+    if (!check) {
+      return; // Check not found or not completed
+    }
+
+    // Get issue counts by severity
+    const issues = await db
+      .selectFrom('compliance_issues')
+      .select(['severity', 'status'])
+      .where('check_id', '=', checkId)
+      .execute();
+
+    const severityCounts = {
+      critical: issues.filter((i) => i.severity === 'critical').length,
+      high: issues.filter((i) => i.severity === 'high').length,
+      medium: issues.filter((i) => i.severity === 'medium').length,
+      low: issues.filter((i) => i.severity === 'low').length,
+      open: issues.filter((i) => i.status === 'open').length,
+      resolved: issues.filter((i) => i.status === 'resolved').length,
+    };
+
+    // Determine risk level
+    let riskLevel: string;
+    if (severityCounts.critical > 0 || (check.overall_score || 0) < 40) {
+      riskLevel = 'critical';
+    } else if (severityCounts.high > 2 || (check.overall_score || 0) < 60) {
+      riskLevel = 'high';
+    } else if (severityCounts.medium > 3 || (check.overall_score || 0) < 80) {
+      riskLevel = 'medium';
+    } else {
+      riskLevel = 'low';
+    }
+
+    const now = Date.now();
+    const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
+
+    const cacheId = `cache_${check.document_id}_${check.framework}`;
+
+    // Upsert cache record
+    await db
+      .insertInto('document_compliance_cache')
+      .values({
+        id: cacheId,
+        workspace_id: check.workspace_id,
+        document_id: check.document_id,
+        framework: check.framework,
+        overall_score: check.overall_score,
+        risk_level: riskLevel,
+        total_issues: check.issues_found,
+        critical_issues: severityCounts.critical,
+        high_issues: severityCounts.high,
+        medium_issues: severityCounts.medium,
+        low_issues: severityCounts.low,
+        open_issues: severityCounts.open,
+        resolved_issues: severityCounts.resolved,
+        last_check_id: checkId,
+        last_analyzed_at: now,
+        expires_at: expiresAt,
+      })
+      .onConflict((oc) =>
+        oc.columns(['document_id', 'framework']).doUpdateSet({
+          overall_score: check.overall_score,
+          risk_level: riskLevel,
+          total_issues: check.issues_found,
+          critical_issues: severityCounts.critical,
+          high_issues: severityCounts.high,
+          medium_issues: severityCounts.medium,
+          low_issues: severityCounts.low,
+          open_issues: severityCounts.open,
+          resolved_issues: severityCounts.resolved,
+          last_check_id: checkId,
+          last_analyzed_at: now,
+          expires_at: expiresAt,
+        })
+      )
+      .execute();
+
+    // this.logger.info('Compliance cache updated', {
+    //   checkId,
+    //   documentId: check.document_id,
+    //   framework: check.framework,
+    // });
+  }
+
+  /**
+   * PHASE 2.2: Get Document Compliance Summary
+   * Retrieve cached compliance summary for a document
+   */
+  async getDocumentComplianceSummary(
+    documentId: string,
+    workspaceId: string,
+    userId: string,
+    framework?: string
+  ): Promise<{
+    overallScore: number | null;
+    riskLevel: string | null;
+    totalIssues: number;
+    criticalIssues: number;
+    highIssues: number;
+    mediumIssues: number;
+    lowIssues: number;
+    openIssues: number;
+    resolvedIssues: number;
+    lastAnalyzedAt: number;
+    lastCheckId: string | null;
+  } | null> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    let query = db
+      .selectFrom('document_compliance_cache')
+      .selectAll()
+      .where('document_id', '=', documentId)
+      .where('workspace_id', '=', workspaceId);
+
+    if (framework) {
+      query = query.where('framework', '=', framework);
+    }
+
+    // Check if cache is not expired
+    const now = Date.now();
+    query = query.where('expires_at', '>', now);
+
+    const cache = await query
+      .orderBy('last_analyzed_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+
+    if (!cache) {
+      return null;
+    }
+
+    return {
+      overallScore: cache.overall_score,
+      riskLevel: cache.risk_level,
+      totalIssues: cache.total_issues,
+      criticalIssues: cache.critical_issues,
+      highIssues: cache.high_issues,
+      mediumIssues: cache.medium_issues,
+      lowIssues: cache.low_issues,
+      openIssues: cache.open_issues,
+      resolvedIssues: cache.resolved_issues,
+      lastAnalyzedAt: cache.last_analyzed_at,
+      lastCheckId: cache.last_check_id,
     };
   }
 }

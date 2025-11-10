@@ -44,6 +44,7 @@ export class ProcessingStepTracker {
     { name: 'embedding', order: 3, label: 'Vector Embeddings' },
     { name: 'indexing', order: 4, label: 'Vector Indexing' },
     { name: 'enrichment', order: 5, label: 'AI Enrichment' },
+    { name: 'compliance_analysis', order: 6, label: 'Compliance Analysis' },
   ];
 
   constructor(db: any, logger: Logger) {

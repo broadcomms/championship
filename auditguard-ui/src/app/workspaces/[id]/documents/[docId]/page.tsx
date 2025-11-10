@@ -8,9 +8,12 @@ import { CategoryBadge } from '@/components/documents/CategoryBadge';
 import { ProcessingIndicator } from '@/components/documents/ProcessingIndicator';
 import { ProcessingProgress } from '@/components/documents/ProcessingProgress';
 import { DocumentContentViewer } from '@/components/documents/DocumentContentViewer';
+import { DocumentComplianceTab } from '@/components/compliance/DocumentComplianceTab';
 import { useDocumentPolling } from '@/hooks/useDocumentPolling';
 import { api } from '@/lib/api';
 import { Document, DocumentCategory } from '@/types';
+
+type TabType = 'overview' | 'fulltext' | 'compliance';
 
 export default function DocumentDetailsPage() {
   const params = useParams();
@@ -34,6 +37,7 @@ export default function DocumentDetailsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
 
   // Form state for editing
   const [editFilename, setEditFilename] = useState('');
@@ -356,32 +360,140 @@ export default function DocumentDetailsPage() {
           </div>
         )}
 
-        {/* IMPROVED: Always show ProcessingProgress for non-failed, non-fully-completed documents */}
-        {document.processingStatus !== 'failed' && !document.fullyCompleted && (
-          <div className="mb-8 rounded-lg bg-white p-6 shadow">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">Processing Status</h2>
-            <ProcessingProgress
-              processingStatus={document.processingStatus}
-              textExtracted={document.textExtracted}
-              chunkCount={document.chunkCount}
-              embeddingsGenerated={document.embeddingsGenerated}
-              vectorIndexingStatus={document.vectorIndexingStatus}
-              pageCount={document.pageCount}
-              wordCount={document.wordCount}
-              fullyCompleted={document.fullyCompleted}
-            />
-          </div>
-        )}
+        {/* Tab Navigation */}
+        <div className="mb-6 border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`
+                whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors
+                ${
+                  activeTab === 'overview'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                }
+              `}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('fulltext')}
+              className={`
+                whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors
+                ${
+                  activeTab === 'fulltext'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                }
+              `}
+            >
+              Full Text
+            </button>
+            <button
+              onClick={() => setActiveTab('compliance')}
+              className={`
+                whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors
+                ${
+                  activeTab === 'compliance'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                }
+              `}
+            >
+              Compliance
+            </button>
+          </nav>
+        </div>
 
-        {/* Document Content Viewer - Show extracted content when available */}
+        {/* Tab Content */}
         <div className="mb-8">
-          <DocumentContentViewer
-            workspaceId={workspaceId}
-            documentId={documentId}
-            document={document}
-            hasExtractedText={document.textExtracted || false}
-            chunkCount={document.chunkCount}
-          />
+          {/* Overview Tab */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {/* Processing Status */}
+              {document.processingStatus !== 'failed' && !document.fullyCompleted && (
+                <div className="rounded-lg bg-white p-6 shadow">
+                  <h2 className="mb-4 text-lg font-semibold text-gray-900">Processing Status</h2>
+                  <ProcessingProgress
+                    processingStatus={document.processingStatus}
+                    textExtracted={document.textExtracted}
+                    chunkCount={document.chunkCount}
+                    embeddingsGenerated={document.embeddingsGenerated}
+                    vectorIndexingStatus={document.vectorIndexingStatus}
+                    pageCount={document.pageCount}
+                    wordCount={document.wordCount}
+                    fullyCompleted={document.fullyCompleted}
+                  />
+                </div>
+              )}
+
+              {/* Document Metadata */}
+              <div className="rounded-lg bg-white p-6 shadow">
+                <h2 className="mb-4 text-lg font-semibold text-gray-900">Document Information</h2>
+                <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">File Size</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{formatFileSize(document.fileSize)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Content Type</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{document.contentType}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Uploaded</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{formatDate(document.uploadedAt)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Last Updated</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{formatDate(document.updatedAt)}</dd>
+                  </div>
+                  {document.pageCount && (
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Pages</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{document.pageCount}</dd>
+                    </div>
+                  )}
+                  {document.wordCount && (
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Word Count</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{document.wordCount.toLocaleString()}</dd>
+                    </div>
+                  )}
+                  {document.characterCount && (
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Character Count</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{document.characterCount.toLocaleString()}</dd>
+                    </div>
+                  )}
+                  {document.chunkCount > 0 && (
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Text Chunks</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{document.chunkCount}</dd>
+                    </div>
+                  )}
+                </dl>
+              </div>
+            </div>
+          )}
+
+          {/* Full Text Tab */}
+          {activeTab === 'fulltext' && (
+            <DocumentContentViewer
+              workspaceId={workspaceId}
+              documentId={documentId}
+              document={document}
+              hasExtractedText={document.textExtracted || false}
+              chunkCount={document.chunkCount}
+            />
+          )}
+
+          {/* Compliance Tab */}
+          {activeTab === 'compliance' && (
+            <DocumentComplianceTab
+              workspaceId={workspaceId}
+              documentId={documentId}
+            />
+          )}
         </div>
 
         {/* Delete Section */}

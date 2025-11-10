@@ -8,10 +8,11 @@ import type {
   MaturityLevel,
   RiskLevel,
 } from '@/types';
-import {
-  ComplianceScoreGauge,
-  ComplianceCheckRunner,
-} from '@/components/compliance';
+// TODO: Phase 1 workspace-level compliance features
+// import {
+//   ComplianceScoreGauge,
+//   ComplianceCheckRunner,
+// } from '@/components/compliance';
 
 /**
  * Compliance Dashboard Page
@@ -153,15 +154,8 @@ export default function CompliancePage(props: PageProps) {
 
         {/* New Check Form */}
         {showNewCheck && dashboard && (
-          <div className="animate-in slide-in-from-top-5 duration-300">
-            <ComplianceCheckRunner
-              workspaceId={workspaceId}
-              documentId="" // Note: This needs to be enhanced to select a document
-              onCheckStarted={(checkId) => {
-                setShowNewCheck(false);
-                router.push(`/workspaces/${workspaceId}/compliance/${checkId}`);
-              }}
-            />
+          <div className="animate-in slide-in-from-top-5 duration-300 bg-white rounded-lg border border-gray-200 p-6">
+            <p className="text-gray-600">Workspace-level compliance checking coming soon. Use document-level compliance from individual document pages.</p>
           </div>
         )}
 
@@ -170,10 +164,10 @@ export default function CompliancePage(props: PageProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Overall Score */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="flex justify-center">
-                <ComplianceScoreGauge score={dashboard.overallScore ?? 0} size="small" showLabel={false} />
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-900">{dashboard.overallScore ?? 0}</div>
+                <p className="text-sm text-gray-500 mt-2">Overall Score</p>
               </div>
-              <p className="text-sm text-gray-500 text-center mt-2">Overall Score</p>
             </div>
 
             {/* Risk Level */}

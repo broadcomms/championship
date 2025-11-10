@@ -76,17 +76,30 @@ export type compliance_issues = {
     id: string;
     check_id: string;
     document_id: string;
+    workspace_id: string | null;
+    framework: string | null;
+    regulation_citation: string | null;
+    excerpt: string | null;
+    risk_score: number | null;
+    section_ref: string | null;
+    chunk_ids: string | null;
+    remediation_steps: string | null;
+    full_excerpt: string | null;
+    resolution_notes: string | null;
+    updated_at: number | null;
     severity: string;
     category: string;
     title: string;
     description: string;
     recommendation: string | null;
+    confidence: number;
+    priority: number;
     location: string | null;
-    created_at: number;
     status: string;
     assigned_to: string | null;
     resolved_at: number | null;
     resolved_by: string | null;
+    created_at: number;
 };
 
 export type document_chunks = {
@@ -224,6 +237,48 @@ export type admin_audit_log = {
     created_at: number;
 };
 
+export type issue_assignments = {
+    id: string;
+    issue_id: string;
+    workspace_id: string;
+    assigned_by: string;
+    assigned_to: string;
+    assigned_at: number;
+    unassigned_at: number | null;
+    notes: string | null;
+    notification_sent: number;
+};
+
+export type issue_status_history = {
+    id: string;
+    issue_id: string;
+    workspace_id: string;
+    old_status: string | null;
+    new_status: string;
+    changed_by: string;
+    changed_at: number;
+    notes: string | null;
+};
+
+export type document_compliance_cache = {
+    id: string;
+    workspace_id: string;
+    document_id: string;
+    framework: string;
+    overall_score: number | null;
+    risk_level: string | null;
+    total_issues: number;
+    critical_issues: number;
+    high_issues: number;
+    medium_issues: number;
+    low_issues: number;
+    open_issues: number;
+    resolved_issues: number;
+    last_check_id: string | null;
+    last_analyzed_at: number;
+    expires_at: number | null;
+};
+
 export type DB = {
     documents: documents;
     sessions: sessions;
@@ -244,4 +299,7 @@ export type DB = {
     admin_users: admin_users;
     system_settings: system_settings;
     admin_audit_log: admin_audit_log;
+    issue_assignments: issue_assignments;
+    issue_status_history: issue_status_history;
+    document_compliance_cache: document_compliance_cache;
 };

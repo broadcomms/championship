@@ -149,7 +149,7 @@ export type ComplianceFramework =
 
 export type CheckStatus = 'processing' | 'completed' | 'failed';
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
-export type IssueStatus = 'open' | 'acknowledged' | 'resolved' | 'dismissed';
+export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'dismissed'; // Updated for Phase 2
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
 export interface ComplianceCheck {
@@ -169,19 +169,21 @@ export interface ComplianceCheckListItem extends ComplianceCheck {
   documentName: string;
 }
 
-export interface ComplianceIssue {
-  id: string;
-  checkId: string;
-  documentId: string;
-  severity: IssueSeverity;
-  category: string;
-  title: string;
-  description: string;
-  recommendation: string | null;
-  location: string | null;
-  status: IssueStatus;
-  createdAt: number;
-}
+// Phase 2: ComplianceIssue moved to types/compliance.ts
+// This old definition is replaced by the more detailed one in compliance.ts
+// export interface ComplianceIssue {
+//   id: string;
+//   checkId: string;
+//   documentId: string;
+//   severity: IssueSeverity;
+//   category: string;
+//   title: string;
+//   description: string;
+//   recommendation: string | null;
+//   location: string | null;
+//   status: IssueStatus;
+//   createdAt: number;
+// }
 
 // ==================
 // Analytics Types
@@ -514,3 +516,9 @@ export interface ApiResponse<T> {
   error?: string;
   status: number;
 }
+
+// ====================
+// PHASE 2: Document-Level Compliance Types
+// ====================
+
+export * from './compliance';

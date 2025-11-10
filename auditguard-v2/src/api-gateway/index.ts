@@ -26,7 +26,7 @@ export default class extends Service<Env> {
 
       await (this.env.AUDITGUARD_DB as any)
         .prepare(`
-          INSERT INTO performance_metrics (operation, start_time, end_time, duration, success, metadata, error, created_at)
+          INSERT INTO performance_metrics (operation, start_time, end_time, duration, success, meta_info, error, created_at)
           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
         `)
         .bind(
@@ -1571,6 +1571,372 @@ export default class extends Service<Env> {
         );
 
         return new Response(null, { status: 204 });
+      }
+
+      // ====== PHASE 2.2: DOCUMENT COMPLIANCE ENDPOINTS ======
+      // Match /api/workspaces/:id/documents/:documentId/compliance/checks (get all compliance checks for document)
+      const docComplianceChecksMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/compliance\/checks$/);
+      if (docComplianceChecksMatch && docComplianceChecksMatch[1] && docComplianceChecksMatch[2] && request.method === 'GET') {
+        const workspaceId = docComplianceChecksMatch[1];
+        const documentId = docComplianceChecksMatch[2];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const framework = url.searchParams.get('framework') || undefined;
+        const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+        const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+        const result = await this.env.COMPLIANCE_SERVICE.getDocumentComplianceChecks(
+          documentId,
+          workspaceId,
+          user.userId,
+          { framework, limit, offset }
+        );
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/documents/:documentId/compliance/summary (get cached compliance summary)
+      const docComplianceSummaryMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/compliance\/summary$/);
+      if (docComplianceSummaryMatch && docComplianceSummaryMatch[1] && docComplianceSummaryMatch[2] && request.method === 'GET') {
+        const workspaceId = docComplianceSummaryMatch[1];
+        const documentId = docComplianceSummaryMatch[2];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const framework = url.searchParams.get('framework') || undefined;
+
+        const result = await this.env.COMPLIANCE_SERVICE.getDocumentComplianceSummary(
+          documentId,
+          workspaceId,
+          user.userId,
+          framework
+        );
+
+        return new Response(JSON.stringify(result || { error: 'No compliance summary available' }), {
+          status: result ? 200 : 404,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/documents/:documentId/compliance/analyze (trigger compliance analysis)
+      const docComplianceAnalyzeMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/compliance\/analyze$/);
+      if (docComplianceAnalyzeMatch && docComplianceAnalyzeMatch[1] && docComplianceAnalyzeMatch[2] && request.method === 'POST') {
+        const workspaceId = docComplianceAnalyzeMatch[1];
+        const documentId = docComplianceAnalyzeMatch[2];
+        const user = await this.validateSession(request);
+
+        // Parse request body for framework selection (optional)
+        let framework: 'GDPR' | 'HIPAA' | 'SOC2' | 'ISO_27001' | 'PCI_DSS' = 'GDPR';
+        try {
+          const body = await request.json() as { framework?: string };
+          if (body.framework) {
+            framework = body.framework as 'GDPR' | 'HIPAA' | 'SOC2' | 'ISO_27001' | 'PCI_DSS';
+          }
+        } catch {
+          // No body or invalid JSON - use default framework
+        }
+
+        const result = await this.env.COMPLIANCE_SERVICE.runComplianceCheck({
+          documentId,
+          workspaceId,
+          userId: user.userId,
+          framework,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // ====== PHASE 2.2: ISSUE MANAGEMENT ENDPOINTS ======
+      // Match /api/workspaces/:id/documents/:documentId/issues (get issues with filters)
+      const docIssuesMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/issues$/);
+      if (docIssuesMatch && docIssuesMatch[1] && docIssuesMatch[2] && request.method === 'GET') {
+        const workspaceId = docIssuesMatch[1];
+        const documentId = docIssuesMatch[2];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const checkId = url.searchParams.get('checkId') || undefined;
+        const severity = url.searchParams.get('severity')?.split(',') as any[] || undefined;
+        const status = url.searchParams.get('status')?.split(',') as any[] || undefined;
+        const search = url.searchParams.get('search') || undefined;
+        const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+        const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+        const result = await this.env.ISSUE_MANAGEMENT_SERVICE.getDocumentIssues({
+          workspaceId,
+          documentId,
+          userId: user.userId,
+          checkId,
+          severity,
+          status,
+          search,
+          limit,
+          offset,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/issues/:issueId (get issue details)
+      const issueDetailsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/([^\/]+)$/);
+      if (issueDetailsMatch && issueDetailsMatch[1] && issueDetailsMatch[2] && request.method === 'GET') {
+        const workspaceId = issueDetailsMatch[1];
+        const issueId = issueDetailsMatch[2];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.ISSUE_MANAGEMENT_SERVICE.getIssueDetails({
+          workspaceId,
+          issueId,
+          userId: user.userId,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/issues/:issueId/status (update issue status)
+      const issueStatusUpdateMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/([^\/]+)\/status$/);
+      if (issueStatusUpdateMatch && issueStatusUpdateMatch[1] && issueStatusUpdateMatch[2] && request.method === 'PATCH') {
+        const workspaceId = issueStatusUpdateMatch[1];
+        const issueId = issueStatusUpdateMatch[2];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          status: 'open' | 'in_progress' | 'resolved' | 'dismissed';
+          notes?: string;
+        }>(request, ['status']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        await this.env.ISSUE_MANAGEMENT_SERVICE.updateIssueStatus({
+          issueId,
+          workspaceId,
+          userId: user.userId,
+          newStatus: body.status,
+          notes: body.notes,
+        });
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/issues/:issueId/resolve (mark issue as resolved)
+      const issueResolveMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/([^\/]+)\/resolve$/);
+      if (issueResolveMatch && issueResolveMatch[1] && issueResolveMatch[2] && request.method === 'POST') {
+        const workspaceId = issueResolveMatch[1];
+        const issueId = issueResolveMatch[2];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          resolutionNotes?: string;
+        }>(request);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        await this.env.ISSUE_MANAGEMENT_SERVICE.resolveIssue({
+          issueId,
+          workspaceId,
+          userId: user.userId,
+          resolutionNotes: body.resolutionNotes,
+        });
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/issues/bulk (bulk update issues)
+      const issuesBulkMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/bulk$/);
+      if (issuesBulkMatch && issuesBulkMatch[1] && request.method === 'POST') {
+        const workspaceId = issuesBulkMatch[1];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          issueIds: string[];
+          action: 'resolve' | 'dismiss' | 'reopen';
+          notes?: string;
+        }>(request, ['issueIds', 'action']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        if (!Array.isArray(body.issueIds) || body.issueIds.length === 0) {
+          return new Response(JSON.stringify({ error: 'issueIds must be a non-empty array' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.ISSUE_MANAGEMENT_SERVICE.bulkUpdateIssues({
+          issueIds: body.issueIds,
+          workspaceId,
+          userId: user.userId,
+          action: body.action,
+          notes: body.notes,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // ====== PHASE 2.2: ISSUE ASSIGNMENT ENDPOINTS ======
+      // Match /api/workspaces/:id/issues/:issueId/assign (assign issue)
+      const issueAssignMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/([^\/]+)\/assign$/);
+      if (issueAssignMatch && issueAssignMatch[1] && issueAssignMatch[2] && request.method === 'POST') {
+        const workspaceId = issueAssignMatch[1];
+        const issueId = issueAssignMatch[2];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          assignedTo: string;
+          notes?: string;
+        }>(request, ['assignedTo']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        await this.env.ISSUE_ASSIGNMENT_SERVICE.assignIssue({
+          issueId,
+          workspaceId,
+          assignedTo: body.assignedTo,
+          assignedBy: user.userId,
+          notes: body.notes,
+        });
+
+        return new Response(JSON.stringify({ success: true }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/issues/:issueId/unassign (unassign issue)
+      const issueUnassignMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/([^\/]+)\/unassign$/);
+      if (issueUnassignMatch && issueUnassignMatch[1] && issueUnassignMatch[2] && request.method === 'POST') {
+        const workspaceId = issueUnassignMatch[1];
+        const issueId = issueUnassignMatch[2];
+        const user = await this.validateSession(request);
+
+        await this.env.ISSUE_ASSIGNMENT_SERVICE.unassignIssue({
+          issueId,
+          workspaceId,
+          userId: user.userId,
+        });
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/issues/assigned/:userId (get assigned issues)
+      const assignedIssuesMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/assigned\/([^\/]+)$/);
+      if (assignedIssuesMatch && assignedIssuesMatch[1] && assignedIssuesMatch[2] && request.method === 'GET') {
+        const workspaceId = assignedIssuesMatch[1];
+        const assignedTo = assignedIssuesMatch[2];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const status = url.searchParams.get('status')?.split(',') as any[] || undefined;
+        const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+        const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+        const result = await this.env.ISSUE_ASSIGNMENT_SERVICE.getAssignedIssues({
+          workspaceId,
+          userId: user.userId,
+          assignedTo,
+          status,
+          limit,
+          offset,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/issues/:issueId/assignment-history (get assignment history)
+      const assignmentHistoryMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/([^\/]+)\/assignment-history$/);
+      if (assignmentHistoryMatch && assignmentHistoryMatch[1] && assignmentHistoryMatch[2] && request.method === 'GET') {
+        const workspaceId = assignmentHistoryMatch[1];
+        const issueId = assignmentHistoryMatch[2];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.ISSUE_ASSIGNMENT_SERVICE.getIssueAssignmentHistory({
+          issueId,
+          workspaceId,
+          userId: user.userId,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/issues/bulk-assign (bulk assign issues)
+      const issuesBulkAssignMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/bulk-assign$/);
+      if (issuesBulkAssignMatch && issuesBulkAssignMatch[1] && request.method === 'POST') {
+        const workspaceId = issuesBulkAssignMatch[1];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          issueIds: string[];
+          assignedTo: string;
+          notes?: string;
+        }>(request, ['issueIds', 'assignedTo']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        if (!Array.isArray(body.issueIds) || body.issueIds.length === 0) {
+          return new Response(JSON.stringify({ error: 'issueIds must be a non-empty array' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.ISSUE_ASSIGNMENT_SERVICE.bulkAssignIssues({
+          issueIds: body.issueIds,
+          workspaceId,
+          assignedTo: body.assignedTo,
+          assignedBy: user.userId,
+          notes: body.notes,
+        });
+
+        return new Response(JSON.stringify(result), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
       }
 
       // ====== ANALYTICS ENDPOINTS ======

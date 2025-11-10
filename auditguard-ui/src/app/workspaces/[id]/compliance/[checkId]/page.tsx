@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { ComplianceCheckResult } from '@/components/compliance';
+// TODO: Phase 1 workspace-level compliance features
+// import { ComplianceCheckResult } from '@/components/compliance';
 
 /**
  * Compliance Check Detail Page
@@ -57,7 +58,9 @@ export default function ComplianceCheckDetailPage(props: PageProps) {
         </div>
 
         {/* Main content */}
-        <ComplianceCheckResult workspaceId={workspaceId} checkId={checkId} />
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <p className="text-gray-600">Workspace-level compliance check details coming soon. Use document-level compliance from individual document pages.</p>
+        </div>
 
         {/* Actions */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">

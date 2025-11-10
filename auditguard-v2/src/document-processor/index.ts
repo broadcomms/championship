@@ -516,6 +516,84 @@ export default class extends Each<Body, Env> {
           frameworkId: enrichmentResult.complianceFrameworkId,
         });
 
+        // PHASE 2.2: Automatic compliance analysis if framework detected
+        if (enrichmentResult.complianceFrameworkId) {
+          try {
+            await stepTracker.startStep(documentId, 'compliance_analysis');
+
+            this.env.logger.info('🔍 Starting automatic compliance analysis', {
+              documentId,
+              frameworkId: enrichmentResult.complianceFrameworkId,
+            });
+
+            // Get framework name from database
+            const frameworkResult = await (this.env.AUDITGUARD_DB as any).prepare(
+              `SELECT name FROM compliance_frameworks WHERE id = ?`
+            ).bind(enrichmentResult.complianceFrameworkId).first();
+
+            if (frameworkResult && frameworkResult.name) {
+              const frameworkName = frameworkResult.name;
+
+              this.env.logger.info('🎯 Framework identified for compliance check', {
+                documentId,
+                framework: frameworkName,
+                frameworkId: enrichmentResult.complianceFrameworkId,
+              });
+
+              // Trigger compliance analysis
+              const complianceResult = await this.env.COMPLIANCE_SERVICE.runComplianceCheck({
+                documentId,
+                workspaceId,
+                userId,
+                framework: frameworkName as any,
+              });
+
+              await stepTracker.completeStep(documentId, 'compliance_analysis', {
+                framework: frameworkName,
+                checkId: complianceResult.checkId,
+                status: complianceResult.status,
+              });
+
+              this.env.logger.info('✅ Automatic compliance analysis completed', {
+                documentId,
+                framework: frameworkName,
+                checkId: complianceResult.checkId,
+                status: complianceResult.status,
+              });
+            } else {
+              this.env.logger.warn('⚠️ Framework ID found but framework not in database', {
+                documentId,
+                frameworkId: enrichmentResult.complianceFrameworkId,
+              });
+              await stepTracker.failStep(
+                documentId,
+                'compliance_analysis',
+                'Framework not found in database'
+              );
+            }
+          } catch (complianceError) {
+            this.env.logger.error('❌ Automatic compliance analysis failed', {
+              documentId,
+              frameworkId: enrichmentResult.complianceFrameworkId,
+              error: complianceError instanceof Error ? complianceError.message : String(complianceError),
+              stack: complianceError instanceof Error ? complianceError.stack : undefined,
+            });
+
+            await stepTracker.failStep(
+              documentId,
+              'compliance_analysis',
+              complianceError instanceof Error ? complianceError.message : String(complianceError)
+            );
+
+            // Don't fail the entire pipeline - compliance is non-critical
+            // Continue processing normally
+          }
+        } else {
+          this.env.logger.info('ℹ️ No compliance framework detected, skipping automatic analysis', {
+            documentId,
+          });
+        }
+
       } catch (enrichmentError) {
         this.env.logger.error('❌ AI enrichment failed', {
           documentId,
