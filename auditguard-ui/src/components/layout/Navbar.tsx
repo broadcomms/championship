@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { Bell, Settings, LogOut, User, ShieldCheck } from 'lucide-react';
+import { Bell, Settings, LogOut, User, ShieldCheck, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function Navbar() {
@@ -135,6 +135,24 @@ export function Navbar() {
                         <Settings className="h-4 w-4" />
                         Settings
                       </button>
+
+                      {/* Admin link - only show for admin users */}
+                      {user?.isAdmin && (
+                        <>
+                          <div className="my-2 border-t border-gray-200" />
+                          
+                          <button
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              router.push('/admin');
+                            }}
+                            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                          >
+                            <Shield className="h-4 w-4" />
+                            Admin Dashboard
+                          </button>
+                        </>
+                      )}
 
                       <div className="my-2 border-t border-gray-200" />
 

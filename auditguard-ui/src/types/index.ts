@@ -7,6 +7,7 @@ export interface User {
   email: string;
   name?: string; // Optional - not always returned by API
   createdAt: number;
+  isAdmin?: boolean; // Platform admin status
 }
 
 export interface Session {

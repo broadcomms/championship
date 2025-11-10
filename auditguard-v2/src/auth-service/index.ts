@@ -153,7 +153,7 @@ export default class extends Service<Env> {
     };
   }
 
-  async getUserById(userId: string): Promise<{ userId: string; email: string; createdAt: number } | null> {
+  async getUserById(userId: string): Promise<{ userId: string; email: string; createdAt: number; isAdmin: boolean } | null> {
     const db = this.getDb();
 
     const user = await db
@@ -166,10 +166,18 @@ export default class extends Service<Env> {
       return null;
     }
 
+    // Check if user is an admin
+    const adminUser = await db
+      .selectFrom('admin_users')
+      .select(['user_id'])
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
     return {
       userId: user.id,
       email: user.email,
       createdAt: user.created_at,
+      isAdmin: !!adminUser,
     };
   }
 }
