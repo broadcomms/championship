@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { ComplianceFrameworkInfo } from '@/types';
 import { Button } from '@/components/common/Button';
+import DOMPurify from 'dompurify';
 
 interface SearchResult {
   documentId: string;
@@ -95,6 +96,10 @@ export function VectorSearch({ workspaceId }: VectorSearchProps) {
     return 'Different Topics';
   };
 
+  /**
+   * SECURITY FIX: Sanitize and highlight query terms safely
+   * Prevents XSS attacks by sanitizing HTML before rendering
+   */
   const highlightQuery = (text: string): string => {
     if (!query.trim()) return text;
 
@@ -102,11 +107,17 @@ export function VectorSearch({ workspaceId }: VectorSearchProps) {
     let highlighted = text;
 
     words.forEach(word => {
-      const regex = new RegExp(`(${word})`, 'gi');
+      // Escape special regex characters
+      const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escapedWord})`, 'gi');
       highlighted = highlighted.replace(regex, '<mark class="bg-yellow-200">$1</mark>');
     });
 
-    return highlighted;
+    // CRITICAL SECURITY FIX: Sanitize HTML to prevent XSS
+    return DOMPurify.sanitize(highlighted, {
+      ALLOWED_TAGS: ['mark'],
+      ALLOWED_ATTR: ['class'],
+    });
   };
 
   return (

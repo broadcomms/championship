@@ -33,26 +33,48 @@ export function ComplianceFrameworkBadge({
       return;
     }
 
+    // MEMORY LEAK FIX: Add AbortController for cleanup
+    const abortController = new AbortController();
+    let isMounted = true;
+
     const fetchFramework = async () => {
       setLoading(true);
       try {
         const response = await fetch(
           `/api/workspaces/${workspaceId}/compliance-frameworks/${frameworkId}`,
-          { credentials: 'include' }
+          { 
+            credentials: 'include',
+            signal: abortController.signal, // Add abort signal
+          }
         );
 
         if (response.ok) {
           const data = await response.json();
-          setFramework(data.framework);
+          // Only update state if component is still mounted
+          if (isMounted) {
+            setFramework(data.framework);
+          }
         }
       } catch (error) {
+        // Ignore AbortError when component unmounts
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
         console.error('Failed to fetch compliance framework:', error);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchFramework();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      abortController.abort();
+    };
   }, [frameworkId, workspaceId]);
 
   if (!frameworkId) {

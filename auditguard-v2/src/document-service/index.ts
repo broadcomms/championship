@@ -638,21 +638,42 @@ export default class extends Service<Env> {
     const deletionErrors: string[] = [];
 
     try {
-      // Step 1: Mark document as deleting (prevents concurrent operations)
-      await db
-        .updateTable('documents')
-        .set({
-          processing_status: 'deleting' as any,
-          updated_at: Date.now(),
-        })
-        .where('id', '=', documentId)
-        .where('workspace_id', '=', workspaceId)
-        .execute();
+      // SECURITY FIX: Use database transaction for atomic D1 deletion
+      // This ensures all D1 operations succeed or fail together
+      await db.transaction().execute(async (trx) => {
+        // Step 1: Mark document as deleting (prevents concurrent operations)
+        await trx
+          .updateTable('documents')
+          .set({
+            processing_status: 'deleting' as any,
+            updated_at: Date.now(),
+          })
+          .where('id', '=', documentId)
+          .where('workspace_id', '=', workspaceId)
+          .execute();
 
-      this.env.logger.info('Document marked as deleting', { documentId });
+        this.env.logger.info('Document marked as deleting', { documentId });
 
+        // Step 2: Delete from D1 database (CRITICAL - CASCADE handles related tables)
+        // This MUST happen BEFORE SmartBucket deletion to ensure consistency
+        // If this fails, transaction rolls back and SmartBucket remains untouched
+        await trx
+          .deleteFrom('documents')
+          .where('id', '=', documentId)
+          .where('workspace_id', '=', workspaceId)
+          .execute();
 
-      // Step 3: Delete from SmartBucket storage (best effort)
+        deletionStatus.d1Database = true;
+
+        this.env.logger.info('Document deleted successfully from D1 (with CASCADE)', {
+          documentId,
+          workspaceId,
+        });
+      });
+
+      // Step 3: Delete from SmartBucket storage (best effort, after D1 commit)
+      // This happens AFTER D1 transaction commits successfully
+      // If SmartBucket deletion fails, D1 is already clean (acceptable)
       try {
         await this.env.DOCUMENTS_BUCKET.delete(document.storage_key);
         deletionStatus.smartbucket = true;
@@ -661,64 +682,14 @@ export default class extends Service<Env> {
           storageKey: document.storage_key,
         });
       } catch (error) {
-        const errorMsg = `SmartBucket deletion failed: ${error instanceof Error ? error.message : String(error)}`;
+        const errorMsg = `SmartBucket deletion failed (D1 already clean): ${error instanceof Error ? error.message : String(error)}`;
         deletionErrors.push(errorMsg);
         this.env.logger.error('Failed to delete from SmartBucket storage', {
           documentId,
           storageKey: document.storage_key,
           error: error instanceof Error ? error.message : String(error),
+          note: 'Document already deleted from D1 - orphaned file in storage',
         });
-      }
-
-// Step 4: Delete from D1 database (CRITICAL - CASCADE handles related tables)
-try {
-  // Delete document - CASCADE will automatically delete:
-  // - compliance_issues (via document_id foreign key)
-  // - compliance_checks (via document_id foreign key)  
-  // - document_chunks (via document_id foreign key)
-  await db
-    .deleteFrom('documents')
-    .where('id', '=', documentId)
-    .where('workspace_id', '=', workspaceId)
-    .execute();
-
-  deletionStatus.d1Database = true;
-  
-  this.env.logger.info('Document deleted successfully from D1 (with CASCADE)', {
-    documentId,
-    workspaceId,
-  });
-} catch (dbError) {
-        // CRITICAL: D1 deletion failed - this is a serious error
-        const errorMsg = `D1 deletion CRITICAL failure: ${dbError instanceof Error ? dbError.message : String(dbError)}`;
-        deletionErrors.push(errorMsg);
-        this.env.logger.error('CRITICAL: D1 database deletion failed', {
-          documentId,
-          error: dbError instanceof Error ? dbError.message : String(dbError),
-          stack: dbError instanceof Error ? dbError.stack : undefined,
-        });
-
-        // Try to restore document status
-        try {
-          await db
-            .updateTable('documents')
-            .set({
-              processing_status: 'completed' as any,
-              updated_at: Date.now(),
-            })
-            .where('id', '=', documentId)
-            .where('workspace_id', '=', workspaceId)
-            .execute();
-
-          this.env.logger.info('Restored document status after failed deletion', { documentId });
-        } catch (restoreError) {
-          this.env.logger.error('Failed to restore document status', {
-            documentId,
-            error: restoreError instanceof Error ? restoreError.message : String(restoreError),
-          });
-        }
-
-        throw new Error(errorMsg);
       }
 
       // Log final status

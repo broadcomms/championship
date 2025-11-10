@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
 import { DocumentChunksViewer } from './DocumentChunksViewer';
 import { CategoryBadge } from './CategoryBadge';
@@ -41,19 +41,8 @@ export function DocumentContentViewer({
   const totalChunks = chunkCount ?? content?.chunks?.length ?? 0;
   const hasChunks = totalChunks > 0;
 
-  useEffect(() => {
-    if (hasExtractedText) {
-      fetchContent();
-    }
-  }, [workspaceId, documentId, hasExtractedText]);
-
-  useEffect(() => {
-    if (!hasChunks && activeTab === 'chunks') {
-      setActiveTab('info');
-    }
-  }, [hasChunks, activeTab]);
-
-  const fetchContent = async () => {
+  // CRITICAL FIX: Add fetchContent to dependency array to prevent stale closures
+  const fetchContent = useCallback(async () => {
     setIsLoading(true);
     setError('');
     setIsContentUnavailable(false);
@@ -72,7 +61,23 @@ export function DocumentContentViewer({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [workspaceId, documentId]);
+
+  useEffect(() => {
+    if (hasExtractedText) {
+      fetchContent();
+    }
+  }, [workspaceId, documentId, hasExtractedText, fetchContent]);
+
+  // INFINITE LOOP FIX: Use ref to prevent circular dependency
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+
+  useEffect(() => {
+    if (!hasChunks && activeTabRef.current === 'chunks') {
+      setActiveTab('info');
+    }
+  }, [hasChunks]); // Remove activeTab from dependencies
 
   const handleReExtract = () => {
     // Refresh content after re-extraction
@@ -420,6 +425,13 @@ function FullTextTab({ fullText, workspaceId, documentId, onReExtract }: FullTex
         credentials: 'include',
       });
 
+      // CRITICAL FIX: Check response.ok before parsing JSON
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+        setReExtractError(errorData.details || errorData.error || `Request failed with status ${response.status}`);
+        return;
+      }
+
       const data = await response.json();
 
       if (!data.success) {
@@ -435,7 +447,14 @@ function FullTextTab({ fullText, workspaceId, documentId, onReExtract }: FullTex
         onReExtract();
       }
     } catch (error: any) {
-      setReExtractError('Failed to re-extract text from storage');
+      // Differentiate between network errors and server errors
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        setReExtractError('Network error: Unable to connect to server');
+      } else if (error instanceof SyntaxError) {
+        setReExtractError('Server returned invalid response');
+      } else {
+        setReExtractError(error.message || 'Failed to re-extract text from storage');
+      }
     } finally {
       setIsReExtracting(false);
     }

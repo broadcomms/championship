@@ -8,6 +8,7 @@ import { CategoryBadge } from '@/components/documents/CategoryBadge';
 import { ProcessingIndicator } from '@/components/documents/ProcessingIndicator';
 import { DocumentUpload } from '@/components/documents/DocumentUpload';
 import { VectorSearch } from '@/components/documents/VectorSearch';
+import { ComponentErrorBoundary } from '@/components/common/ErrorBoundary';
 import { useDocuments } from '@/hooks/useDocuments';
 import { DocumentCategory } from '@/types';
 
@@ -340,7 +341,9 @@ export default function DocumentsPage() {
 
         {/* Search View - Phase 5 */}
         {viewMode === 'search' && (
-          <VectorSearch workspaceId={workspaceId} />
+          <ComponentErrorBoundary>
+            <VectorSearch workspaceId={workspaceId} />
+          </ComponentErrorBoundary>
         )}
       </div>
     </AppLayout>

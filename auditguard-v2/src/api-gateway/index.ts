@@ -119,6 +119,26 @@ export default class extends Service<Env> {
     }
   }
 
+  /**
+   * SECURITY FIX: Check if user has admin privileges
+   * Used to protect debug and admin-only endpoints
+   */
+  private async isUserAdmin(userId: string): Promise<boolean> {
+    try {
+      const db = this.getDb();
+      const adminUser = await db
+        .selectFrom('admin_users')
+        .select(['user_id'])
+        .where('user_id', '=', userId)
+        .executeTakeFirst();
+      
+      return !!adminUser;
+    } catch (error) {
+      this.env.logger.error('Failed to check admin status', { userId, error });
+      return false;
+    }
+  }
+
   async fetch(request: Request): Promise<Response> {
     const startTime = Date.now();
     const url = new URL(request.url);
@@ -162,7 +182,34 @@ export default class extends Service<Env> {
         });
       }
 
-      // Debug: List documents - No auth for debugging
+      // SECURITY FIX: Protect debug/test endpoints with admin authentication
+      if (path.startsWith('/api/debug/') || path.startsWith('/api/test-')) {
+        // Validate session
+        const user = await this.validateSession(request);
+        if (!user) {
+          return new Response(JSON.stringify({
+            error: 'Authentication required',
+            details: 'You must be logged in to access debug endpoints'
+          }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        // Check admin privileges
+        const isAdmin = await this.isUserAdmin(user.userId);
+        if (!isAdmin) {
+          return new Response(JSON.stringify({
+            error: 'Admin privileges required',
+            details: 'Only platform administrators can access debug endpoints'
+          }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // Debug: List documents
       if (path === '/api/debug/documents' && request.method === 'GET') {
         try {
           const url = new URL(request.url);

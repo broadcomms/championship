@@ -9,6 +9,7 @@ import { ProcessingIndicator } from '@/components/documents/ProcessingIndicator'
 import { ProcessingProgress } from '@/components/documents/ProcessingProgress';
 import { DocumentContentViewer } from '@/components/documents/DocumentContentViewer';
 import { DocumentComplianceTab } from '@/components/compliance/DocumentComplianceTab';
+import { ComponentErrorBoundary } from '@/components/common/ErrorBoundary';
 import { useDocumentPolling } from '@/hooks/useDocumentPolling';
 import { api } from '@/lib/api';
 import { Document, DocumentCategory } from '@/types';
@@ -478,21 +479,25 @@ export default function DocumentDetailsPage() {
 
           {/* Full Text Tab */}
           {activeTab === 'fulltext' && (
-            <DocumentContentViewer
-              workspaceId={workspaceId}
-              documentId={documentId}
-              document={document}
-              hasExtractedText={document.textExtracted || false}
-              chunkCount={document.chunkCount}
-            />
+            <ComponentErrorBoundary>
+              <DocumentContentViewer
+                workspaceId={workspaceId}
+                documentId={documentId}
+                document={document}
+                hasExtractedText={document.textExtracted || false}
+                chunkCount={document.chunkCount}
+              />
+            </ComponentErrorBoundary>
           )}
 
           {/* Compliance Tab */}
           {activeTab === 'compliance' && (
-            <DocumentComplianceTab
-              workspaceId={workspaceId}
-              documentId={documentId}
-            />
+            <ComponentErrorBoundary>
+              <DocumentComplianceTab
+                workspaceId={workspaceId}
+                documentId={documentId}
+              />
+            </ComponentErrorBoundary>
           )}
         </div>
 
