@@ -485,6 +485,9 @@ export default class extends Each<Body, Env> {
                description = ?,
                category = ?,
                compliance_framework_id = ?,
+               word_count = ?,
+               page_count = ?,
+               character_count = ?,
                fully_completed = 1,
                updated_at = ?
            WHERE id = ?`
@@ -493,6 +496,9 @@ export default class extends Each<Body, Env> {
           enrichmentResult.description,
           enrichmentResult.category,
           enrichmentResult.complianceFrameworkId,
+          wordCount,
+          pageCount,
+          characterCount,
           Date.now(),
           documentId
         ).run();

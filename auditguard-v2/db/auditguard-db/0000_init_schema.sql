@@ -48,7 +48,7 @@ CREATE TABLE documents (
     content_type TEXT NOT NULL,
     category TEXT,
     storage_key TEXT,
-    processing_status TEXT DEFAULT 'pending' CHECK(processing_status IN ('pending', 'processing', 'completed', 'failed')),
+    processing_status TEXT DEFAULT 'pending' CHECK(processing_status IN ('pending', 'processing', 'completed', 'failed', 'deleting')),
     
     text_extracted INTEGER DEFAULT 0,
     chunk_count INTEGER DEFAULT 0,
