@@ -651,57 +651,6 @@ export default class extends Service<Env> {
 
       this.env.logger.info('Document marked as deleting', { documentId });
 
-      // Step 2: Delete from PostgreSQL embedding service (best effort)
-      try {
-        const embeddingServiceUrl = (this.env as any).LOCAL_EMBEDDING_SERVICE_URL || 'https://auditrig.com';
-
-        this.env.logger.info('Deleting document from PostgreSQL embedding service', {
-          documentId,
-          embeddingServiceUrl,
-        });
-
-        const deleteResponse = await fetch(`${embeddingServiceUrl}/api/v1/documents/${documentId}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-API-Key': (this.env as any).EMBEDDING_SERVICE_API_KEY || '',
-          },
-        });
-
-        if (deleteResponse.ok) {
-          const result = await deleteResponse.json() as {
-            documentId: string;
-            deletedEmbeddings: number;
-            deletedChunks: number;
-            deletedDocument: boolean;
-            success: boolean;
-            message: string;
-          };
-          deletionStatus.postgresql = true;
-          this.env.logger.info('Successfully deleted document from PostgreSQL', {
-            documentId,
-            deletedEmbeddings: result.deletedEmbeddings,
-            deletedChunks: result.deletedChunks,
-            message: result.message,
-          });
-        } else {
-          const errorText = await deleteResponse.text();
-          const errorMsg = `PostgreSQL deletion failed: HTTP ${deleteResponse.status} - ${errorText}`;
-          deletionErrors.push(errorMsg);
-          this.env.logger.error('Failed to delete document from PostgreSQL', {
-            documentId,
-            status: deleteResponse.status,
-            error: errorText,
-          });
-        }
-      } catch (error) {
-        const errorMsg = `PostgreSQL deletion error: ${error instanceof Error ? error.message : String(error)}`;
-        deletionErrors.push(errorMsg);
-        this.env.logger.error('Error calling PostgreSQL delete endpoint', {
-          documentId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
 
       // Step 3: Delete from SmartBucket storage (best effort)
       try {
@@ -721,42 +670,25 @@ export default class extends Service<Env> {
         });
       }
 
-      // Step 4: Delete from D1 database (CRITICAL - must succeed)
-      // Use transaction to ensure all D1 deletions are atomic
-      try {
-        await db
-          .deleteFrom('compliance_check_issues' as any)
-          .where('check_id', 'in', (eb: any) =>
-            eb
-              .selectFrom('compliance_checks' as any)
-              .select('id')
-              .where('document_id', '=', documentId)
-          )
-          .execute();
+// Step 4: Delete from D1 database (CRITICAL - CASCADE handles related tables)
+try {
+  // Delete document - CASCADE will automatically delete:
+  // - compliance_issues (via document_id foreign key)
+  // - compliance_checks (via document_id foreign key)  
+  // - document_chunks (via document_id foreign key)
+  await db
+    .deleteFrom('documents')
+    .where('id', '=', documentId)
+    .where('workspace_id', '=', workspaceId)
+    .execute();
 
-        await db
-          .deleteFrom('compliance_checks')
-          .where('document_id', '=', documentId)
-          .execute();
-
-        await db
-          .deleteFrom('annotations' as any)
-          .where('document_id', '=', documentId)
-          .execute();
-
-        await db
-          .deleteFrom('documents')
-          .where('id', '=', documentId)
-          .where('workspace_id', '=', workspaceId)
-          .execute();
-
-        deletionStatus.d1Database = true;
-
-        this.env.logger.info('Document deleted successfully from D1', {
-          documentId,
-          workspaceId,
-        });
-      } catch (dbError) {
+  deletionStatus.d1Database = true;
+  
+  this.env.logger.info('Document deleted successfully from D1 (with CASCADE)', {
+    documentId,
+    workspaceId,
+  });
+} catch (dbError) {
         // CRITICAL: D1 deletion failed - this is a serious error
         const errorMsg = `D1 deletion CRITICAL failure: ${dbError instanceof Error ? dbError.message : String(dbError)}`;
         deletionErrors.push(errorMsg);
