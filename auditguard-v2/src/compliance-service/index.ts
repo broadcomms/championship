@@ -324,6 +324,10 @@ export default class extends Service<Env> {
         issuesFound: issues.length,
       });
       
+      // Update compliance cache for summary display
+      await this.updateComplianceCache(checkId);
+      this.env.logger.info('📊 Compliance cache updated', { checkId });
+      
     } catch (error) {
       // Mark check as failed
       this.env.logger.error('❌❌❌ Compliance check failed', {
@@ -1078,6 +1082,38 @@ Format as JSON with: { score: number, issues: [{severity, category, title, descr
   }
 
   /**
+   * PHASE 2.1.5: Cleanup Stale Processing Checks
+   * Mark old processing checks as failed (timeout after 10 minutes)
+   */
+  async cleanupStaleChecks(documentId: string, workspaceId: string): Promise<number> {
+    const db = this.getDb();
+    const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+
+    const result = await db
+      .updateTable('compliance_checks')
+      .set({
+        status: 'failed',
+        completed_at: Date.now(),
+      })
+      .where('document_id', '=', documentId)
+      .where('workspace_id', '=', workspaceId)
+      .where('status', '=', 'processing')
+      .where('created_at', '<', tenMinutesAgo)
+      .execute();
+
+    const cleanedCount = result.length;
+    if (cleanedCount > 0) {
+      this.env.logger.info('🧹 Cleaned up stale processing checks', {
+        documentId,
+        workspaceId,
+        count: cleanedCount,
+      });
+    }
+
+    return cleanedCount;
+  }
+
+  /**
    * PHASE 2.2: Get Document Compliance Checks
    * Retrieve all compliance checks for a specific document
    */
@@ -1103,6 +1139,9 @@ Format as JSON with: { score: number, issues: [{severity, category, title, descr
     total: number;
   }> {
     const db = this.getDb();
+
+    // Cleanup stale processing checks before returning list
+    await this.cleanupStaleChecks(documentId, workspaceId);
 
     // Verify workspace access
     const membership = await db
