@@ -39,6 +39,24 @@ interface WorkspaceDashboard {
     issuesFound: number;
     createdAt: number;
   }>;
+  recentActivity?: {
+    documentsUploaded: number;
+    checksCompleted: number;
+    issuesResolved: number;
+  };
+  complianceByFramework?: Array<{
+    frameworkId: string;
+    frameworkName: string;
+    displayName: string;
+    score: number;
+    checksCount: number;
+    lastCheckDate: number | null;
+  }>;
+  topIssues?: Array<{
+    category: string;
+    severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+    count: number;
+  }>;
 }
 
 // PHASE 1.2.1: CMMI Maturity Model
@@ -300,6 +318,108 @@ export default class extends Service<Env> {
         ? Math.round((latestScore.documents_checked / latestScore.total_documents) * 100)
         : 0;
 
+    // Calculate recent activity (last 30 days)
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+    const recentDocsResult = await db
+      .selectFrom('documents')
+      .select(({ fn }) => fn.count<number>('id').as('count'))
+      .where('workspace_id', '=', workspaceId)
+      .where('uploaded_at', '>=', thirtyDaysAgo)
+      .executeTakeFirst();
+
+    const recentChecksResult = await db
+      .selectFrom('compliance_checks')
+      .select(({ fn }) => fn.count<number>('id').as('count'))
+      .where('workspace_id', '=', workspaceId)
+      .where('status', '=', 'completed')
+      .where('created_at', '>=', thirtyDaysAgo)
+      .executeTakeFirst();
+
+    const recentResolvedResult = await db
+      .selectFrom('compliance_issues')
+      .innerJoin('compliance_checks', 'compliance_issues.check_id', 'compliance_checks.id')
+      .select(({ fn }) => fn.count<number>('compliance_issues.id').as('count'))
+      .where('compliance_checks.workspace_id', '=', workspaceId)
+      .where('compliance_issues.status', '=', 'resolved')
+      .where('compliance_issues.resolved_at', '>=', thirtyDaysAgo)
+      .executeTakeFirst();
+
+    const recentActivity = {
+      documentsUploaded: recentDocsResult?.count || 0,
+      checksCompleted: recentChecksResult?.count || 0,
+      issuesResolved: recentResolvedResult?.count || 0,
+    };
+
+    // Get framework names from database
+    const frameworks = await db
+      .selectFrom('compliance_frameworks')
+      .select(['id', 'name', 'display_name'])
+      .execute();
+
+    const frameworkMap = new Map(frameworks.map(f => [f.name, { id: f.id, displayName: f.display_name }]));
+
+    // Calculate compliance by framework with enhanced data
+    const complianceByFramework = frameworkScores
+      .map(fs => {
+        const frameworkInfo = frameworkMap.get(fs.framework);
+        return {
+          frameworkId: fs.framework,
+          frameworkName: fs.framework,
+          displayName: frameworkInfo?.displayName || fs.framework.toUpperCase(),
+          score: Math.round(fs.score),
+          checksCount: fs.total_checks,
+          lastCheckDate: fs.last_check_at,
+        };
+      })
+      .sort((a, b) => b.score - a.score); // Sort by score descending
+
+    // Calculate top issues by category
+    const topIssuesRaw = await db
+      .selectFrom('compliance_issues')
+      .innerJoin('compliance_checks', 'compliance_issues.check_id', 'compliance_checks.id')
+      .select([
+        'compliance_issues.category',
+        'compliance_issues.severity',
+        ({ fn }) => fn.count<number>('compliance_issues.id').as('count')
+      ])
+      .where('compliance_checks.workspace_id', '=', workspaceId)
+      .where('compliance_issues.status', 'in', ['open', 'in_progress'])
+      .groupBy(['compliance_issues.category', 'compliance_issues.severity'])
+      .execute();
+
+    // Aggregate by category, keeping highest severity
+    const categoryMap = new Map<string, { severity: string; count: number; severityRank: number }>();
+    const severityRank = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
+
+    topIssuesRaw.forEach(issue => {
+      const existing = categoryMap.get(issue.category);
+      const currentRank = severityRank[issue.severity as keyof typeof severityRank] || 0;
+      
+      if (!existing || currentRank > existing.severityRank) {
+        categoryMap.set(issue.category, {
+          severity: issue.severity,
+          count: (existing?.count || 0) + issue.count,
+          severityRank: currentRank
+        });
+      } else {
+        existing.count += issue.count;
+      }
+    });
+
+    const topIssues = Array.from(categoryMap.entries())
+      .map(([category, data]) => ({
+        category,
+        severity: data.severity as 'critical' | 'high' | 'medium' | 'low' | 'info',
+        count: data.count,
+      }))
+      .sort((a, b) => {
+        // Sort by severity rank first, then count
+        const rankDiff = (severityRank[b.severity] || 0) - (severityRank[a.severity] || 0);
+        return rankDiff !== 0 ? rankDiff : b.count - a.count;
+      })
+      .slice(0, 10); // Top 10 issue categories
+
     return {
       overallScore: latestScore.overall_score,
       riskLevel: latestScore.risk_level as 'critical' | 'high' | 'medium' | 'low' | 'minimal',
@@ -331,6 +451,9 @@ export default class extends Service<Env> {
         issuesFound: rc.issues_found,
         createdAt: rc.created_at,
       })),
+      recentActivity,
+      complianceByFramework,
+      topIssues,
     };
   }
 

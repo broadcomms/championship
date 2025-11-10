@@ -23,14 +23,28 @@ export function ComplianceReportsList({ workspaceId, onReportClick }: Compliance
     setError(null);
 
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/reports`);
+      const response = await fetch(`/api/workspaces/${workspaceId}/reports`, {
+        credentials: 'include',
+      });
       
       if (!response.ok) {
         throw new Error('Failed to fetch reports');
       }
 
       const data = await response.json();
-      setReports(data.reports || []);
+      // Backend returns array directly, not wrapped in {reports: [...]}
+      // Transform to match ComplianceReportListItem structure
+      const transformedReports = Array.isArray(data) ? data.map((report: any) => ({
+        id: report.id,
+        name: report.name,
+        createdAt: report.createdAt,
+        frameworks: report.frameworks,
+        overallScore: report.summary?.overview?.overallScore || 0,
+        totalIssues: report.summary?.overview?.totalIssues || 0,
+        criticalIssues: report.summary?.overview?.criticalIssues || 0,
+        status: report.status,
+      })) : [];
+      setReports(transformedReports);
     } catch (err) {
       console.error('Error fetching reports:', err);
       setError(err instanceof Error ? err.message : 'Failed to load reports');

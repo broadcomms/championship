@@ -72,6 +72,17 @@ export type compliance_checks = {
     created_by: string;
 };
 
+export type compliance_frameworks = {
+    id: number;
+    name: string;
+    display_name: string;
+    description: string | null;
+    settings: string | null;
+    is_active: number;
+    created_at: number;
+    updated_at: number;
+};
+
 export type compliance_issues = {
     id: string;
     check_id: string;
@@ -298,6 +309,7 @@ export type DB = {
     workspace_members: workspace_members;
     workspaces: workspaces;
     compliance_checks: compliance_checks;
+    compliance_frameworks: compliance_frameworks;
     compliance_issues: compliance_issues;
     compliance_reports: compliance_reports;
     document_chunks: document_chunks;

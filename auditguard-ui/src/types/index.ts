@@ -448,6 +448,16 @@ export interface FrameworkScoreItem {
   coverage: number;
 }
 
+// Phase 2: Framework Score (for dashboard display)
+export interface FrameworkScore {
+  frameworkId: number;
+  frameworkName: ComplianceFramework;
+  displayName: string;
+  score: number;
+  checksCount: number;
+  lastCheckDate: number | null;
+}
+
 export interface RecommendationItem {
   priority: IssueSeverity;
   title: string;

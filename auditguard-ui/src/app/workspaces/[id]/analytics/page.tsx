@@ -46,14 +46,18 @@ export default function AnalyticsPage() {
         // Calculate stats
         const totalReports = reports.length;
         const avgScore = Math.round(
-          reports.reduce((sum: number, r: any) => sum + (r.summary.overallScore || 0), 0) / totalReports
+          reports.reduce((sum: number, r: any) => {
+            // Handle both direct overallScore and nested overview.overallScore
+            const score = r.summary?.overview?.overallScore || r.summary?.overallScore || 0;
+            return sum + score;
+          }, 0) / totalReports
         );
 
         // Calculate trend (compare latest 3 vs previous 3)
         let trend = '-';
         if (reports.length >= 2) {
-          const latest = reports[0].summary.overallScore || 0;
-          const previous = reports[1].summary.overallScore || 0;
+          const latest = reports[0].summary?.overview?.overallScore || reports[0].summary?.overallScore || 0;
+          const previous = reports[1].summary?.overview?.overallScore || reports[1].summary?.overallScore || 0;
           if (latest > previous) {
             trend = `+${(latest - previous).toFixed(1)}%`;
           } else if (latest < previous) {
