@@ -3,6 +3,8 @@
  * TypeScript definitions for compliance features
  */
 
+import { ComplianceFramework } from './index';
+
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'dismissed';
 export type ComplianceCheckStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -156,36 +158,71 @@ export interface ExecutiveSummaryRequest {
 export interface ExecutiveSummary {
   workspaceId: string;
   generatedAt: number;
-  overview: {
-    totalDocuments: number;
-    totalChecks: number;
-    totalIssues: number;
-    averageScore: number;
-    riskLevel: string;
+  reportPeriod: {
+    startDate: string;
+    endDate: string;
   };
-  keyFindings: string[]; // AI-generated insights
-  topRisks: {
-    category: string;
-    count: number;
-    severity: IssueSeverity;
-  }[];
-  frameworkCompliance: {
-    framework: string;
-    score: number;
+  overview: {
+    overallScore: number;
+    maturityLevel: number;
+    totalDocuments: number;
+    documentsChecked: number;
+    coveragePercentage: number;
+    totalIssues: number;
+    criticalIssues: number;
+  };
+  keyFindings: string[];
+  topRisks: Array<{
+    framework: ComplianceFramework;
     issueCount: number;
-    riskLevel: string;
-  }[];
-  recommendations: {
-    priority: 'critical' | 'high' | 'medium' | 'low';
+    severity: 'critical' | 'high' | 'medium' | 'low';
+    description: string;
+  }>;
+  frameworkSummary: Array<{
+    framework: ComplianceFramework;
+    score: number;
+    checksCompleted: number;
+    issuesFound: number;
+    status: 'compliant' | 'partial' | 'non-compliant';
+  }>;
+  recommendations: Array<{
+    priority: 'high' | 'medium' | 'low';
     title: string;
     description: string;
-    effort: 'low' | 'medium' | 'high';
-  }[];
+    estimatedEffort: string;
+  }>;
   trends: {
     scoreChange: number;
     issueChange: number;
-    period: string;
-  } | null;
+    coverageChange: number;
+  };
+}
+
+// Stored compliance report with metadata
+export interface ComplianceReport {
+  id: string;
+  workspaceId: string;
+  name: string;
+  createdAt: number;
+  frameworks: ComplianceFramework[];
+  reportPeriod: {
+    startDate: string;
+    endDate: string;
+  };
+  summary: ExecutiveSummary;
+  status: 'completed' | 'failed' | 'processing';
+}
+
+// Report list item (lightweight for listing)
+export interface ComplianceReportListItem {
+  id: string;
+  name: string;
+  createdAt: number;
+  frameworks: ComplianceFramework[];
+  overallScore: number;
+  totalIssues: number;
+  criticalIssues: number;
+  status: 'completed' | 'failed' | 'processing';
 }
 
 export interface ReportExportResponse {

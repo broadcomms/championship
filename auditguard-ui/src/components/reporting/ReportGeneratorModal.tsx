@@ -93,18 +93,30 @@ export function ReportGeneratorModal({
 
         const summary = await response.json();
         
-        // Download as JSON
-        const blob = new Blob([JSON.stringify(summary, null, 2)], {
-          type: 'application/json',
+        // Save report to backend
+        const reportName = `Compliance Report - ${new Date().toLocaleDateString()}`;
+        const saveResponse = await fetch(`/api/workspaces/${workspaceId}/reports`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            name: reportName,
+            frameworks: selectedFrameworks.length > 0 ? selectedFrameworks : [],
+            summary,
+          }),
         });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `executive-summary-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+
+        if (!saveResponse.ok) {
+          console.error('Failed to save report to backend');
+          // Don't throw - still show success if generation worked
+        }
+
+        setSuccess(true);
+        setTimeout(() => {
+          onClose();
+          // Reload page to show new report
+          window.location.reload();
+        }, 1500);
       } else {
         // Generate data export
         const request: ReportGenerationRequest = {
