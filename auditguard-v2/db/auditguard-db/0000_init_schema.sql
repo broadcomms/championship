@@ -79,7 +79,7 @@ CREATE TABLE documents (
 );
 
 -- Document chunks table for semantic search
-CREATE TABLE IF NOT EXISTS document_chunks (
+CREATE TABLE document_chunks (
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL,
     workspace_id TEXT NOT NULL,
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
 );
 
 -- Compliance checks table
-CREATE TABLE IF NOT EXISTS compliance_checks (
+CREATE TABLE compliance_checks (
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL,
     workspace_id TEXT NOT NULL,
@@ -222,6 +222,17 @@ CREATE TABLE compliance_issues (
     id TEXT PRIMARY KEY,
     check_id TEXT NOT NULL,
     document_id TEXT NOT NULL,
+    workspace_id TEXT,
+    framework TEXT,
+    regulation_citation TEXT,
+    excerpt TEXT,
+    risk_score INTEGER,
+    section_ref TEXT,
+    chunk_ids TEXT,
+    remediation_steps TEXT,
+    full_excerpt TEXT,
+    resolution_notes TEXT,
+    updated_at INTEGER,
     severity TEXT NOT NULL CHECK(severity IN ('critical', 'high', 'medium', 'low', 'info')),
     category TEXT NOT NULL,
     title TEXT NOT NULL,
@@ -350,6 +361,59 @@ CREATE TABLE performance_metrics (
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
 );
 
+
+-- -------------------- New Table: document_compliance_cache --------------------
+-- Cache computed compliance scores and summaries for performance
+CREATE TABLE IF NOT EXISTS document_compliance_cache (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  framework TEXT NOT NULL,
+  overall_score REAL,
+  risk_level TEXT,
+  total_issues INTEGER DEFAULT 0,
+  critical_issues INTEGER DEFAULT 0,
+  high_issues INTEGER DEFAULT 0,
+  medium_issues INTEGER DEFAULT 0,
+  low_issues INTEGER DEFAULT 0,
+  open_issues INTEGER DEFAULT 0,
+  resolved_issues INTEGER DEFAULT 0,
+  last_check_id TEXT,
+  last_analyzed_at INTEGER NOT NULL,
+  expires_at INTEGER,
+  UNIQUE(document_id, framework),
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+);
+
+-- -------------------- New Table: issue_status_history --------------------
+-- Track all status changes for complete audit trail
+CREATE TABLE IF NOT EXISTS issue_status_history (
+  id TEXT PRIMARY KEY,
+  issue_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  old_status TEXT,
+  new_status TEXT NOT NULL,
+  changed_by TEXT NOT NULL,
+  changed_at INTEGER NOT NULL,
+  notes TEXT,
+  FOREIGN KEY (issue_id) REFERENCES compliance_issues(id) ON DELETE CASCADE
+);
+
+
+-- Track assignment history for audit trail and notifications
+CREATE TABLE IF NOT EXISTS issue_assignments (
+  id TEXT PRIMARY KEY,
+  issue_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  assigned_by TEXT NOT NULL,
+  assigned_to TEXT NOT NULL,
+  assigned_at INTEGER NOT NULL,
+  unassigned_at INTEGER,
+  notes TEXT,
+  notification_sent INTEGER DEFAULT 0,
+  FOREIGN KEY (issue_id) REFERENCES compliance_issues(id) ON DELETE CASCADE
+);
+
 -- Indexes for performance 00
 CREATE INDEX sessions_user_id_idx ON sessions(user_id);
 CREATE INDEX sessions_expires_at_idx ON sessions(expires_at);
@@ -438,6 +502,31 @@ CREATE INDEX IF NOT EXISTS idx_compliance_issues_status ON compliance_issues(sta
 CREATE INDEX IF NOT EXISTS idx_compliance_issues_assigned_to ON compliance_issues(assigned_to);
 
 CREATE INDEX IF NOT EXISTS idx_framework_scores_workspace_framework ON framework_scores(workspace_id, framework);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_issues_workspace ON compliance_issues(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_issues_status ON compliance_issues(status);
+CREATE INDEX IF NOT EXISTS idx_issues_assigned ON compliance_issues(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_issues_severity ON compliance_issues(severity);
+CREATE INDEX IF NOT EXISTS idx_issues_document ON compliance_issues(document_id);
+CREATE INDEX IF NOT EXISTS idx_issues_framework ON compliance_issues(framework);
+
+
+
+CREATE INDEX idx_assignments_issue ON issue_assignments(issue_id);
+CREATE INDEX idx_assignments_assignee ON issue_assignments(assigned_to);
+CREATE INDEX idx_assignments_workspace ON issue_assignments(workspace_id);
+
+
+
+CREATE INDEX idx_status_history_issue ON issue_status_history(issue_id);
+CREATE INDEX idx_status_history_workspace ON issue_status_history(workspace_id);
+
+
+
+CREATE INDEX idx_compliance_cache_document ON document_compliance_cache(document_id);
+CREATE INDEX idx_compliance_cache_workspace ON document_compliance_cache(workspace_id);
+
 
 -- Seed default frameworks
 INSERT INTO compliance_frameworks (name, display_name, description, settings) VALUES
