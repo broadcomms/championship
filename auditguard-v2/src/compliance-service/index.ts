@@ -325,8 +325,17 @@ export default class extends Service<Env> {
       });
       
       // Update compliance cache for summary display
-      await this.updateComplianceCache(checkId);
-      this.env.logger.info('📊 Compliance cache updated', { checkId });
+      try {
+        await this.updateComplianceCache(checkId);
+        this.env.logger.info('📊 Compliance cache updated successfully', { checkId });
+      } catch (cacheError) {
+        this.env.logger.error('⚠️ Failed to update compliance cache', {
+          checkId,
+          error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+          stack: cacheError instanceof Error ? cacheError.stack : undefined,
+        });
+        // Don't fail the whole check if cache update fails - summary can be calculated on-demand
+      }
       
     } catch (error) {
       // Mark check as failed
@@ -1435,22 +1444,102 @@ Format as JSON with: { score: number, issues: [{severity, category, title, descr
       .limit(1)
       .executeTakeFirst();
 
-    if (!cache) {
+    if (cache) {
+      return {
+        overallScore: cache.overall_score,
+        riskLevel: cache.risk_level,
+        totalIssues: cache.total_issues,
+        criticalIssues: cache.critical_issues,
+        highIssues: cache.high_issues,
+        mediumIssues: cache.medium_issues,
+        lowIssues: cache.low_issues,
+        openIssues: cache.open_issues,
+        resolvedIssues: cache.resolved_issues,
+        lastAnalyzedAt: cache.last_analyzed_at,
+        lastCheckId: cache.last_check_id,
+      };
+    }
+
+    // Fallback: If no cache exists, calculate summary from latest completed check
+    this.env.logger.info('📊 No cache found, calculating summary from latest completed check', {
+      documentId,
+      workspaceId,
+      framework,
+    });
+
+    let checkQuery = db
+      .selectFrom('compliance_checks')
+      .selectAll()
+      .where('document_id', '=', documentId)
+      .where('workspace_id', '=', workspaceId)
+      .where('status', '=', 'completed');
+
+    if (framework) {
+      checkQuery = checkQuery.where('framework', '=', framework);
+    }
+
+    const latestCheck = await checkQuery
+      .orderBy('completed_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+
+    if (!latestCheck) {
+      this.env.logger.info('📊 No completed checks found for document', {
+        documentId,
+        workspaceId,
+        framework,
+      });
       return null;
     }
 
-    return {
-      overallScore: cache.overall_score,
-      riskLevel: cache.risk_level,
-      totalIssues: cache.total_issues,
-      criticalIssues: cache.critical_issues,
-      highIssues: cache.high_issues,
-      mediumIssues: cache.medium_issues,
-      lowIssues: cache.low_issues,
-      openIssues: cache.open_issues,
-      resolvedIssues: cache.resolved_issues,
-      lastAnalyzedAt: cache.last_analyzed_at,
-      lastCheckId: cache.last_check_id,
+    // Calculate summary from check + issues
+    const issues = await db
+      .selectFrom('compliance_issues')
+      .selectAll()
+      .where('check_id', '=', latestCheck.id)
+      .where('workspace_id', '=', workspaceId)
+      .execute();
+
+    const criticalIssues = issues.filter((i) => i.severity === 'critical').length;
+    const highIssues = issues.filter((i) => i.severity === 'high').length;
+    const mediumIssues = issues.filter((i) => i.severity === 'medium').length;
+    const lowIssues = issues.filter((i) => i.severity === 'low').length;
+    const openIssues = issues.filter((i) => i.status === 'open').length;
+    const resolvedIssues = issues.filter((i) => i.status === 'resolved').length;
+    const totalIssues = issues.length;
+
+    // Determine risk level based on issue severity distribution
+    let riskLevel: string;
+    if (criticalIssues >= 3 || (criticalIssues >= 1 && highIssues >= 3)) {
+      riskLevel = 'critical';
+    } else if (highIssues >= 3 || criticalIssues >= 1 || (highIssues >= 1 && mediumIssues >= 5)) {
+      riskLevel = 'high';
+    } else if (mediumIssues >= 3 || highIssues >= 1) {
+      riskLevel = 'medium';
+    } else {
+      riskLevel = 'low';
+    }
+
+    const fallbackSummary = {
+      overallScore: latestCheck.overall_score,
+      riskLevel,
+      totalIssues,
+      criticalIssues,
+      highIssues,
+      mediumIssues,
+      lowIssues,
+      openIssues,
+      resolvedIssues,
+      lastAnalyzedAt: latestCheck.completed_at || latestCheck.created_at,
+      lastCheckId: latestCheck.id,
     };
+
+    this.env.logger.info('📊 Calculated fallback summary from check', {
+      checkId: latestCheck.id,
+      totalIssues,
+      riskLevel,
+    });
+
+    return fallbackSummary;
   }
 }

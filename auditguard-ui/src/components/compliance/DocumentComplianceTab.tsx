@@ -76,6 +76,12 @@ export function DocumentComplianceTab({
       );
 
       if (!response.ok) {
+        if (response.status === 404) {
+          // No compliance checks have been run yet - this is not an error
+          setSummary(null);
+          setLoading(false);
+          return;
+        }
         throw new Error('Failed to fetch compliance summary');
       }
 
@@ -137,10 +143,31 @@ export function DocumentComplianceTab({
         setSelectedCheckId(data.checkId);
       }
 
-      // Refresh summary after a short delay
-      setTimeout(() => {
-        fetchSummary();
-      }, 2000);
+      // Poll for summary with exponential backoff (max 5 attempts over ~10 seconds)
+      const pollSummary = async (attempt: number = 1): Promise<void> => {
+        if (attempt > 5) {
+          console.warn('Max polling attempts reached for compliance summary');
+          return;
+        }
+
+        const delay = Math.min(1000 * Math.pow(1.5, attempt - 1), 3000); // 1s, 1.5s, 2.25s, 3s, 3s
+        await new Promise((resolve) => setTimeout(resolve, delay));
+
+        const summaryResponse = await fetch(
+          `/api/workspaces/${workspaceId}/documents/${documentId}/compliance/summary`,
+          { credentials: 'include' }
+        );
+
+        if (summaryResponse.ok) {
+          const summaryData = await summaryResponse.json();
+          setSummary(summaryData);
+        } else if (summaryResponse.status === 404 && attempt < 5) {
+          // Cache not ready yet, try again
+          await pollSummary(attempt + 1);
+        }
+      };
+
+      await pollSummary();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to run check');
     } finally {
