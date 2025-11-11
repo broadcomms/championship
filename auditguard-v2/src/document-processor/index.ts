@@ -442,6 +442,34 @@ export default class extends Each<Body, Env> {
         smartBucketKey,
       });
 
+      // CRITICAL FIX: Update storage_key in database IMMEDIATELY after SmartBucket upload
+      // This ensures compliance checks can access the document content
+      await (this.env.AUDITGUARD_DB as any).prepare(
+        `UPDATE documents
+         SET storage_key = ?,
+             extracted_text_key = ?,
+             extraction_status = 'completed',
+             word_count = ?,
+             page_count = ?,
+             character_count = ?,
+             updated_at = ?
+         WHERE id = ?`
+      ).bind(
+        smartBucketKey,
+        smartBucketKey,
+        wordCount,
+        pageCount,
+        characterCount,
+        Date.now(),
+        documentId
+      ).run();
+
+      this.env.logger.info('✅ storage_key updated in database', {
+        documentId,
+        smartBucketKey,
+        note: 'Document is now accessible for compliance checks',
+      });
+
       // STEP 5: AI ENRICHMENT - Generate title, description, category, and detect compliance framework
       // ⚠️ CRITICAL FIX: This MUST run BEFORE marking status as 'completed'
       // Otherwise UI polling stops before enrichment data is available
