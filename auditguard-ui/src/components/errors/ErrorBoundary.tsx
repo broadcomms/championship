@@ -63,23 +63,29 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.logErrorToService(error, errorInfo);
   }
 
-  logErrorToService(error: Error, errorInfo: ErrorInfo): void {
-    // TODO: Integrate with analytics service
-    // For now, just log to console
+  async logErrorToService(error: Error, errorInfo: ErrorInfo): Promise<void> {
     try {
-      const errorLog = {
-        message: error.message,
-        stack: error.stack,
-        componentStack: errorInfo.componentStack,
-        timestamp: new Date().toISOString(),
-        userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
-        url: typeof window !== 'undefined' ? window.location.href : 'unknown',
-      };
-
-      // Could send to backend endpoint: /api/errors/log
-      console.warn('Error logged:', errorLog);
-    } catch (loggingError) {
-      console.error('Failed to log error:', loggingError);
+      // Send error to logging endpoint
+      await fetch('/api/errors/log', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: error.message,
+          stack: error.stack,
+          componentStack: errorInfo.componentStack,
+          context: {
+            errorName: error.name,
+            url: typeof window !== 'undefined' ? window.location.href : undefined,
+          },
+          timestamp: Date.now(),
+          level: 'error',
+        }),
+      });
+    } catch (logError) {
+      // Don't throw if logging fails - prevents infinite error loops
+      console.error('Failed to log error to service:', logError);
     }
   }
 

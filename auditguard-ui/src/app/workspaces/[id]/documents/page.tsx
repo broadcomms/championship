@@ -10,6 +10,9 @@ import { useDocuments } from '@/hooks/useDocuments';
 import { DocumentCategory } from '@/types';
 import { FileText } from 'lucide-react';
 import { preloadOnHover } from '@/utils/preload';
+import { ErrorDisplay, SectionErrorBoundary } from '@/components/errors';
+import { retryFetch } from '@/utils/retry';
+import { NetworkError, toAppError } from '@/utils/errors';
 
 // Lazy load heavy components - only load when needed
 const DocumentUploadFactory = () => import('@/components/documents/DocumentUpload').then(m => ({ default: m.DocumentUpload }));
@@ -174,15 +177,35 @@ export default function DocumentsPage() {
 
   const handleReprocess = async (documentId: string) => {
     try {
-      const response = await fetch(
+      const response = await retryFetch(
         `/api/workspaces/${workspaceId}/documents/${documentId}/process`,
-        { method: 'POST', credentials: 'include' }
+        { method: 'POST', credentials: 'include' },
+        {
+          maxAttempts: 3,
+          initialDelay: 1000,
+          onRetry: (error, attempt, delay) => {
+            console.warn(`Retrying reprocess (attempt ${attempt}, delay ${delay}ms):`, error);
+          },
+        }
       );
-      if (response.ok) {
-        refetch();
+      
+      if (!response.ok) {
+        throw new NetworkError(
+          `Failed to reprocess document: ${response.statusText}`,
+          { operation: 'reprocessDocument', workspaceId, documentId },
+          response.status
+        );
       }
+      
+      refetch();
     } catch (error) {
       console.error('Failed to reprocess:', error);
+      const appError = toAppError(error, {
+        operation: 'reprocessDocument',
+        workspaceId,
+        documentId,
+      });
+      alert(appError.getUserMessage());
     }
   };
 
@@ -198,6 +221,19 @@ export default function DocumentsPage() {
             <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
             <p className="mt-4 text-sm text-gray-600">Loading documents...</p>
           </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AppLayout>
+        <div className="mx-auto max-w-7xl px-4 py-8">
+          <ErrorDisplay
+            error={new Error(error)}
+            onRetry={() => refetch()}
+          />
         </div>
       </AppLayout>
     );
@@ -318,18 +354,19 @@ export default function DocumentsPage() {
             </div>
 
             {/* Documents Table */}
-        <div className="rounded-lg bg-white shadow overflow-hidden">
-          {filteredAndSortedDocuments.length === 0 ? (
-            <div className="p-12 text-center">
-              <div className="text-4xl">📄</div>
-              <p className="mt-4 text-sm text-gray-600">
-                {categoryFilter !== 'all' ? 'No documents in this category' : 'No documents yet'}
-              </p>
-              <p className="mt-1 text-xs text-gray-500">
-                {!showUpload && 'Click "Upload Document" to get started'}
-              </p>
-            </div>
-          ) : (
+            <SectionErrorBoundary>
+              <div className="rounded-lg bg-white shadow overflow-hidden">
+                {filteredAndSortedDocuments.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <div className="text-4xl">📄</div>
+                    <p className="mt-4 text-sm text-gray-600">
+                      {categoryFilter !== 'all' ? 'No documents in this category' : 'No documents yet'}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {!showUpload && 'Click "Upload Document" to get started'}
+                    </p>
+                  </div>
+                ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -394,7 +431,8 @@ export default function DocumentsPage() {
               </table>
             </div>
           )}
-        </div>
+              </div>
+            </SectionErrorBoundary>
           </>
         )}
 

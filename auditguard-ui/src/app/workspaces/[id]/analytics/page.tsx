@@ -8,6 +8,9 @@ import { ComplianceReportsList } from '@/components/reporting/ComplianceReportsL
 import { ComplianceReportDetailModal } from '@/components/reporting/ComplianceReportDetailModal';
 import BenchmarkComparison from '@/components/analytics/BenchmarkComparison';
 import { FileText, TrendingUp, BarChart3 } from 'lucide-react';
+import { ErrorDisplay, SectionErrorBoundary } from '@/components/errors';
+import { retryFetch } from '@/utils/retry';
+import { NetworkError, toAppError } from '@/utils/errors';
 
 interface ReportStats {
   totalReports: number;
@@ -26,16 +29,32 @@ export default function AnalyticsPage() {
     trend: '-',
   });
   const [refreshKey, setRefreshKey] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch report statistics
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch(`/api/workspaces/${workspaceId}/reports`, {
-          credentials: 'include',
-        });
+        setError(null);
+        const response = await retryFetch(
+          `/api/workspaces/${workspaceId}/reports`,
+          { credentials: 'include' },
+          {
+            maxAttempts: 3,
+            initialDelay: 1000,
+            onRetry: (error, attempt, delay) => {
+              console.warn(`Retrying stats fetch (attempt ${attempt}, delay ${delay}ms):`, error);
+            },
+          }
+        );
 
-        if (!response.ok) return;
+        if (!response.ok) {
+          throw new NetworkError(
+            `Failed to load reports: ${response.statusText}`,
+            { operation: 'fetchReportStats', workspaceId },
+            response.status
+          );
+        }
 
         const reports = await response.json();
         
@@ -71,6 +90,11 @@ export default function AnalyticsPage() {
         setStats({ totalReports, avgScore, trend });
       } catch (error) {
         console.error('Failed to fetch report stats:', error);
+        const appError = toAppError(error, {
+          operation: 'fetchReportStats',
+          workspaceId,
+        });
+        setError(appError.getUserMessage());
       }
     };
 
@@ -113,8 +137,17 @@ export default function AnalyticsPage() {
             </button>
           </div>
 
+          {/* Error Display */}
+          {error && (
+            <ErrorDisplay
+              error={new Error(error)}
+              onRetry={() => setRefreshKey(prev => prev + 1)}
+            />
+          )}
+
           {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <SectionErrorBoundary>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2 bg-blue-100 rounded-lg">
@@ -154,9 +187,11 @@ export default function AnalyticsPage() {
               <p className="text-xs text-gray-500 mt-1">Last 30 days</p>
             </div>
           </div>
+          </SectionErrorBoundary>
 
           {/* Industry Benchmark Comparison - PHASE 3.1.2 */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <SectionErrorBoundary>
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-purple-100 rounded-lg">
                 <BarChart3 className="w-5 h-5 text-purple-600" />
@@ -172,14 +207,17 @@ export default function AnalyticsPage() {
               size="medium"
             />
           </div>
+          </SectionErrorBoundary>
 
           {/* Reports List */}
-          <ComplianceReportsList
-            key={refreshKey}
-            workspaceId={workspaceId}
-            onReportClick={handleReportClick}
-            refreshTrigger={refreshKey}
-          />
+          <SectionErrorBoundary>
+            <ComplianceReportsList
+              key={refreshKey}
+              workspaceId={workspaceId}
+              onReportClick={handleReportClick}
+              refreshTrigger={refreshKey}
+            />
+          </SectionErrorBoundary>
 
           {/* Report Generator Modal */}
           <ReportGeneratorModal
