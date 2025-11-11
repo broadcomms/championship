@@ -11,7 +11,8 @@ import {
   Calendar,
   FileText,
   Shield,
-  Activity
+  Activity,
+  Trash2
 } from 'lucide-react';
 
 interface ComplianceReportDetailModalProps {
@@ -19,6 +20,7 @@ interface ComplianceReportDetailModalProps {
   reportId: string | null;
   isOpen: boolean;
   onClose: () => void;
+  onDelete?: () => void;
 }
 
 export function ComplianceReportDetailModal({
@@ -26,11 +28,14 @@ export function ComplianceReportDetailModal({
   reportId,
   isOpen,
   onClose,
+  onDelete,
 }: ComplianceReportDetailModalProps) {
   const [report, setReport] = useState<ComplianceReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (isOpen && reportId) {
@@ -89,6 +94,32 @@ export function ComplianceReportDetailModal({
       alert(err instanceof Error ? err.message : 'Export failed');
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!reportId) return;
+
+    setDeleting(true);
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/reports/${reportId}`,
+        { method: 'DELETE' }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to delete report');
+      }
+
+      // Close the modal and notify parent
+      setShowDeleteConfirm(false);
+      onClose();
+      onDelete?.();
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert(err instanceof Error ? err.message : 'Failed to delete report');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -210,6 +241,15 @@ export function ComplianceReportDetailModal({
                   >
                     <Download className="w-4 h-4" />
                     PDF
+                  </button>
+                  <div className="flex-1"></div>
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={deleting}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-white rounded-md text-sm disabled:opacity-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Report
                   </button>
                 </div>
               </div>
@@ -410,6 +450,49 @@ export function ComplianceReportDetailModal({
           ) : null}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[60] overflow-y-auto" role="dialog" aria-modal="true">
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div 
+              className="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity"
+              onClick={() => setShowDeleteConfirm(false)}
+            ></div>
+            <div className="relative bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Delete Compliance Report
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Are you sure you want to delete &quot;{report?.name}&quot;? This action cannot be undone.
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {deleting ? 'Deleting...' : 'Delete Report'}
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      disabled={deleting}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

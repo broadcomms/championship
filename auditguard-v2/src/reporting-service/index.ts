@@ -501,6 +501,74 @@ export default class extends Service<Env> {
   }
 
   /**
+   * Delete a saved report
+   */
+  async deleteReport(
+    workspaceId: string,
+    userId: string,
+    reportId: string
+  ): Promise<{ success: boolean }> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    // Get report to check if user created it or has admin role
+    const report = await db
+      .selectFrom('compliance_reports')
+      .select(['created_by'])
+      .where('workspace_id', '=', workspaceId)
+      .where('id', '=', reportId)
+      .executeTakeFirst();
+
+    if (!report) {
+      throw new Error('Report not found');
+    }
+
+    // Check if user is creator or has admin role
+    const isCreator = report.created_by === userId;
+    
+    const roleHierarchy: Record<string, number> = {
+      owner: 4,
+      admin: 3,
+      member: 2,
+      viewer: 1,
+    };
+
+    const userRoleLevel = roleHierarchy[membership.role] ?? 0;
+    const adminRoleLevel = roleHierarchy['admin'] ?? 3;
+    const isAdminOrOwner = userRoleLevel >= adminRoleLevel;
+
+    if (!isCreator && !isAdminOrOwner) {
+      throw new Error('Access denied: Requires report creator, admin, or owner role');
+    }
+
+    // Delete the report
+    await db
+      .deleteFrom('compliance_reports')
+      .where('workspace_id', '=', workspaceId)
+      .where('id', '=', reportId)
+      .execute();
+
+    this.env.logger.info('Report deleted successfully', {
+      workspaceId,
+      reportId,
+      deletedBy: userId,
+    });
+
+    return { success: true };
+  }
+
+  /**
    * Generate AI-powered key findings
    */
   private async generateAIKeyFindings(dashboard: any, maturity: any, topRisks: any[]): Promise<string[]> {

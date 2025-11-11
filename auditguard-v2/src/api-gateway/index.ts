@@ -2184,6 +2184,27 @@ export default class extends Service<Env> {
         });
       }
 
+      // DELETE /api/workspaces/:id/reports/:reportId - Delete a saved report
+      const deleteSingleReportMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/reports\/([^\/]+)$/);
+      if (
+        deleteSingleReportMatch &&
+        deleteSingleReportMatch[1] &&
+        deleteSingleReportMatch[2] &&
+        request.method === 'DELETE' &&
+        !deleteSingleReportMatch[2].startsWith('executive') &&
+        !deleteSingleReportMatch[2].startsWith('export')
+      ) {
+        const workspaceId = deleteSingleReportMatch[1];
+        const reportId = deleteSingleReportMatch[2];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.REPORTING_SERVICE.deleteReport(workspaceId, user.userId, reportId);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/workspaces/:id/issues
       const workspaceIssuesMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues$/);
       if (workspaceIssuesMatch && workspaceIssuesMatch[1] && request.method === 'GET') {

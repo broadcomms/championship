@@ -38,3 +38,40 @@ export async function GET(
     );
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { workspaceId: string; reportId: string } }
+) {
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('session');
+
+    const response = await fetch(
+      `${BACKEND_URL}/api/workspaces/${params.workspaceId}/reports/${params.reportId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionCookie && { Cookie: `session=${sessionCookie.value}` }),
+        },
+      }
+    );
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: 'Failed to delete report' },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error deleting report:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

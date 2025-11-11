@@ -7,16 +7,17 @@ import { FileText, Calendar, TrendingUp, AlertCircle, Clock } from 'lucide-react
 interface ComplianceReportsListProps {
   workspaceId: string;
   onReportClick: (reportId: string) => void;
+  refreshTrigger?: number;
 }
 
-export function ComplianceReportsList({ workspaceId, onReportClick }: ComplianceReportsListProps) {
+export function ComplianceReportsList({ workspaceId, onReportClick, refreshTrigger }: ComplianceReportsListProps) {
   const [reports, setReports] = useState<ComplianceReportListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchReports();
-  }, [workspaceId]);
+  }, [workspaceId, refreshTrigger]);
 
   const fetchReports = async () => {
     setLoading(true);

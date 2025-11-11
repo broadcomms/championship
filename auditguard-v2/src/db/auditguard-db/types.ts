@@ -123,6 +123,22 @@ export type document_chunks = {
     created_at: number;
 };
 
+export type document_processing_steps = {
+    id: string;
+    document_id: string;
+    step_name: string;
+    step_order: number;
+    status: string;
+    started_at: number | null;
+    completed_at: number | null;
+    progress_current: number;
+    progress_total: number;
+    meta_info: string | null;
+    error_message: string | null;
+    created_at: number;
+    updated_at: number;
+};
+
 export type workspace_scores = {
     id: string;
     workspace_id: string;
@@ -313,6 +329,7 @@ export type DB = {
     compliance_issues: compliance_issues;
     compliance_reports: compliance_reports;
     document_chunks: document_chunks;
+    document_processing_steps: document_processing_steps;
     workspace_scores: workspace_scores;
     framework_scores: framework_scores;
     conversation_sessions: conversation_sessions;

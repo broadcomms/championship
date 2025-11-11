@@ -623,26 +623,35 @@ export default class extends Service<Env> {
       throw new Error('Access denied: Requires document uploader, admin, or owner role');
     }
 
-    this.env.logger.info('Deleting document with cascade', {
+    this.env.logger.info('Starting document deletion with cascade', {
       documentId,
       workspaceId,
       storageKey: document.storage_key,
     });
 
-    // CRITICAL FIX: Track deletion status across all systems
+    // Track deletion status and warnings
     const deletionStatus = {
-      postgresql: false,
-      smartbucket: false,
-      d1Database: false,
+      statusMarked: false,
+      complianceIssuesDeleted: false,
+      complianceChecksDeleted: false,
+      documentChunksDeleted: false,
+      processingStepsDeleted: false,
+      complianceCacheDeleted: false,
+      documentDeleted: false,
+      storageDeleted: false,
     };
-    const deletionErrors: string[] = [];
+    const deletionWarnings: string[] = [];
 
     try {
-      // SECURITY FIX: Use database transaction for atomic D1 deletion
-      // This ensures all D1 operations succeed or fail together
-      await db.transaction().execute(async (trx) => {
-        // Step 1: Mark document as deleting (prevents concurrent operations)
-        await trx
+      // STEP 1: Enable foreign key constraints (critical for CASCADE to work)
+      // D1 disables foreign keys by default, so we must enable them
+      await (this.env.AUDITGUARD_DB as any).prepare('PRAGMA foreign_keys = ON').run();
+      this.env.logger.info('Foreign key constraints enabled for deletion', { documentId });
+
+      // STEP 2: Mark document as deleting (prevents concurrent operations)
+      // This is a soft lock - if deletion fails, manual cleanup may be needed
+      try {
+        await db
           .updateTable('documents')
           .set({
             processing_status: 'deleting' as any,
@@ -652,54 +661,156 @@ export default class extends Service<Env> {
           .where('workspace_id', '=', workspaceId)
           .execute();
 
+        deletionStatus.statusMarked = true;
         this.env.logger.info('Document marked as deleting', { documentId });
+      } catch (error) {
+        const msg = `Failed to mark document as deleting: ${error instanceof Error ? error.message : String(error)}`;
+        deletionWarnings.push(msg);
+        this.env.logger.warn(msg, { documentId, error });
+        // Continue - not critical, we can still delete
+      }
 
-        // Step 2: Delete from D1 database (CRITICAL - CASCADE handles related tables)
-        // This MUST happen BEFORE SmartBucket deletion to ensure consistency
-        // If this fails, transaction rolls back and SmartBucket remains untouched
-        await trx
-          .deleteFrom('documents')
-          .where('id', '=', documentId)
+      // STEP 3: Manual cascade deletion in reverse dependency order
+      // We do this explicitly because D1's CASCADE behavior can be unreliable
+      // Order matters: delete children before parents to avoid FK violations
+
+      // 3a. Delete compliance issues (has FK to compliance_checks and document_id)
+      try {
+        const issuesResult = await db
+          .deleteFrom('compliance_issues')
+          .where('document_id', '=', documentId)
+          .executeTakeFirst();
+
+        deletionStatus.complianceIssuesDeleted = true;
+        const deletedCount = Number(issuesResult.numDeletedRows) || 0;
+        this.env.logger.info('Deleted compliance issues', { documentId, count: deletedCount });
+      } catch (error) {
+        const msg = `Failed to delete compliance issues: ${error instanceof Error ? error.message : String(error)}`;
+        deletionWarnings.push(msg);
+        this.env.logger.warn(msg, { documentId, error });
+      }
+
+      // 3b. Delete compliance checks (parent of issues, child of document)
+      try {
+        const checksResult = await db
+          .deleteFrom('compliance_checks')
+          .where('document_id', '=', documentId)
           .where('workspace_id', '=', workspaceId)
-          .execute();
+          .executeTakeFirst();
 
-        deletionStatus.d1Database = true;
+        deletionStatus.complianceChecksDeleted = true;
+        const deletedCount = Number(checksResult.numDeletedRows) || 0;
+        this.env.logger.info('Deleted compliance checks', { documentId, count: deletedCount });
+      } catch (error) {
+        const msg = `Failed to delete compliance checks: ${error instanceof Error ? error.message : String(error)}`;
+        deletionWarnings.push(msg);
+        this.env.logger.warn(msg, { documentId, error });
+      }
 
-        this.env.logger.info('Document deleted successfully from D1 (with CASCADE)', {
-          documentId,
-          workspaceId,
-        });
+      // 3c. Delete document chunks
+      try {
+        const chunksResult = await db
+          .deleteFrom('document_chunks')
+          .where('document_id', '=', documentId)
+          .where('workspace_id', '=', workspaceId)
+          .executeTakeFirst();
+
+        deletionStatus.documentChunksDeleted = true;
+        const deletedCount = Number(chunksResult.numDeletedRows) || 0;
+        this.env.logger.info('Deleted document chunks', { documentId, count: deletedCount });
+      } catch (error) {
+        const msg = `Failed to delete document chunks: ${error instanceof Error ? error.message : String(error)}`;
+        deletionWarnings.push(msg);
+        this.env.logger.warn(msg, { documentId, error });
+      }
+
+      // 3d. Delete processing steps
+      try {
+        const stepsResult = await db
+          .deleteFrom('document_processing_steps')
+          .where('document_id', '=', documentId)
+          .executeTakeFirst();
+
+        deletionStatus.processingStepsDeleted = true;
+        const deletedCount = Number(stepsResult.numDeletedRows) || 0;
+        this.env.logger.info('Deleted processing steps', { documentId, count: deletedCount });
+      } catch (error) {
+        const msg = `Failed to delete processing steps: ${error instanceof Error ? error.message : String(error)}`;
+        deletionWarnings.push(msg);
+        this.env.logger.warn(msg, { documentId, error });
+      }
+
+      // 3e. Delete compliance cache
+      try {
+        const cacheResult = await db
+          .deleteFrom('document_compliance_cache')
+          .where('document_id', '=', documentId)
+          .where('workspace_id', '=', workspaceId)
+          .executeTakeFirst();
+
+        deletionStatus.complianceCacheDeleted = true;
+        const deletedCount = Number(cacheResult.numDeletedRows) || 0;
+        this.env.logger.info('Deleted compliance cache', { documentId, count: deletedCount });
+      } catch (error) {
+        const msg = `Failed to delete compliance cache: ${error instanceof Error ? error.message : String(error)}`;
+        deletionWarnings.push(msg);
+        this.env.logger.warn(msg, { documentId, error });
+      }
+
+      // STEP 4: Delete the document itself (parent record)
+      // All child records should now be deleted, so this should succeed
+      const documentResult = await db
+        .deleteFrom('documents')
+        .where('id', '=', documentId)
+        .where('workspace_id', '=', workspaceId)
+        .executeTakeFirst();
+
+      deletionStatus.documentDeleted = true;
+      this.env.logger.info('Document record deleted from database', {
+        documentId,
+        workspaceId,
+        rowsDeleted: Number(documentResult.numDeletedRows) || 0,
       });
 
-      // Step 3: Delete from SmartBucket storage (best effort, after D1 commit)
-      // This happens AFTER D1 transaction commits successfully
-      // If SmartBucket deletion fails, D1 is already clean (acceptable)
+      // STEP 5: Delete from SmartBucket storage (best effort)
+      // Storage deletion is separate from DB - if it fails, log warning but don't fail request
       try {
         await this.env.DOCUMENTS_BUCKET.delete(document.storage_key);
-        deletionStatus.smartbucket = true;
+        deletionStatus.storageDeleted = true;
         this.env.logger.info('Deleted document from SmartBucket storage', {
           documentId,
           storageKey: document.storage_key,
         });
       } catch (error) {
-        const errorMsg = `SmartBucket deletion failed (D1 already clean): ${error instanceof Error ? error.message : String(error)}`;
-        deletionErrors.push(errorMsg);
+        const msg = `SmartBucket deletion failed (DB already clean): ${error instanceof Error ? error.message : String(error)}`;
+        deletionWarnings.push(msg);
         this.env.logger.error('Failed to delete from SmartBucket storage', {
           documentId,
           storageKey: document.storage_key,
           error: error instanceof Error ? error.message : String(error),
-          note: 'Document already deleted from D1 - orphaned file in storage',
+          note: 'Document deleted from DB - orphaned file in storage (safe to ignore)',
         });
       }
 
+      // STEP 6: Recalculate workspace scores after document deletion
+      // This ensures analytics reflect the current state
+      try {
+        await this.env.ANALYTICS_SERVICE.calculateWorkspaceScore(workspaceId, userId);
+        this.env.logger.info('Recalculated workspace scores after deletion', { documentId, workspaceId });
+      } catch (error) {
+        const msg = `Failed to recalculate workspace scores: ${error instanceof Error ? error.message : String(error)}`;
+        deletionWarnings.push(msg);
+        this.env.logger.warn(msg, { documentId, workspaceId, error });
+      }
+
       // Log final status
-      if (deletionErrors.length > 0) {
+      if (deletionWarnings.length > 0) {
         this.env.logger.warn('Document deleted with warnings', {
           documentId,
           workspaceId,
           deletionStatus,
-          warnings: deletionErrors,
-          note: 'Manual cleanup may be required for failed systems',
+          warnings: deletionWarnings,
+          note: 'Document successfully deleted from database. Some cleanup operations had warnings.',
         });
       } else {
         this.env.logger.info('Document deleted successfully from all systems', {
@@ -711,17 +822,19 @@ export default class extends Service<Env> {
 
       return {
         success: true,
-        warnings: deletionErrors.length > 0 ? deletionErrors : undefined,
+        warnings: deletionWarnings.length > 0 ? deletionWarnings : undefined,
       } as any;
 
     } catch (error) {
+      // Deletion failed - log comprehensive error information
       this.env.logger.error('Document deletion failed', {
         documentId,
         workspaceId,
         deletionStatus,
-        errors: deletionErrors,
+        warnings: deletionWarnings,
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
+        note: 'Document may be in partial deletion state. Manual cleanup may be required.',
       });
 
       throw new Error(`Document deletion failed: ${error instanceof Error ? error.message : String(error)}`);

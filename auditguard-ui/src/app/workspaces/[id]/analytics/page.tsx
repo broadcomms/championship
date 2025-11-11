@@ -86,6 +86,11 @@ export default function AnalyticsPage() {
     setRefreshKey(prev => prev + 1);
   };
 
+  const handleReportDeleted = () => {
+    // Trigger refresh when report is deleted
+    setRefreshKey(prev => prev + 1);
+  };
+
   return (
     <AppLayout>
       <div className="p-6">
@@ -154,6 +159,7 @@ export default function AnalyticsPage() {
             key={refreshKey}
             workspaceId={workspaceId}
             onReportClick={handleReportClick}
+            refreshTrigger={refreshKey}
           />
 
           {/* Report Generator Modal */}
@@ -169,6 +175,7 @@ export default function AnalyticsPage() {
             reportId={selectedReportId}
             isOpen={selectedReportId !== null}
             onClose={() => setSelectedReportId(null)}
+            onDelete={handleReportDeleted}
           />
         </div>
       </div>
