@@ -1,5 +1,6 @@
-import { retryWithBackoff, retryFetch } from '../../utils/retry'
+import { retryWithBackoff, retryFetch, createRetryable, isRetryableError, useRetry } from '../../utils/retry'
 import { NetworkError, ValidationError } from '../../utils/errors'
+import { renderHook, waitFor, act } from '@testing-library/react'
 
 describe('retryWithBackoff', () => {
   beforeEach(() => {
@@ -213,3 +214,207 @@ describe('retryFetch', () => {
     expect(global.fetch).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('createRetryable', () => {
+  it('should create a retryable function', async () => {
+    const mockFn = jest.fn()
+      .mockRejectedValueOnce(new Error('Temporary error'))
+      .mockResolvedValueOnce('success')
+
+    const retryableFn = createRetryable(mockFn, { initialDelay: 10 })
+    
+    const result = await retryableFn()
+
+    expect(result).toBe('success')
+    expect(mockFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('should pass arguments to the wrapped function', async () => {
+    const mockFn = jest.fn().mockResolvedValue('result')
+    const retryableFn = createRetryable(
+      async (arg1: string, arg2: number) => mockFn(arg1, arg2),
+      { initialDelay: 10 }
+    )
+
+    await retryableFn('test', 123)
+
+    expect(mockFn).toHaveBeenCalledWith('test', 123)
+  })
+
+  it('should work with multiple arguments', async () => {
+    const mockFn = jest.fn().mockResolvedValue('done')
+    const retryableFn = createRetryable(
+      async (a: string, b: number, c: boolean) => mockFn(a, b, c),
+      { maxAttempts: 3, initialDelay: 10 }
+    )
+
+    await retryableFn('hello', 42, true)
+
+    expect(mockFn).toHaveBeenCalledWith('hello', 42, true)
+  })
+})
+
+describe('isRetryableError', () => {
+  it('should identify network fetch errors as retryable', () => {
+    const error = new TypeError('Failed to fetch')
+    expect(isRetryableError(error)).toBe(true)
+  })
+
+  it('should identify timeout errors as retryable', () => {
+    const error = new Error('Request timeout')
+    expect(isRetryableError(error)).toBe(true)
+  })
+
+  it('should identify AbortError as retryable', () => {
+    const error = new Error('Request aborted')
+    error.name = 'AbortError'
+    expect(isRetryableError(error)).toBe(true)
+  })
+
+  it('should identify 5xx server errors as retryable', () => {
+    const error = new Error('HTTP 500: Internal Server Error')
+    expect(isRetryableError(error)).toBe(true)
+  })
+
+  it('should identify 503 Service Unavailable as retryable', () => {
+    const error = new Error('HTTP 503: Service Unavailable')
+    expect(isRetryableError(error)).toBe(true)
+  })
+
+  it('should identify rate limit errors (429) as retryable', () => {
+    const error = new Error('HTTP 429: Too Many Requests')
+    expect(isRetryableError(error)).toBe(true)
+  })
+
+  it('should not identify 4xx client errors as retryable', () => {
+    const error = new Error('HTTP 400: Bad Request')
+    expect(isRetryableError(error)).toBe(false)
+  })
+
+  it('should not identify 404 errors as retryable', () => {
+    const error = new Error('HTTP 404: Not Found')
+    expect(isRetryableError(error)).toBe(false)
+  })
+
+  it('should not identify validation errors as retryable', () => {
+    const error = new Error('Validation failed')
+    expect(isRetryableError(error)).toBe(false)
+  })
+
+  it('should not identify generic errors as retryable', () => {
+    const error = new Error('Something went wrong')
+    expect(isRetryableError(error)).toBe(false)
+  })
+})
+
+describe('useRetry', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('should initialize with loading false and no error', () => {
+    const mockFn = jest.fn().mockResolvedValue('success')
+    const { result } = renderHook(() => useRetry(mockFn))
+
+    expect(result.current.loading).toBe(false)
+    expect(result.current.error).toBe(null)
+    expect(result.current.data).toBe(null)
+  })
+
+  it('should set loading to true during execution', async () => {
+    const mockFn = jest.fn().mockImplementation(
+      () => new Promise(resolve => setTimeout(() => resolve('success'), 100))
+    )
+    const { result } = renderHook(() => useRetry(mockFn))
+
+    act(() => {
+      result.current.execute()
+    })
+
+    expect(result.current.loading).toBe(true)
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+  })
+
+  it('should set data on successful execution', async () => {
+    const mockFn = jest.fn().mockResolvedValue('success')
+    const { result } = renderHook(() => useRetry(mockFn, { initialDelay: 10 }))
+
+    await act(async () => {
+      await result.current.execute()
+    })
+
+    expect(result.current.data).toBe('success')
+    expect(result.current.error).toBe(null)
+    expect(result.current.loading).toBe(false)
+  })
+
+  it('should set error on failed execution', async () => {
+    const mockError = new Error('Test error')
+    const mockFn = jest.fn().mockRejectedValue(mockError)
+    const { result } = renderHook(() => useRetry(mockFn, { maxAttempts: 1, initialDelay: 10 }))
+
+    await act(async () => {
+      try {
+        await result.current.execute()
+      } catch (err) {
+        // Expected to throw
+      }
+    })
+
+    expect(result.current.error).toEqual(mockError)
+    expect(result.current.data).toBe(null)
+    expect(result.current.loading).toBe(false)
+  })
+
+  it('should retry on error', async () => {
+    const mockFn = jest.fn()
+      .mockRejectedValueOnce(new Error('First attempt'))
+      .mockResolvedValueOnce('success')
+
+    const { result } = renderHook(() => useRetry(mockFn, { initialDelay: 10 }))
+
+    await act(async () => {
+      await result.current.execute()
+    })
+
+    expect(mockFn).toHaveBeenCalledTimes(2)
+    expect(result.current.data).toBe('success')
+  })
+
+  it('should have a retry function that executes again', async () => {
+    const mockFn = jest.fn().mockResolvedValue('success')
+    const { result } = renderHook(() => useRetry(mockFn, { initialDelay: 10 }))
+
+    await act(async () => {
+      await result.current.execute()
+    })
+
+    expect(mockFn).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await result.current.retry()
+    })
+
+    expect(mockFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('should convert non-Error objects to Error instances', async () => {
+    const mockFn = jest.fn().mockRejectedValue('string error')
+    const { result } = renderHook(() => useRetry(mockFn, { maxAttempts: 1, initialDelay: 10 }))
+
+    await act(async () => {
+      try {
+        await result.current.execute()
+      } catch (err) {
+        // Expected to throw
+      }
+    })
+
+    expect(result.current.error).toBeInstanceOf(Error)
+    expect(result.current.error?.message).toBe('string error')
+  })
+})
+
