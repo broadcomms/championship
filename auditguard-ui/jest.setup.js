@@ -1,10 +1,26 @@
 // Learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom'
 
-// Polyfill Response for tests
+// Polyfill Request and Response for tests
 if (typeof global.Response === 'undefined') {
-  const { Response } = require('node-fetch')
+  const { Response, Request, Headers } = require('node-fetch')
+  
+  // Add Response.json() static method (not available in node-fetch@2)
+  if (!Response.json) {
+    Response.json = (data, init) => {
+      return new Response(JSON.stringify(data), {
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          ...init?.headers,
+        },
+      })
+    }
+  }
+  
   global.Response = Response
+  global.Request = Request
+  global.Headers = Headers
 }
 
 // Mock Next.js router
