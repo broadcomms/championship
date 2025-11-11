@@ -1,10 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { ComplianceIssuesList } from '@/components/compliance/ComplianceIssuesList';
-import { IssueDetailPanel } from '@/components/compliance/IssueDetailPanel';
 import { ComplianceScoreGauge } from '@/components/compliance/ComplianceScoreGauge';
 import type {
   ComplianceCheckListItem,
@@ -14,6 +12,10 @@ import type {
   ComplianceFramework,
 } from '@/types';
 import { IssueStatus } from '@/types/compliance';
+
+// Lazy load heavy components
+const ComplianceIssuesList = lazy(() => import('@/components/compliance/ComplianceIssuesList').then(m => ({ default: m.ComplianceIssuesList })));
+const IssueDetailPanel = lazy(() => import('@/components/compliance/IssueDetailPanel').then(m => ({ default: m.IssueDetailPanel })));
 
 /**
  * Compliance Dashboard Page
@@ -426,20 +428,33 @@ export default function CompliancePage(props: PageProps) {
         </div>
 
         {/* Compliance Issues Management */}
-        <ComplianceIssuesList
-          workspaceId={workspaceId}
-          onIssueClick={handleIssueClick}
-          onBulkAction={handleBulkAction}
-        />
+        <Suspense fallback={
+          <div className="bg-white rounded-lg border border-gray-200 p-8">
+            <div className="flex items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+              <p className="ml-3 text-sm text-gray-600">Loading issues...</p>
+            </div>
+          </div>
+        }>
+          <ComplianceIssuesList
+            workspaceId={workspaceId}
+            onIssueClick={handleIssueClick}
+            onBulkAction={handleBulkAction}
+          />
+        </Suspense>
 
         {/* Issue Detail Panel */}
-        <IssueDetailPanel
-          workspaceId={workspaceId}
-          issueId={selectedIssueId}
-          isOpen={selectedIssueId !== null}
-          onClose={() => setSelectedIssueId(null)}
-          onStatusChange={handleIssueStatusChange}
-        />
+        {selectedIssueId && (
+          <Suspense fallback={null}>
+            <IssueDetailPanel
+              workspaceId={workspaceId}
+              issueId={selectedIssueId}
+              isOpen={selectedIssueId !== null}
+              onClose={() => setSelectedIssueId(null)}
+              onStatusChange={handleIssueStatusChange}
+            />
+          </Suspense>
+        )}
       </div>
       </div>
     </AppLayout>

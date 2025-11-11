@@ -6,6 +6,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { ReportGeneratorModal } from '@/components/reporting';
 import { ComplianceReportsList } from '@/components/reporting/ComplianceReportsList';
 import { ComplianceReportDetailModal } from '@/components/reporting/ComplianceReportDetailModal';
+import BenchmarkComparison from '@/components/analytics/BenchmarkComparison';
 import { FileText, TrendingUp, BarChart3 } from 'lucide-react';
 
 interface ReportStats {
@@ -152,6 +153,24 @@ export default function AnalyticsPage() {
               </div>
               <p className="text-xs text-gray-500 mt-1">Last 30 days</p>
             </div>
+          </div>
+
+          {/* Industry Benchmark Comparison - PHASE 3.1.2 */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <BarChart3 className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Industry Benchmark</h2>
+                <p className="text-sm text-gray-500">Compare your compliance against industry standards</p>
+              </div>
+            </div>
+            <BenchmarkComparison 
+              workspaceId={workspaceId}
+              industry="general"
+              size="medium"
+            />
           </div>
 
           {/* Reports List */}

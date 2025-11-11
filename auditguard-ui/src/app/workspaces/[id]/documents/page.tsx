@@ -1,22 +1,104 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo, lazy, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/common/Button';
 import { CategoryBadge } from '@/components/documents/CategoryBadge';
 import { ProcessingIndicator } from '@/components/documents/ProcessingIndicator';
-import { DocumentUpload } from '@/components/documents/DocumentUpload';
-import { VectorSearch } from '@/components/documents/VectorSearch';
-import { ComponentErrorBoundary } from '@/components/common/ErrorBoundary';
-import { ReportGeneratorModal } from '@/components/reporting';
 import { useDocuments } from '@/hooks/useDocuments';
 import { DocumentCategory } from '@/types';
 import { FileText } from 'lucide-react';
+import { preloadOnHover } from '@/utils/preload';
+
+// Lazy load heavy components - only load when needed
+const DocumentUploadFactory = () => import('@/components/documents/DocumentUpload').then(m => ({ default: m.DocumentUpload }));
+const VectorSearchFactory = () => import('@/components/documents/VectorSearch').then(m => ({ default: m.VectorSearch }));
+const ReportGeneratorModalFactory = () => import('@/components/reporting').then(m => ({ default: m.ReportGeneratorModal }));
+
+const DocumentUpload = lazy(DocumentUploadFactory);
+const VectorSearch = lazy(VectorSearchFactory);
+const ReportGeneratorModal = lazy(ReportGeneratorModalFactory);
 
 type SortField = 'filename' | 'uploadedAt' | 'fileSize';
 type SortDirection = 'asc' | 'desc';
 type ViewMode = 'list' | 'search';
+
+// Memoized document row component to prevent unnecessary re-renders
+const DocumentRow = memo(({ 
+  document, 
+  workspaceId, 
+  onNavigate, 
+  onReprocess, 
+  formatFileSize, 
+  formatDate 
+}: any) => {
+  return (
+    <tr
+      className="cursor-pointer hover:bg-gray-50"
+      onClick={() => onNavigate(`/workspaces/${workspaceId}/documents/${document.id}`)}
+    >
+      <td className="px-6 py-4">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">📄</span>
+          <div>
+            <p className="font-medium text-gray-900">
+              {document.title || document.filename}
+            </p>
+            {document.description && (
+              <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                {document.description}
+              </p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">{document.contentType}</p>
+          </div>
+        </div>
+      </td>
+      <td className="px-6 py-4">
+        <CategoryBadge category={document.category} />
+      </td>
+      <td className="px-6 py-4 text-sm text-gray-600">
+        {formatFileSize(document.fileSize)}
+      </td>
+      <td className="px-6 py-4">
+        <ProcessingIndicator status={document.processingStatus} />
+      </td>
+      <td className="px-6 py-4 text-sm text-gray-600">
+        <div>
+          <p>{formatDate(document.uploadedAt)}</p>
+          <p className="text-xs text-gray-500">{document.uploaderEmail}</p>
+        </div>
+      </td>
+      <td className="px-6 py-4 text-right">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigate(`/workspaces/${workspaceId}/documents/${document.id}`);
+            }}
+            className="text-sm text-blue-600 hover:text-blue-800"
+          >
+            View
+          </button>
+          {document.processingStatus === 'completed' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onReprocess(document.id);
+              }}
+              className="text-sm text-gray-600 hover:text-gray-800"
+              title="Reprocess to extract title and description"
+            >
+              ↻ Reprocess
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+});
+
+DocumentRow.displayName = 'DocumentRow';
 
 export default function DocumentsPage() {
   const params = useParams();
@@ -90,6 +172,24 @@ export default function DocumentsPage() {
     });
   };
 
+  const handleReprocess = async (documentId: string) => {
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/documents/${documentId}/process`,
+        { method: 'POST', credentials: 'include' }
+      );
+      if (response.ok) {
+        refetch();
+      }
+    } catch (error) {
+      console.error('Failed to reprocess:', error);
+    }
+  };
+
+  const handleNavigate = (path: string) => {
+    router.push(path);
+  };
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -125,12 +225,17 @@ export default function DocumentsPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowReportGenerator(true)}
+              onMouseEnter={preloadOnHover(ReportGeneratorModalFactory)}
               className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               <FileText className="h-4 w-4" />
               Generate Report
             </button>
-            <Button variant="primary" onClick={() => setShowUpload(!showUpload)}>
+            <Button 
+              variant="primary" 
+              onClick={() => setShowUpload(!showUpload)}
+              onMouseEnter={preloadOnHover(DocumentUploadFactory)}
+            >
               {showUpload ? '✕ Cancel' : '+ Upload Document'}
             </Button>
           </div>
@@ -140,14 +245,20 @@ export default function DocumentsPage() {
         {showUpload && (
           <div className="mb-8 rounded-lg bg-white p-6 shadow">
             <h2 className="mb-4 text-lg font-semibold text-gray-900">Upload Document</h2>
-            <DocumentUpload
-              workspaceId={workspaceId}
-              onSuccess={() => {
-                setShowUpload(false);
-                refetch();
-              }}
-              onClose={() => setShowUpload(false)}
-            />
+            <Suspense fallback={
+              <div className="flex items-center justify-center py-8">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+              </div>
+            }>
+              <DocumentUpload
+                workspaceId={workspaceId}
+                onSuccess={() => {
+                  setShowUpload(false);
+                  refetch();
+                }}
+                onClose={() => setShowUpload(false)}
+              />
+            </Suspense>
           </div>
         )}
 
@@ -173,6 +284,7 @@ export default function DocumentsPage() {
             </button>
             <button
               onClick={() => setViewMode('search')}
+              onMouseEnter={preloadOnHover(VectorSearchFactory)}
               className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
                 viewMode === 'search'
                   ? 'border-blue-500 text-blue-600'
@@ -268,80 +380,15 @@ export default function DocumentsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {filteredAndSortedDocuments.map((document) => (
-                    <tr
+                    <DocumentRow
                       key={document.id}
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() =>
-                        router.push(`/workspaces/${workspaceId}/documents/${document.id}`)
-                      }
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-2xl">📄</span>
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              {document.title || document.filename}
-                            </p>
-                            {document.description && (
-                              <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                                {document.description}
-                              </p>
-                            )}
-                            <p className="text-xs text-gray-500 mt-1">{document.contentType}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <CategoryBadge category={document.category} />
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {formatFileSize(document.fileSize)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <ProcessingIndicator status={document.processingStatus} />
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        <div>
-                          <p>{formatDate(document.uploadedAt)}</p>
-                          <p className="text-xs text-gray-500">{document.uploaderEmail}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(`/workspaces/${workspaceId}/documents/${document.id}`);
-                            }}
-                            className="text-sm text-blue-600 hover:text-blue-800"
-                          >
-                            View
-                          </button>
-                          {document.processingStatus === 'completed' && (
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  const response = await fetch(
-                                    `/api/workspaces/${workspaceId}/documents/${document.id}/process`,
-                                    { method: 'POST', credentials: 'include' }
-                                  );
-                                  if (response.ok) {
-                                    refetch();
-                                  }
-                                } catch (error) {
-                                  console.error('Failed to reprocess:', error);
-                                }
-                              }}
-                              className="text-sm text-gray-600 hover:text-gray-800"
-                              title="Reprocess to extract title and description"
-                            >
-                              ↻ Reprocess
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                      document={document}
+                      workspaceId={workspaceId}
+                      onNavigate={handleNavigate}
+                      onReprocess={handleReprocess}
+                      formatFileSize={formatFileSize}
+                      formatDate={formatDate}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -353,17 +400,28 @@ export default function DocumentsPage() {
 
         {/* Search View - Phase 5 */}
         {viewMode === 'search' && (
-          <ComponentErrorBoundary>
+          <Suspense fallback={
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+                <p className="mt-4 text-sm text-gray-600">Loading search...</p>
+              </div>
+            </div>
+          }>
             <VectorSearch workspaceId={workspaceId} />
-          </ComponentErrorBoundary>
+          </Suspense>
         )}
 
         {/* Report Generator Modal */}
-        <ReportGeneratorModal
-          workspaceId={workspaceId}
-          isOpen={showReportGenerator}
-          onClose={() => setShowReportGenerator(false)}
-        />
+        {showReportGenerator && (
+          <Suspense fallback={null}>
+            <ReportGeneratorModal
+              workspaceId={workspaceId}
+              isOpen={showReportGenerator}
+              onClose={() => setShowReportGenerator(false)}
+            />
+          </Suspense>
+        )}
       </div>
     </AppLayout>
   );

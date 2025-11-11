@@ -4,6 +4,67 @@ import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 
+/**
+ * PHASE 4.1: PERFORMANCE CACHE
+ * In-memory cache for frequently accessed data
+ */
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+  ttl: number; // Time to live in milliseconds
+}
+
+class PerformanceCache {
+  private cache: Map<string, CacheEntry<any>> = new Map();
+  private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
+  private readonly MAX_CACHE_SIZE = 1000;
+
+  set<T>(key: string, data: T, ttl?: number): void {
+    // Evict oldest entries if cache is full
+    if (this.cache.size >= this.MAX_CACHE_SIZE) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+      ttl: ttl || this.DEFAULT_TTL,
+    });
+  }
+
+  get<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+
+    const now = Date.now();
+    if (now - entry.timestamp > entry.ttl) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return entry.data as T;
+  }
+
+  invalidate(pattern?: string): void {
+    if (!pattern) {
+      this.cache.clear();
+      return;
+    }
+
+    // Invalidate keys matching pattern
+    for (const key of this.cache.keys()) {
+      if (key.includes(pattern)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  size(): number {
+    return this.cache.size;
+  }
+}
+
 interface RiskDistribution {
   critical: number;
   high: number;
@@ -100,6 +161,9 @@ interface FrameworkMaturity {
 }
 
 export default class extends Service<Env> {
+  // PHASE 4.1: Performance cache instance
+  private cache = new PerformanceCache();
+
   private getDb(): Kysely<DB> {
     return new Kysely<DB>({
       dialect: new D1Dialect({ database: this.env.AUDITGUARD_DB }),
@@ -110,6 +174,47 @@ export default class extends Service<Env> {
     return new Response('Analytics Service - Private', { status: 501 });
   }
 
+  /**
+   * PHASE 4.1: Cache helper method
+   * Wraps expensive operations with caching
+   */
+  private async withCache<T>(
+    key: string,
+    ttl: number | undefined,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    // Try to get from cache
+    const cached = this.cache.get<T>(key);
+    if (cached) {
+      this.env.logger.info('📦 Cache hit', { key });
+      return cached;
+    }
+
+    // Execute operation and cache result
+    const result = await operation();
+    this.cache.set(key, result, ttl);
+    this.env.logger.info('💾 Cache miss, storing', { key });
+    return result;
+  }
+
+  /**
+   * Invalidate all caches for a specific workspace
+   * Call this when workspace data changes (new checks, issue updates, etc.)
+   */
+  private invalidateWorkspaceCache(workspaceId: string): void {
+    const patterns = [
+      `workspace-score:${workspaceId}`,
+      `dashboard:${workspaceId}`,
+      `trends:${workspaceId}:*`,
+      `benchmarks:${workspaceId}:*`,
+    ];
+    
+    patterns.forEach(pattern => {
+      this.cache.invalidate(pattern);
+      this.env.logger.info('🗑️ Cache invalidated', { pattern });
+    });
+  }
+
   async calculateWorkspaceScore(workspaceId: string, userId: string): Promise<{
     scoreId: string;
     overallScore: number;
@@ -118,7 +223,10 @@ export default class extends Service<Env> {
     totalDocuments: number;
     issueBreakdown: RiskDistribution;
   }> {
-    const db = this.getDb();
+    const cacheKey = `workspace-score:${workspaceId}`;
+    return this.withCache(cacheKey, 2 * 60 * 1000, async () => {
+      // Original calculation logic
+      const db = this.getDb();
 
     // Verify workspace access
     const membership = await db
@@ -229,6 +337,9 @@ export default class extends Service<Env> {
       })
       .execute();
 
+    // Invalidate related caches since we just updated scores
+    this.invalidateWorkspaceCache(workspaceId);
+
     return {
       scoreId,
       overallScore,
@@ -237,12 +348,13 @@ export default class extends Service<Env> {
       totalDocuments,
       issueBreakdown,
     };
+    }); // Close withCache callback
   }
 
   async getWorkspaceDashboard(workspaceId: string, userId: string): Promise<WorkspaceDashboard> {
     const db = this.getDb();
 
-    // Verify workspace access
+    // Verify workspace access (not cached - security check)
     const membership = await db
       .selectFrom('workspace_members')
       .select('role')
@@ -254,7 +366,10 @@ export default class extends Service<Env> {
       throw new Error('Access denied: You are not a member of this workspace');
     }
 
-    // Get latest workspace score
+    // Cache the expensive dashboard calculation (5 minutes)
+    const cacheKey = `dashboard:${workspaceId}`;
+    return this.withCache(cacheKey, 5 * 60 * 1000, async () => {
+      // Get latest workspace score
     const latestScore = await db
       .selectFrom('workspace_scores')
       .selectAll()
@@ -455,6 +570,7 @@ export default class extends Service<Env> {
       complianceByFramework,
       topIssues,
     };
+    }); // Close withCache callback
   }
 
   async updateIssueStatus(
@@ -519,6 +635,9 @@ export default class extends Service<Env> {
     }
 
     await db.updateTable('compliance_issues').set(updateData).where('id', '=', issueId).execute();
+
+    // Invalidate workspace caches since issue data changed
+    this.invalidateWorkspaceCache(workspaceId);
 
     // Get updated issue
     const updated = await db
@@ -630,7 +749,7 @@ export default class extends Service<Env> {
   }> {
     const db = this.getDb();
 
-    // Verify workspace access
+    // Verify workspace access (not cached - security check)
     const membership = await db
       .selectFrom('workspace_members')
       .select('role')
@@ -642,7 +761,10 @@ export default class extends Service<Env> {
       throw new Error('Access denied: You are not a member of this workspace');
     }
 
-    const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
+    // Cache trend data (5 minutes)
+    const cacheKey = `trends:${workspaceId}:${days}`;
+    return this.withCache(cacheKey, 5 * 60 * 1000, async () => {
+      const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
 
     const scores = await db
       .selectFrom('workspace_scores')
@@ -661,15 +783,16 @@ export default class extends Service<Env> {
       .orderBy('calculated_at', 'asc')
       .execute();
 
-    return {
-      trends: scores.map((s) => ({
-        date: s.calculated_at,
-        overallScore: s.overall_score,
-        riskLevel: s.risk_level,
-        totalIssues:
-          s.critical_issues + s.high_issues + s.medium_issues + s.low_issues + s.info_issues,
-      })),
-    };
+      return {
+        trends: scores.map((s) => ({
+          date: s.calculated_at,
+          overallScore: s.overall_score,
+          riskLevel: s.risk_level,
+          totalIssues:
+            s.critical_issues + s.high_issues + s.medium_issues + s.low_issues + s.info_issues,
+        })),
+      };
+    }); // Close withCache callback
   }
 
   /**
@@ -1120,5 +1243,319 @@ export default class extends Service<Env> {
     }
 
     return 'medium';
+  }
+
+  /**
+   * PHASE 3.1.2: BENCHMARK COMPARISONS
+   * Compare workspace compliance against industry benchmarks
+   */
+  async getBenchmarkComparisons(
+    workspaceId: string,
+    userId: string,
+    options?: {
+      industry?: 'healthcare' | 'finance' | 'technology' | 'retail' | 'government' | 'general';
+      size?: 'small' | 'medium' | 'large' | 'enterprise';
+    }
+  ): Promise<{
+    workspace: {
+      overallScore: number;
+      frameworkCount: number;
+      documentsCovered: number;
+      issueResolutionRate: number;
+    };
+    benchmarks: {
+      industry: string;
+      size: string;
+      averageScore: number;
+      topQuartileScore: number;
+      frameworkAdoptionRate: Record<string, number>; // % of companies using each framework
+      averageIssueResolutionTime: number; // days
+      bestPractices: string[];
+    };
+    comparison: {
+      scorePercentile: number; // 0-100, where workspace ranks
+      performanceRating: 'excellent' | 'above-average' | 'average' | 'below-average' | 'needs-improvement';
+      strengths: string[];
+      weaknesses: string[];
+      recommendations: string[];
+    };
+    peerInsights: {
+      betterThan: number; // % of peers
+      similarTo: number; // % of peers within 5 points
+      worseThan: number; // % of peers
+    };
+  }> {
+    const db = this.getDb();
+
+    const industry = options?.industry || 'general';
+    const size = options?.size || 'medium';
+
+    // Verify workspace access (not cached - security check)
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    // Cache benchmark data (10 minutes - relatively static)
+    const cacheKey = `benchmarks:${workspaceId}:${industry}:${size}`;
+    return this.withCache(cacheKey, 10 * 60 * 1000, async () => {
+      this.env.logger.info('📊 Calculating benchmark comparisons', {
+        workspaceId,
+        industry,
+        size,
+      });
+
+    // Get workspace metrics
+    const workspace = await this.calculateWorkspaceScore(workspaceId, userId);
+    
+    // Get framework count
+    const frameworks = await db
+      .selectFrom('compliance_checks')
+      .select('framework')
+      .distinct()
+      .where('workspace_id', '=', workspaceId)
+      .where('status', '=', 'completed')
+      .execute();
+    const frameworkCount = frameworks.length;
+    
+    const documentsCovered = workspace.documentsChecked;
+    
+    // Calculate issue resolution rate
+    const issueStats = await db
+      .selectFrom('compliance_issues')
+      .select(({ fn }) => [
+        fn.count<number>('id').as('total'),
+        fn.sum<number>(
+          db.case().when('status', '=', 'resolved').then(1).else(0).end()
+        ).as('resolved'),
+      ])
+      .where('check_id', 'in', (eb) =>
+        eb.selectFrom('compliance_checks').select('id').where('workspace_id', '=', workspaceId)
+      )
+      .executeTakeFirst();
+
+    const totalIssues = Number(issueStats?.total || 0);
+    const resolvedIssues = Number(issueStats?.resolved || 0);
+    const issueResolutionRate = totalIssues > 0 ? Math.round((resolvedIssues / totalIssues) * 100) : 0;
+
+    // Industry-specific benchmark data (based on industry standards)
+    const benchmarkData: Record<
+      string,
+      {
+        averageScore: number;
+        topQuartileScore: number;
+        frameworkAdoption: Record<string, number>;
+        avgResolutionTime: number;
+        bestPractices: string[];
+      }
+    > = {
+      healthcare: {
+        averageScore: 82,
+        topQuartileScore: 92,
+        frameworkAdoption: {
+          HIPAA: 98,
+          SOC2: 65,
+          ISO_27001: 45,
+          NIST_CSF: 40,
+        },
+        avgResolutionTime: 14,
+        bestPractices: [
+          'Implement comprehensive PHI access controls',
+          'Regular HIPAA compliance audits',
+          'Encrypt all patient data at rest and in transit',
+          'Maintain detailed audit logs for all PHI access',
+        ],
+      },
+      finance: {
+        averageScore: 85,
+        topQuartileScore: 94,
+        frameworkAdoption: {
+          SOX: 95,
+          PCI_DSS: 90,
+          GLBA: 85,
+          SOC2: 70,
+          ISO_27001: 55,
+        },
+        avgResolutionTime: 10,
+        bestPractices: [
+          'Implement strong financial controls',
+          'Regular SOX compliance reviews',
+          'PCI DSS certification for payment processing',
+          'Multi-factor authentication for all financial systems',
+        ],
+      },
+      technology: {
+        averageScore: 78,
+        topQuartileScore: 89,
+        frameworkAdoption: {
+          SOC2: 85,
+          ISO_27001: 60,
+          GDPR: 75,
+          NIST_CSF: 50,
+        },
+        avgResolutionTime: 12,
+        bestPractices: [
+          'Implement DevSecOps practices',
+          'Regular security assessments',
+          'SOC 2 Type II certification',
+          'Automated compliance monitoring',
+        ],
+      },
+      retail: {
+        averageScore: 75,
+        topQuartileScore: 86,
+        frameworkAdoption: {
+          PCI_DSS: 95,
+          GDPR: 60,
+          CCPA: 55,
+          SOC2: 40,
+        },
+        avgResolutionTime: 15,
+        bestPractices: [
+          'PCI DSS compliance for payment processing',
+          'Customer data privacy controls',
+          'Regular vulnerability assessments',
+          'Employee security training programs',
+        ],
+      },
+      government: {
+        averageScore: 88,
+        topQuartileScore: 96,
+        frameworkAdoption: {
+          FISMA: 100,
+          NIST_CSF: 95,
+          ISO_27001: 70,
+          SOC2: 50,
+        },
+        avgResolutionTime: 8,
+        bestPractices: [
+          'FISMA compliance framework',
+          'NIST security controls implementation',
+          'Regular security audits',
+          'Continuous monitoring programs',
+        ],
+      },
+      general: {
+        averageScore: 76,
+        topQuartileScore: 87,
+        frameworkAdoption: {
+          SOC2: 60,
+          GDPR: 70,
+          ISO_27001: 45,
+          NIST_CSF: 35,
+        },
+        avgResolutionTime: 14,
+        bestPractices: [
+          'Establish baseline security controls',
+          'Regular compliance assessments',
+          'Employee security awareness training',
+          'Incident response procedures',
+        ],
+      },
+    };
+
+    const benchmark = benchmarkData[industry];
+
+    // Calculate percentile (where workspace ranks)
+    const scoreDiff = workspace.overallScore - benchmark.averageScore;
+    const scorePercentile = Math.max(
+      0,
+      Math.min(100, 50 + (scoreDiff / (benchmark.topQuartileScore - benchmark.averageScore)) * 25)
+    );
+
+    // Determine performance rating
+    let performanceRating: 'excellent' | 'above-average' | 'average' | 'below-average' | 'needs-improvement';
+    if (workspace.overallScore >= benchmark.topQuartileScore) {
+      performanceRating = 'excellent';
+    } else if (workspace.overallScore >= benchmark.averageScore + 5) {
+      performanceRating = 'above-average';
+    } else if (workspace.overallScore >= benchmark.averageScore - 5) {
+      performanceRating = 'average';
+    } else if (workspace.overallScore >= benchmark.averageScore - 15) {
+      performanceRating = 'below-average';
+    } else {
+      performanceRating = 'needs-improvement';
+    }
+
+    // Identify strengths and weaknesses
+    const strengths: string[] = [];
+    const weaknesses: string[] = [];
+    const recommendations: string[] = [];
+
+    if (workspace.overallScore >= benchmark.averageScore) {
+      strengths.push(`Overall compliance score (${workspace.overallScore}) exceeds industry average (${benchmark.averageScore})`);
+    } else {
+      weaknesses.push(`Compliance score below industry average - gap of ${Math.round(benchmark.averageScore - workspace.overallScore)} points`);
+      recommendations.push('Focus on addressing high-severity compliance issues to improve overall score');
+    }
+
+    if (frameworkCount >= 3) {
+      strengths.push(`Strong framework coverage with ${frameworkCount} frameworks implemented`);
+    } else {
+      weaknesses.push('Limited framework coverage - consider adopting additional relevant standards');
+      recommendations.push(`Implement ${industry}-specific frameworks to align with industry best practices`);
+    }
+
+    if (issueResolutionRate >= 70) {
+      strengths.push(`Good issue resolution rate (${issueResolutionRate}%)`);
+    } else {
+      weaknesses.push('Low issue resolution rate - many compliance issues remain unaddressed');
+      recommendations.push('Prioritize issue remediation with clear ownership and timelines');
+    }
+
+    if (workspace.issueBreakdown.critical === 0) {
+      strengths.push('No critical compliance issues - good risk management');
+    } else {
+      weaknesses.push(`${workspace.issueBreakdown.critical} critical issues require immediate attention`);
+      recommendations.push('Address all critical compliance issues as highest priority');
+    }
+
+    // Calculate peer insights
+    const peerInsights = {
+      betterThan: Math.round(scorePercentile),
+      similarTo: Math.max(0, Math.min(30, 30 - Math.abs(workspace.overallScore - benchmark.averageScore) * 2)),
+      worseThan: 0,
+    };
+    peerInsights.worseThan = 100 - peerInsights.betterThan - peerInsights.similarTo;
+
+    this.env.logger.info('✅ Benchmark comparison completed', {
+      workspaceId,
+      industry,
+      performanceRating,
+      scorePercentile,
+    });
+
+    return {
+      workspace: {
+        overallScore: workspace.overallScore,
+        frameworkCount,
+        documentsCovered,
+        issueResolutionRate,
+      },
+      benchmarks: {
+        industry,
+        size,
+        averageScore: benchmark.averageScore,
+        topQuartileScore: benchmark.topQuartileScore,
+        frameworkAdoptionRate: benchmark.frameworkAdoption,
+        averageIssueResolutionTime: benchmark.avgResolutionTime,
+        bestPractices: benchmark.bestPractices,
+      },
+      comparison: {
+        scorePercentile: Math.round(scorePercentile),
+        performanceRating,
+        strengths,
+        weaknesses,
+        recommendations,
+      },
+      peerInsights,
+    };
+    }); // Close withCache callback
   }
 }

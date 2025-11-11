@@ -3,6 +3,7 @@ import { Env } from './raindrop.gen';
 import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
+import { broadcastComplianceCheckUpdate, broadcastDashboardUpdate } from '../common/realtime-events';
 
 type ComplianceFramework =
   | 'GDPR'
@@ -100,6 +101,13 @@ export default class extends Service<Env> {
         created_by: input.userId,
       })
       .execute();
+
+    // Broadcast that check has started (PHASE 4.2.1)
+    await broadcastComplianceCheckUpdate(this.env, input.workspaceId, {
+      checkId,
+      status: 'running',
+      progress: 0,
+    });
 
     this.env.logger.info('🚀 Running compliance analysis SYNCHRONOUSLY for demo', {
       checkId,
@@ -323,6 +331,33 @@ export default class extends Service<Env> {
         overallScore,
         issuesFound: issues.length,
       });
+
+      // Broadcast completion (PHASE 4.2.1)
+      await broadcastComplianceCheckUpdate(this.env, workspaceId, {
+        checkId,
+        status: 'completed',
+        progress: 100,
+        issuesFound: issues.length,
+        overallScore,
+      });
+
+      // Also update dashboard metrics
+      const dashboardStats = await db
+        .selectFrom('compliance_issues')
+        .select((eb) => [
+          eb.fn.count('id').as('totalIssues'),
+          eb.fn.count('id').filterWhere('status', '=', 'open').as('openIssues'),
+        ])
+        .where('workspace_id', '=', workspaceId)
+        .executeTakeFirst();
+
+      if (dashboardStats) {
+        await broadcastDashboardUpdate(this.env, workspaceId, {
+          overallScore,
+          totalIssues: Number(dashboardStats.totalIssues || 0),
+          openIssues: Number(dashboardStats.openIssues || 0),
+        });
+      }
       
       // Update compliance cache for summary display
       try {
@@ -354,6 +389,12 @@ export default class extends Service<Env> {
         })
         .where('id', '=', checkId)
         .execute();
+
+      // Broadcast failure (PHASE 4.2.1)
+      await broadcastComplianceCheckUpdate(this.env, workspaceId, {
+        checkId,
+        status: 'failed',
+      });
 
       this.env.logger.error(`Compliance check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

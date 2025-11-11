@@ -145,6 +145,46 @@ export default class extends Service<Env> {
     const path = url.pathname;
     const operation = `${request.method} ${path}`;
 
+    // PHASE 4.2.1: Handle WebSocket upgrade requests for real-time notifications
+    if (path.startsWith('/api/realtime/') && request.headers.get('Upgrade') === 'websocket') {
+      const pathMatch = path.match(/^\/api\/realtime\/([^/]+)$/);
+      if (!pathMatch) {
+        return new Response('Invalid realtime path', { status: 400 });
+      }
+
+      const workspaceId = pathMatch[1];
+
+      // Validate session
+      const user = await this.validateSession(request);
+      if (!user) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+
+      // Verify workspace access
+      const db = this.getDb();
+      const membership = await db
+        .selectFrom('workspace_members')
+        .select('role')
+        .where('workspace_id', '=', workspaceId)
+        .where('user_id', '=', user.userId)
+        .executeTakeFirst();
+
+      if (!membership) {
+        return new Response('Forbidden', { status: 403 });
+      }
+
+      // Forward to realtime service (with Durable Object)
+      // Construct URL for realtime service
+      const realtimeUrl = new URL(request.url);
+      realtimeUrl.pathname = `/ws/${workspaceId}/realtime`;
+
+      return this.env.REALTIME_SERVICE.fetch(
+        new Request(realtimeUrl.toString(), {
+          headers: request.headers,
+        })
+      );
+    }
+
     // CORS helper function
     const getCorsHeaders = (origin: string | null) => {
       const headers: Record<string, string> = {
@@ -2051,6 +2091,30 @@ export default class extends Service<Env> {
         const user = await this.validateSession(request);
 
         const result = await this.env.ANALYTICS_SERVICE.getFrameworkMaturity(workspaceId, user.userId, framework);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // PHASE 3.1.2: Match /api/workspaces/:id/analytics/benchmarks
+      const benchmarksMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/analytics\/benchmarks$/);
+      if (benchmarksMatch && benchmarksMatch[1] && request.method === 'GET') {
+        const workspaceId = benchmarksMatch[1];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const industry = url.searchParams.get('industry') as 'healthcare' | 'finance' | 'technology' | 'retail' | 'government' | 'general' | null;
+        const size = url.searchParams.get('size') as 'small' | 'medium' | 'large' | 'enterprise' | null;
+
+        const result = await this.env.ANALYTICS_SERVICE.getBenchmarkComparisons(
+          workspaceId,
+          user.userId,
+          {
+            industry: industry || undefined,
+            size: size || undefined,
+          }
+        );
 
         return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
