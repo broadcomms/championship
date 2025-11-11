@@ -7,7 +7,7 @@ import { ComplianceFramework } from './index';
 
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'dismissed';
-export type ComplianceCheckStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type ComplianceCheckStatus = 'pending' | 'running' | 'processing' | 'completed' | 'failed';
 
 export interface ComplianceIssue {
   id: string;

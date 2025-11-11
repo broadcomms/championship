@@ -1,0 +1,181 @@
+import { useEffect, useRef, useState, useCallback } from 'react';
+
+export type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+
+export interface WebSocketMessage {
+  type: string;
+  channel?: string;
+  data?: any;
+}
+
+export interface UseWebSocketOptions {
+  workspaceId: string;
+  onMessage?: (message: WebSocketMessage) => void;
+  onError?: (error: Event) => void;
+  onConnect?: () => void;
+  onDisconnect?: () => void;
+  reconnectAttempts?: number;
+  reconnectInterval?: number;
+}
+
+export interface UseWebSocketReturn {
+  status: WebSocketStatus;
+  send: (message: WebSocketMessage) => void;
+  subscribe: (channel: string) => void;
+  unsubscribe: (channel: string) => void;
+  reconnect: () => void;
+}
+
+export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
+  const {
+    workspaceId,
+    onMessage,
+    onError,
+    onConnect,
+    onDisconnect,
+    reconnectAttempts = 5,
+    reconnectInterval = 3000,
+  } = options;
+
+  const [status, setStatus] = useState<WebSocketStatus>('connecting');
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectCountRef = useRef(0);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const subscribedChannelsRef = useRef<Set<string>>(new Set());
+
+  // Build WebSocket URL
+  const getWebSocketUrl = useCallback(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    return `${protocol}//${host}/api/realtime/${workspaceId}`;
+  }, [workspaceId]);
+
+  // Send message through WebSocket
+  const send = useCallback((message: WebSocketMessage) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(message));
+    } else {
+      console.warn('WebSocket not connected, message not sent:', message);
+    }
+  }, []);
+
+  // Subscribe to a channel
+  const subscribe = useCallback((channel: string) => {
+    subscribedChannelsRef.current.add(channel);
+    send({ type: 'subscribe', channel });
+  }, [send]);
+
+  // Unsubscribe from a channel
+  const unsubscribe = useCallback((channel: string) => {
+    subscribedChannelsRef.current.delete(channel);
+    send({ type: 'unsubscribe', channel });
+  }, [send]);
+
+  // Connect to WebSocket
+  const connect = useCallback(() => {
+    try {
+      setStatus('connecting');
+      const ws = new WebSocket(getWebSocketUrl());
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        setStatus('connected');
+        reconnectCountRef.current = 0;
+        
+        // Re-subscribe to channels
+        subscribedChannelsRef.current.forEach(channel => {
+          ws.send(JSON.stringify({ type: 'subscribe', channel }));
+        });
+
+        onConnect?.();
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message: WebSocketMessage = JSON.parse(event.data);
+          
+          // Handle pong messages internally
+          if (message.type === 'pong') {
+            return;
+          }
+
+          onMessage?.(message);
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+        }
+      };
+
+      ws.onerror = (event) => {
+        console.error('WebSocket error:', event);
+        setStatus('error');
+        onError?.(event);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setStatus('disconnected');
+        wsRef.current = null;
+        onDisconnect?.();
+
+        // Attempt reconnection
+        if (reconnectCountRef.current < reconnectAttempts) {
+          reconnectCountRef.current++;
+          console.log(`Reconnecting... (attempt ${reconnectCountRef.current}/${reconnectAttempts})`);
+          
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connect();
+          }, reconnectInterval);
+        }
+      };
+
+      wsRef.current = ws;
+
+      // Send periodic ping to keep connection alive
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 30000); // Every 30 seconds
+
+      // Clean up ping interval when connection closes
+      ws.addEventListener('close', () => {
+        clearInterval(pingInterval);
+      });
+
+    } catch (error) {
+      console.error('Failed to connect WebSocket:', error);
+      setStatus('error');
+    }
+  }, [getWebSocketUrl, onConnect, onMessage, onError, onDisconnect, reconnectAttempts, reconnectInterval]);
+
+  // Manual reconnect
+  const reconnect = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+    reconnectCountRef.current = 0;
+    connect();
+  }, [connect]);
+
+  // Connect on mount, disconnect on unmount
+  useEffect(() => {
+    connect();
+
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [connect]);
+
+  return {
+    status,
+    send,
+    subscribe,
+    unsubscribe,
+    reconnect,
+  };
+}

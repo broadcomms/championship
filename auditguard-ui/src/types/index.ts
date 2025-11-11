@@ -148,7 +148,7 @@ export type ComplianceFramework =
   | 'COPPA'
   | 'SOX';
 
-export type CheckStatus = 'processing' | 'completed' | 'failed';
+export type CheckStatus = 'pending' | 'running' | 'processing' | 'completed' | 'failed';
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'dismissed'; // Updated for Phase 2
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';

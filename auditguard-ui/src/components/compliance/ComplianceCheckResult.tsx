@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { ComplianceCheck, CheckStatus } from '@/types';
 import { ComplianceScoreGauge } from './ComplianceScoreGauge';
+import { LiveProgressBar } from '@/components/realtime';
+import { useWebSocket, WebSocketMessage } from '@/hooks/useWebSocket';
 
 interface ComplianceCheckResultProps {
   checkId: string;
@@ -11,6 +13,7 @@ interface ComplianceCheckResultProps {
   onCheckComplete?: (check: ComplianceCheck) => void;
   onError?: (error: string) => void;
   pollInterval?: number; // milliseconds
+  enableRealtime?: boolean; // Enable WebSocket updates
 }
 
 export function ComplianceCheckResult({
@@ -20,10 +23,57 @@ export function ComplianceCheckResult({
   onCheckComplete,
   onError,
   pollInterval = 2000,
+  enableRealtime = true,
 }: ComplianceCheckResultProps) {
   const [check, setCheck] = useState<ComplianceCheck | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+
+  // WebSocket for real-time updates
+  const { subscribe } = useWebSocket({
+    workspaceId,
+    onMessage: (message: WebSocketMessage) => {
+      if (message.type === 'compliance_check_update' && message.data?.checkId === checkId) {
+        console.log('Real-time check update:', message.data);
+        
+        // Update progress
+        if (message.data.progress !== undefined) {
+          setProgress(message.data.progress);
+        }
+
+        // Update check status
+        setCheck(prev => prev ? {
+          ...prev,
+          status: message.data.status || prev.status,
+          overallScore: message.data.score ?? prev.overallScore,
+        } : null);
+
+        // Handle completion
+        if (message.data.status === 'completed' && check) {
+          const completedCheck = {
+            ...check,
+            status: 'completed' as CheckStatus,
+            overallScore: message.data.score ?? check.overallScore,
+          };
+          onCheckComplete?.(completedCheck);
+        }
+
+        // Handle failure
+        if (message.data.status === 'failed') {
+          setError('Compliance check failed');
+          onError?.('Compliance check failed');
+        }
+      }
+    },
+  });
+
+  // Subscribe to compliance-checks channel
+  useEffect(() => {
+    if (enableRealtime) {
+      subscribe('compliance-checks');
+    }
+  }, [enableRealtime, subscribe]);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -149,6 +199,13 @@ export function ComplianceCheckResult({
 
   const getStatusBadge = (status: CheckStatus) => {
     switch (status) {
+      case 'pending':
+        return (
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+            Pending
+          </span>
+        );
+      case 'running':
       case 'processing':
         return (
           <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
@@ -167,7 +224,7 @@ export function ComplianceCheckResult({
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
-            Processing
+            {status === 'running' ? 'Running' : 'Processing'}
           </span>
         );
       case 'completed':
@@ -212,28 +269,14 @@ export function ComplianceCheckResult({
         {getStatusBadge(check.status)}
       </div>
 
-      {check.status === 'processing' && (
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-          <div className="flex items-center">
-            <svg
-              className="animate-spin h-5 w-5 text-yellow-600 mr-3"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
+      {(check.status === 'processing' || check.status === 'running' || check.status === 'pending') && (
+        <div className="mb-6">
+          <LiveProgressBar 
+            status={check.status === 'processing' || check.status === 'running' ? 'running' : 'pending'} 
+            progress={progress}
+            checkId={check.id}
+          />
+          <div className="mt-3 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
             <span className="text-sm text-yellow-800">
               Analyzing document against {check.framework} requirements...
             </span>

@@ -4,6 +4,11 @@ import React, { useState, useEffect, lazy, Suspense, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ComplianceScoreGauge } from '@/components/compliance/ComplianceScoreGauge';
+import { ConnectionStatus } from '@/components/realtime';
+import { ErrorDisplay, SectionErrorBoundary } from '@/components/errors';
+import { useWebSocket, WebSocketMessage } from '@/hooks/useWebSocket';
+import { retryFetch } from '@/utils/retry';
+import { NetworkError, toAppError } from '@/utils/errors';
 import type {
   ComplianceCheckListItem,
   MaturityLevel,
@@ -73,40 +78,125 @@ export default function CompliancePage(props: PageProps) {
   const [showNewCheck, setShowNewCheck] = useState(false);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
 
+  // WebSocket for real-time updates
+  const { status: wsStatus, subscribe, reconnect } = useWebSocket({
+    workspaceId,
+    onMessage: (message: WebSocketMessage) => {
+      console.log('WebSocket message received:', message);
+
+      switch (message.type) {
+        case 'compliance_check_update':
+          // Update check in recent checks list
+          if (message.data) {
+            setRecentChecks(prev => {
+              const existing = prev.find(c => c.id === message.data.checkId);
+              if (existing) {
+                return prev.map(c => 
+                  c.id === message.data.checkId 
+                    ? { ...c, status: message.data.status, score: message.data.score }
+                    : c
+                );
+              }
+              return prev;
+            });
+          }
+          break;
+
+        case 'dashboard_update':
+          // Update dashboard metrics
+          if (message.data) {
+            setDashboard(prev => prev ? {
+              ...prev,
+              overallScore: message.data.overallScore ?? prev.overallScore,
+              totalIssues: message.data.totalIssues ?? prev.totalIssues,
+            } : null);
+          }
+          break;
+
+        case 'issue_update':
+          // Refresh issues list when an issue is updated
+          console.log('Issue updated, refreshing data...');
+          break;
+      }
+    },
+    onConnect: () => {
+      console.log('Connected to real-time updates');
+    },
+    onDisconnect: () => {
+      console.log('Disconnected from real-time updates');
+    },
+  });
+
+  // Subscribe to relevant channels
+  useEffect(() => {
+    subscribe('compliance-checks');
+    subscribe('dashboard');
+    subscribe('issues');
+  }, [subscribe]);
+
   // Fetch dashboard data
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
-        const response = await fetch(`/api/workspaces/${workspaceId}/dashboard`, {
-          credentials: 'include',
-        });
+        const response = await retryFetch(
+          `/api/workspaces/${workspaceId}/dashboard`,
+          { credentials: 'include' },
+          {
+            maxAttempts: 3,
+            initialDelay: 1000,
+            onRetry: (error, attempt, delay) => {
+              console.warn(`Retrying dashboard fetch (attempt ${attempt}, delay ${delay}ms):`, error);
+            },
+          }
+        );
 
         if (!response.ok) {
-          throw new Error('Failed to load dashboard');
+          throw new NetworkError(
+            `Failed to load dashboard: ${response.statusText}`,
+            { operation: 'fetchDashboard', workspaceId },
+            response.status
+          );
         }
 
         const data = await response.json();
         setDashboard(data);
       } catch (err) {
         console.error('Error fetching dashboard:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+        const appError = toAppError(err, {
+          operation: 'fetchDashboard',
+          workspaceId,
+        });
+        setError(appError.getUserMessage());
       }
     };
 
     const fetchRecentChecks = async () => {
       try {
-        const response = await fetch(`/api/workspaces/${workspaceId}/compliance`, {
-          credentials: 'include',
-        });
+        const response = await retryFetch(
+          `/api/workspaces/${workspaceId}/compliance`,
+          { credentials: 'include' },
+          {
+            maxAttempts: 3,
+            initialDelay: 1000,
+            onRetry: (error, attempt, delay) => {
+              console.warn(`Retrying checks fetch (attempt ${attempt}, delay ${delay}ms):`, error);
+            },
+          }
+        );
 
         if (!response.ok) {
-          throw new Error('Failed to load checks');
+          throw new NetworkError(
+            `Failed to load compliance checks: ${response.statusText}`,
+            { operation: 'fetchRecentChecks', workspaceId },
+            response.status
+          );
         }
 
         const data = await response.json();
         setRecentChecks(data.checks?.slice(0, 5) || []);
       } catch (err) {
         console.error('Error fetching checks:', err);
+        // Don't block dashboard if checks fail
       } finally {
         setLoading(false);
       }
@@ -154,10 +244,10 @@ export default function CompliancePage(props: PageProps) {
     return (
       <AppLayout>
         <div className="p-8">
-          <div className="rounded-md bg-red-50 border border-red-200 p-4 text-red-800">
-            <p className="font-medium">Error Loading Dashboard</p>
-            <p className="text-sm mt-1">{error}</p>
-          </div>
+          <ErrorDisplay
+            error={new Error(error)}
+            onRetry={() => window.location.reload()}
+          />
         </div>
       </AppLayout>
     );
@@ -171,7 +261,10 @@ export default function CompliancePage(props: PageProps) {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Compliance Dashboard</h1>
-            <p className="text-gray-500 mt-1">Monitor and manage compliance issues and remediation</p>
+            <div className="flex items-center gap-4 mt-1">
+              <p className="text-gray-500">Monitor and manage compliance issues and remediation</p>
+              <ConnectionStatus status={wsStatus} onReconnect={reconnect} />
+            </div>
           </div>
           <button
             onClick={() => setShowNewCheck(!showNewCheck)}
@@ -190,58 +283,61 @@ export default function CompliancePage(props: PageProps) {
 
         {/* Overview Cards */}
         {dashboard && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Overall Score with Gauge */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <ComplianceScoreGauge score={dashboard.overallScore ?? 0} size="small" />
-            </div>
-
-            {/* Risk Level */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="text-center">
-                <span
-                  className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-medium ${getRiskColor(
-                    dashboard.riskLevel ?? 'low'
-                  )}`}
-                >
-                  {(dashboard.riskLevel ?? 'low').toUpperCase()}
-                </span>
-                <p className="text-sm text-gray-500 mt-4">Risk Level</p>
+          <SectionErrorBoundary>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Overall Score with Gauge */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <ComplianceScoreGauge score={dashboard.overallScore ?? 0} size="small" />
               </div>
-            </div>
 
-            {/* Coverage */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900">
-                  {(dashboard.coveragePercentage ?? 0).toFixed(0)}%
+              {/* Risk Level */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="text-center">
+                  <span
+                    className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-medium ${getRiskColor(
+                      dashboard.riskLevel ?? 'low'
+                    )}`}
+                  >
+                    {(dashboard.riskLevel ?? 'low').toUpperCase()}
+                  </span>
+                  <p className="text-sm text-gray-500 mt-4">Risk Level</p>
                 </div>
-                <p className="text-sm text-gray-500 mt-2">
-                  {dashboard.documentsChecked ?? 0} of {dashboard.totalDocuments ?? 0} documents
-                </p>
-                <p className="text-xs text-gray-400 mt-1">Coverage</p>
               </div>
-            </div>
 
-            {/* Total Issues */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900">{dashboard.totalIssues ?? 0}</div>
-                <p className="text-sm text-gray-500 mt-2">Open Issues</p>
-                <p className="text-xs text-gray-400 mt-1">Across all frameworks</p>
+              {/* Coverage */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-gray-900">
+                    {(dashboard.coveragePercentage ?? 0).toFixed(0)}%
+                  </div>
+                  <p className="text-sm text-gray-500 mt-2">
+                    {dashboard.documentsChecked ?? 0} of {dashboard.totalDocuments ?? 0} documents
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Coverage</p>
+                </div>
+              </div>
+
+              {/* Total Issues */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-gray-900">{dashboard.totalIssues ?? 0}</div>
+                  <p className="text-sm text-gray-500 mt-2">Open Issues</p>
+                  <p className="text-xs text-gray-400 mt-1">Across all frameworks</p>
+                </div>
               </div>
             </div>
-          </div>
+          </SectionErrorBoundary>
         )}
 
         {/* Recent Checks Table */}
         {recentChecks.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Recent Compliance Checks</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+          <SectionErrorBoundary>
+            <div className="bg-white rounded-lg border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-900">Recent Compliance Checks</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -313,82 +409,87 @@ export default function CompliancePage(props: PageProps) {
               </table>
             </div>
           </div>
+          </SectionErrorBoundary>
         )}
 
         {/* Recent Activity */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Recent Activity
-            {dashboard?.recentActivity?.period && (
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                ({dashboard.recentActivity.period})
-              </span>
+        <SectionErrorBoundary>
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Recent Activity
+              {dashboard?.recentActivity?.period && (
+                <span className="text-sm font-normal text-gray-500 ml-2">
+                  ({dashboard.recentActivity.period})
+                </span>
+              )}
+            </h2>
+            {dashboard?.recentActivity ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                  <div className="text-2xl font-bold text-blue-900">
+                    {dashboard.recentActivity.documentsUploaded ?? 0}
+                  </div>
+                  <p className="text-sm text-blue-700 mt-1">Documents Uploaded</p>
+                </div>
+                <div className="p-4 bg-green-50 rounded-lg border border-green-100">
+                  <div className="text-2xl font-bold text-green-900">
+                    {dashboard.recentActivity.checksCompleted ?? 0}
+                  </div>
+                  <p className="text-sm text-green-700 mt-1">Checks Completed</p>
+                </div>
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
+                  <div className="text-2xl font-bold text-purple-900">
+                    {dashboard.recentActivity.issuesResolved ?? 0}
+                  </div>
+                  <p className="text-sm text-purple-700 mt-1">Issues Resolved</p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>No recent activity data available</p>
+                <p className="text-sm mt-1">Activity metrics will appear as checks are run</p>
+              </div>
             )}
-          </h2>
-          {dashboard?.recentActivity ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                <div className="text-2xl font-bold text-blue-900">
-                  {dashboard.recentActivity.documentsUploaded ?? 0}
-                </div>
-                <p className="text-sm text-blue-700 mt-1">Documents Uploaded</p>
-              </div>
-              <div className="p-4 bg-green-50 rounded-lg border border-green-100">
-                <div className="text-2xl font-bold text-green-900">
-                  {dashboard.recentActivity.checksCompleted ?? 0}
-                </div>
-                <p className="text-sm text-green-700 mt-1">Checks Completed</p>
-              </div>
-              <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
-                <div className="text-2xl font-bold text-purple-900">
-                  {dashboard.recentActivity.issuesResolved ?? 0}
-                </div>
-                <p className="text-sm text-purple-700 mt-1">Issues Resolved</p>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <p>No recent activity data available</p>
-              <p className="text-sm mt-1">Activity metrics will appear as checks are run</p>
-            </div>
-          )}
-        </div>
+          </div>
+        </SectionErrorBoundary>
 
         {/* Framework Breakdown */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Framework Compliance</h2>
-          {dashboard?.complianceByFramework && dashboard.complianceByFramework.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {dashboard.complianceByFramework.map((fw) => (
-                <div key={fw.framework} className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-medium text-gray-900">{fw.framework}</h3>
-                    <span className="text-2xl font-bold text-blue-600">{fw.averageScore.toFixed(0)}</span>
-                  </div>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <div className="flex justify-between">
-                      <span>Checks:</span>
-                      <span className="font-medium">{fw.checksCount}</span>
+        <SectionErrorBoundary>
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Framework Compliance</h2>
+            {dashboard?.complianceByFramework && dashboard.complianceByFramework.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {dashboard.complianceByFramework.map((fw) => (
+                  <div key={fw.framework} className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-medium text-gray-900">{fw.framework}</h3>
+                      <span className="text-2xl font-bold text-blue-600">{fw.averageScore.toFixed(0)}</span>
                     </div>
-                    {fw.lastCheckDate > 0 && (
+                    <div className="space-y-1 text-sm text-gray-600">
                       <div className="flex justify-between">
-                        <span>Last Check:</span>
-                        <span className="font-medium">
-                          {new Date(fw.lastCheckDate).toLocaleDateString()}
-                        </span>
+                        <span>Checks:</span>
+                        <span className="font-medium">{fw.checksCount}</span>
                       </div>
-                    )}
+                      {fw.lastCheckDate > 0 && (
+                        <div className="flex justify-between">
+                          <span>Last Check:</span>
+                          <span className="font-medium">
+                            {new Date(fw.lastCheckDate).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <p>No framework compliance data available</p>
-              <p className="text-sm mt-1">Run compliance checks to see framework breakdown</p>
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>No framework compliance data available</p>
+                <p className="text-sm mt-1">Run compliance checks to see framework breakdown</p>
+              </div>
+            )}
+          </div>
+        </SectionErrorBoundary>
 
         {/* Top Issues by Category */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
