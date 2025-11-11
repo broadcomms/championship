@@ -414,6 +414,22 @@ CREATE TABLE IF NOT EXISTS issue_assignments (
   FOREIGN KEY (issue_id) REFERENCES compliance_issues(id) ON DELETE CASCADE
 );
 
+
+-- Enable saving and retrieving generated compliance reports
+CREATE TABLE IF NOT EXISTS compliance_reports (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  created_by TEXT NOT NULL,
+  frameworks TEXT NOT NULL, -- JSON array of framework names
+  report_period TEXT NOT NULL, -- JSON object with startDate and endDate
+  summary TEXT NOT NULL, -- JSON object with report data (overallScore, keyFindings, recommendations, etc.)
+  status TEXT NOT NULL DEFAULT 'completed', -- 'generating', 'completed', 'failed'
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- Indexes for performance 00
 CREATE INDEX sessions_user_id_idx ON sessions(user_id);
 CREATE INDEX sessions_expires_at_idx ON sessions(expires_at);
@@ -526,6 +542,15 @@ CREATE INDEX idx_status_history_workspace ON issue_status_history(workspace_id);
 
 CREATE INDEX idx_compliance_cache_document ON document_compliance_cache(document_id);
 CREATE INDEX idx_compliance_cache_workspace ON document_compliance_cache(workspace_id);
+
+-- Index for fast workspace report lookups
+CREATE INDEX IF NOT EXISTS idx_compliance_reports_workspace_id ON compliance_reports(workspace_id);
+
+-- Index for chronological sorting
+CREATE INDEX IF NOT EXISTS idx_compliance_reports_created_at ON compliance_reports(created_at DESC);
+
+-- Index for filtering by creator
+CREATE INDEX IF NOT EXISTS idx_compliance_reports_created_by ON compliance_reports(created_by);
 
 
 -- Seed default frameworks
