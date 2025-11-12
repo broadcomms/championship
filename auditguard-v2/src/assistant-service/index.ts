@@ -1003,6 +1003,13 @@ Workspace context: ${workspaceContext}`
     workspaceContext: string;
   }): Promise<{ suggestions: string[]; actions: Action[] }> {
     try {
+      // Debug logging to see what we're working with
+      this.env.logger.info('🔍 Post-processing input:', {
+        toolsUsed: input.toolsUsed,
+        toolResultsCount: input.toolResults.length,
+        toolResultsSample: JSON.stringify(input.toolResults).substring(0, 1000)
+      });
+      
       this.env.logger.info('🔄 Post-processing: Generating suggestions and actions');
 
       const prompt = `You are a UX enhancement AI for a compliance management system. Analyze this conversation and generate:
@@ -1036,11 +1043,39 @@ OUTPUT FORMAT (JSON only, no markdown):
   ]
 }
 
+CRITICAL DOCUMENT ID EXTRACTION:
+- Document IDs look like: "doc_1762918196621_ki679h" (NOT "1" or simple numbers)
+- Search tool results for fields: "document_id", "id", "document.id"
+- Use EXACT ID from tool results, never generate placeholder IDs
+- If tool is "get_compliance_issues", look for issues[].document.id or issues[].document_id
+- If tool is "get_compliance_status", check if documents are listed
+- If tool is "search_documents", look for documents[].id
+
+EXAMPLE TOOL RESULT:
+{
+  "tool": "get_compliance_issues",
+  "result": {
+    "issues": [{
+      "document": {
+        "id": "doc_1762918196621_ki679h",
+        "filename": "Privacy_Policy.pdf"
+      }
+    }]
+  }
+}
+
+CORRECT ACTION:
+{
+  "type": "navigate",
+  "target": "/workspaces/wks_xxx/documents/doc_1762918196621_ki679h",
+  "label": "View Privacy_Policy.pdf"
+}
+
 RULES:
 - Suggestions must be natural questions users would actually ask next
 - Make suggestions specific to the data discussed (scores, frameworks, documents)
 - Actions must reference actual documents/pages from tool results
-- Extract document IDs from tool results (look for "id", "document_id" fields)
+- Extract REAL document IDs (not "1" or placeholders)
 - Only include actions if specific documents were mentioned
 - Maximum 3 suggestions, maximum 3 actions
 - If no relevant documents, return empty actions array
@@ -1058,7 +1093,8 @@ RULES:
 
       this.env.logger.info('✅ Post-processing complete', {
         suggestions: parsed.suggestions?.length || 0,
-        actions: parsed.actions?.length || 0
+        actions: parsed.actions?.length || 0,
+        actionsDetail: JSON.stringify(parsed.actions)
       });
 
       return {
