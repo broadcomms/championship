@@ -132,8 +132,16 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
         })
       });
 
+      let errorMessage = '';
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Try to get error message from response
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+        } catch {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -160,9 +168,27 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
       }
     } catch (error) {
       console.error('Chat error:', error);
+      
+      // Show more helpful error messages
+      let errorContent = 'Sorry, I encountered an error. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('401') || error.message.includes('Unauthorized') || error.message.includes('Access denied')) {
+          errorContent = '🔒 **Authentication Required**\n\nPlease log in to use the AI assistant. Your session may have expired.';
+        } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
+          errorContent = '🚫 **Access Denied**\n\nYou don\'t have permission to access this workspace. Please check your workspace membership.';
+        } else if (error.message.includes('500')) {
+          errorContent = '⚠️ **Server Error**\n\nThe AI service is temporarily unavailable. Please try again in a moment.';
+        } else if (error.message.includes('timeout')) {
+          errorContent = '⏱️ **Request Timeout**\n\nThe request took too long to process. Please try a simpler question.';
+        } else {
+          errorContent = `❌ **Error**\n\n${error.message}\n\nPlease try again or contact support if the problem persists.`;
+        }
+      }
+      
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: errorContent,
         timestamp: new Date()
       }]);
     } finally {

@@ -2323,6 +2323,68 @@ export default class extends Service<Env> {
         }
       }
 
+      // POST /api/workspaces/:id/assistant/stream - Stream AI assistant responses (SSE)
+      const assistantStreamMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/assistant\/stream$/);
+      if (assistantStreamMatch && assistantStreamMatch[1] && request.method === 'POST') {
+        const startTime = Date.now();
+        const operation = 'assistant.stream';
+
+        try {
+          const workspaceId = assistantStreamMatch[1];
+          const user = await this.validateSession(request);
+
+          const parseResult = await this.safeParseJSON<{
+            message: string;
+            sessionId?: string;
+            context?: {
+              currentPage?: string;
+              documentId?: string;
+            };
+          }>(request, ['message']);
+
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+
+          // Get ReadableStream from assistant service
+          const stream = await this.env.ASSISTANT_SERVICE.streamChat(workspaceId, user.userId, parseResult.data);
+
+          // Track performance (fire and forget - streaming is long-running)
+          this.trackPerformance(operation, startTime, true, undefined, {
+            workspaceId,
+            sessionId: parseResult.data.sessionId || 'new',
+          }).catch(err => {
+            this.env.logger.error('Failed to track streaming performance', { error: err });
+          });
+
+          // Return SSE stream with proper headers
+          return new Response(stream, {
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              'Connection': 'keep-alive',
+              ...corsHeaders,
+            },
+          });
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await this.trackPerformance(operation, startTime, false, errorMessage);
+
+          this.env.logger.error('Streaming error', {
+            error: errorMessage,
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+
+          return new Response(JSON.stringify({ error: errorMessage }), {
+            status: error instanceof Error && error.message.includes('Access denied') ? 403 : 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
       // GET /api/workspaces/:id/assistant/sessions - List conversation sessions
       const assistantSessionsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/assistant\/sessions$/);
       if (assistantSessionsMatch && assistantSessionsMatch[1] && request.method === 'GET') {

@@ -5,8 +5,18 @@ import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 
 interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  tool_calls?: Array<{
+    id: string;
+    type: 'function';
+    function: {
+      name: string;
+      arguments: string;
+    };
+  }>;
+  tool_call_id?: string;
+  name?: string;
 }
 
 interface Tool {
@@ -237,28 +247,63 @@ ${workspaceContext}`;
     const actions: Action[] = [];
 
     try {
-      // Call AI (function calling to be enabled when platform supports it)
+      // Call AI with function calling enabled
       const aiResponse = await this.env.AI.run('llama-3.3-70b', {
         model: 'llama-3.3-70b',
-        messages: messages.slice(-6), // Use last 6 messages for context window
+        messages: messages.slice(-6) as any, // Use last 6 messages for context window
+        tools: this.getTools(),
+        tool_choice: 'auto',
         temperature: 0.7,
         max_tokens: 2000,
       });
 
       // Type the response properly
       const result = aiResponse as any;
-      assistantMessage = result.response || result.content || 'I apologize, but I encountered an issue generating a response. Please try again.';
       
-      // TODO: Enable function calling when platform supports it
-      // For now, if user asks about specific data, provide guidance
-      const lowerMessage = request.message.toLowerCase();
-      if (lowerMessage.includes('compliance score') || lowerMessage.includes('status')) {
-        const statusData = await this.toolGetComplianceStatus(workspaceId, {});
-        assistantMessage += `\n\n**Current Status:**\n- Overall Score: ${statusData.overall_score}/100\n- Risk Level: ${statusData.risk_level}\n- Documents Checked: ${statusData.documents_checked}/${statusData.total_documents}\n- Critical Issues: ${statusData.critical_issues}\n- High Issues: ${statusData.high_issues}`;
+      // Handle function calling responses
+      if (result.tool_calls && result.tool_calls.length > 0) {
+        // Execute tools
+        const toolResults = await this.executeTools(result.tool_calls, workspaceId, userId);
+        
+        // Add tool call message and results
+        messages.push({
+          role: 'assistant',
+          content: result.response || '',
+          tool_calls: result.tool_calls,
+        });
+        
+        messages.push(...toolResults.messages);
+        actions.push(...toolResults.actions);
+        
+        // Get final response with tool results
+        const finalResponse = await this.env.AI.run('llama-3.3-70b', {
+          model: 'llama-3.3-70b',
+          messages: messages.slice(-8) as any,
+          temperature: 0.7,
+          max_tokens: 1500,
+        });
+        
+        const finalResult = finalResponse as any;
+        assistantMessage = finalResult.response || finalResult.content || 'I have gathered the requested information.';
+      } else {
+        // No function calling, use direct response
+        assistantMessage = result.response || result.content || 'I apologize, but I encountered an issue generating a response. Please try again.';
       }
     } catch (error) {
       this.env.logger.error(`AI response failed: ${error instanceof Error ? error.message : 'Unknown'}`);
-      assistantMessage = 'I apologize, but I encountered a technical issue. Please try again or contact support if the problem persists.';
+      
+      // Fallback: Try to help with keyword detection as last resort
+      const lowerMessage = request.message.toLowerCase();
+      if (lowerMessage.includes('compliance score') || lowerMessage.includes('status')) {
+        try {
+          const statusData = await this.toolGetComplianceStatus(workspaceId, {});
+          assistantMessage = `**Current Compliance Status:**\n- Overall Score: ${statusData.overall_score}/100\n- Risk Level: ${statusData.risk_level}\n- Documents Checked: ${statusData.documents_checked}/${statusData.total_documents}\n- Critical Issues: ${statusData.critical_issues}\n- High Issues: ${statusData.high_issues}`;
+        } catch (toolError) {
+          assistantMessage = 'I apologize, but I encountered a technical issue. Please try again or contact support if the problem persists.';
+        }
+      } else {
+        assistantMessage = 'I apologize, but I encountered a technical issue. Please try again or contact support if the problem persists.';
+      }
     }
 
     // Store assistant message in database
@@ -306,6 +351,217 @@ ${workspaceContext}`;
       suggestions,
       actions,
     };
+  }
+
+  /**
+   * Streaming chat endpoint using Server-Sent Events
+   * Returns a ReadableStream that emits chunks as they're generated
+   */
+  async streamChat(workspaceId: string, userId: string, request: ChatRequest): Promise<ReadableStream> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: You are not a member of this workspace');
+    }
+
+    // Get or create session (reuse logic from chat method)
+    let session;
+    let memorySessionId: string;
+
+    if (request.sessionId) {
+      session = await db
+        .selectFrom('conversation_sessions')
+        .selectAll()
+        .where('id', '=', request.sessionId)
+        .where('workspace_id', '=', workspaceId)
+        .where('user_id', '=', userId)
+        .executeTakeFirst();
+
+      if (!session) {
+        throw new Error('Session not found');
+      }
+
+      memorySessionId = session.memory_session_id;
+    } else {
+      const sessionId = `conv_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      const now = Date.now();
+
+      const { sessionId: smartMemorySessionId } = await this.env.ASSISTANT_MEMORY.startWorkingMemorySession();
+      memorySessionId = smartMemorySessionId;
+
+      await db
+        .insertInto('conversation_sessions')
+        .values({
+          id: sessionId,
+          workspace_id: workspaceId,
+          user_id: userId,
+          memory_session_id: memorySessionId,
+          started_at: now,
+          last_activity_at: now,
+          message_count: 0,
+        })
+        .execute();
+
+      session = {
+        id: sessionId,
+        workspace_id: workspaceId,
+        user_id: userId,
+        memory_session_id: memorySessionId,
+        started_at: now,
+        last_activity_at: now,
+        message_count: 0,
+      };
+    }
+
+    // Store user message
+    const userMsgId = `msg_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    await db
+      .insertInto('conversation_messages')
+      .values({
+        id: userMsgId,
+        session_id: session.id,
+        role: 'user',
+        content: request.message,
+        created_at: Date.now(),
+      })
+      .execute();
+
+    // Get workspace context
+    const workspaceContext = await this.getWorkspaceContext(workspaceId);
+
+    // Build messages
+    const workingMemory = await this.env.ASSISTANT_MEMORY.getWorkingMemorySession(memorySessionId);
+    const conversationHistory = await workingMemory.getMemory({
+      timeline: 'conversation',
+      nMostRecent: 10,
+    });
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: 'You are a helpful AI compliance assistant for AuditGuardX.' },
+      { role: 'system', content: `Context:\n${workspaceContext}` },
+    ];
+
+    if (conversationHistory) {
+      for (const entry of conversationHistory) {
+        messages.push({
+          role: entry.agent === 'user' ? 'user' : 'assistant',
+          content: entry.content,
+        });
+      }
+    }
+
+    messages.push({ role: 'user', content: request.message });
+
+    const self = this;
+
+    // Create a ReadableStream for Server-Sent Events
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // Send session ID first
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'session', sessionId: session.id })}\n\n`));
+
+          // Call AI with streaming (if platform supports it, otherwise simulate)
+          try {
+            // Attempt streaming AI call
+            const response = await self.env.AI.run('llama-3.3-70b', {
+              model: 'llama-3.3-70b',
+              messages: messages.slice(-6) as any,
+              temperature: 0.7,
+              max_tokens: 2000,
+              stream: true, // Enable streaming
+            });
+
+            let fullMessage = '';
+
+            // Stream chunks
+            if (response && typeof response === 'object' && Symbol.asyncIterator in response) {
+              for await (const chunk of response as AsyncIterable<any>) {
+                const text = chunk.response || chunk.content || '';
+                if (text) {
+                  fullMessage += text;
+                  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'chunk', content: text })}\n\n`));
+                }
+              }
+            } else {
+              // Fallback: non-streaming response, simulate chunks
+              const result = response as any;
+              fullMessage = result.response || result.content || 'No response generated.';
+              
+              // Simulate streaming by splitting into words
+              const words = fullMessage.split(' ');
+              for (let i = 0; i < words.length; i++) {
+                const word = words[i] + (i < words.length - 1 ? ' ' : '');
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'chunk', content: word })}\n\n`));
+                await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay between words
+              }
+            }
+
+            // Store complete message
+            const assistantMsgId = `msg_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+            await db
+              .insertInto('conversation_messages')
+              .values({
+                id: assistantMsgId,
+                session_id: session.id,
+                role: 'assistant',
+                content: fullMessage,
+                created_at: Date.now(),
+              })
+              .execute();
+
+            // Store in SmartMemory
+            await workingMemory.putMemory({
+              content: fullMessage,
+              timeline: 'conversation',
+              key: 'assistant',
+              agent: 'assistant',
+            });
+
+            // Update session
+            await db
+              .updateTable('conversation_sessions')
+              .set({
+                last_activity_at: Date.now(),
+                message_count: session.message_count + 2,
+              })
+              .where('id', '=', session.id)
+              .execute();
+
+            // Generate suggestions
+            const suggestions = self.generateSuggestions(request.message, workspaceContext);
+
+            // Send completion event
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ 
+              type: 'done', 
+              suggestions,
+              actions: []
+            })}\n\n`));
+
+          } catch (error) {
+            self.env.logger.error(`Streaming AI error: ${error instanceof Error ? error.message : 'Unknown'}`);
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ 
+              type: 'error', 
+              message: 'AI generation failed' 
+            })}\n\n`));
+          }
+
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+    });
+
+    return stream;
   }
 
   private async getWorkspaceContext(workspaceId: string): Promise<string> {
