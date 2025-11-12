@@ -247,63 +247,53 @@ ${workspaceContext}`;
     const actions: Action[] = [];
 
     try {
-      // Call AI with function calling enabled
+      // Call AI without tool calling (Raindrop's Zod validator rejects null content in tool-only responses)
+      // This is a platform limitation - re-enable tools when Raindrop supports OpenAI-spec tool responses
       const aiResponse = await this.env.AI.run('llama-3.3-70b', {
         model: 'llama-3.3-70b',
         messages: messages.slice(-6) as any, // Use last 6 messages for context window
-        tools: this.getTools(),
-        tool_choice: 'auto',
         temperature: 0.7,
         max_tokens: 2000,
       });
 
-      // Type the response properly
+      // Extract response using OpenAI-compatible format (per Raindrop docs)
       const result = aiResponse as any;
       
-      // Handle function calling responses
-      if (result.tool_calls && result.tool_calls.length > 0) {
-        // Execute tools
-        const toolResults = await this.executeTools(result.tool_calls, workspaceId, userId);
-        
-        // Add tool call message and results
-        messages.push({
-          role: 'assistant',
-          content: result.response || '',
-          tool_calls: result.tool_calls,
-        });
-        
-        messages.push(...toolResults.messages);
-        actions.push(...toolResults.actions);
-        
-        // Get final response with tool results
-        const finalResponse = await this.env.AI.run('llama-3.3-70b', {
-          model: 'llama-3.3-70b',
-          messages: messages.slice(-8) as any,
-          temperature: 0.7,
-          max_tokens: 1500,
-        });
-        
-        const finalResult = finalResponse as any;
-        assistantMessage = finalResult.response || finalResult.content || 'I have gathered the requested information.';
-      } else {
-        // No function calling, use direct response
-        assistantMessage = result.response || result.content || 'I apologize, but I encountered an issue generating a response. Please try again.';
-      }
-    } catch (error) {
-      this.env.logger.error(`AI response failed: ${error instanceof Error ? error.message : 'Unknown'}`);
+      // Primary extraction path: OpenAI-style choices array
+      const primaryResponse = result.choices?.[0]?.message?.content;
       
-      // Fallback: Try to help with keyword detection as last resort
-      const lowerMessage = request.message.toLowerCase();
-      if (lowerMessage.includes('compliance score') || lowerMessage.includes('status')) {
-        try {
-          const statusData = await this.toolGetComplianceStatus(workspaceId, {});
-          assistantMessage = `**Current Compliance Status:**\n- Overall Score: ${statusData.overall_score}/100\n- Risk Level: ${statusData.risk_level}\n- Documents Checked: ${statusData.documents_checked}/${statusData.total_documents}\n- Critical Issues: ${statusData.critical_issues}\n- High Issues: ${statusData.high_issues}`;
-        } catch (toolError) {
-          assistantMessage = 'I apologize, but I encountered a technical issue. Please try again or contact support if the problem persists.';
-        }
-      } else {
-        assistantMessage = 'I apologize, but I encountered a technical issue. Please try again or contact support if the problem persists.';
+      // Fallback paths for different response formats
+      const fallbackResponse = result.response || result.content;
+      
+      // Get actual text content
+      const responseText = primaryResponse || fallbackResponse || '';
+      
+      // Log the response structure for debugging
+      this.env.logger.info('AI Response Structure', {
+        hasChoices: !!result.choices,
+        hasMessage: !!result.choices?.[0]?.message,
+        hasContent: !!primaryResponse,
+        hasFallback: !!fallbackResponse,
+        responseLength: responseText.length
+      });
+      
+      // Direct response (tools disabled due to Raindrop platform limitation)
+      if (!responseText) {
+        throw new Error('AI returned empty response');
       }
+      assistantMessage = responseText;
+      
+      this.env.logger.info('AI response generated', { 
+        length: assistantMessage.length
+      });
+    } catch (error) {
+      this.env.logger.error('AI inference failed', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      // Re-throw - no fallbacks, no heuristics, genuine AI responses only
+      throw new Error(`AI Assistant unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
     // Store assistant message in database
@@ -482,27 +472,32 @@ ${workspaceContext}`;
 
             let fullMessage = '';
 
-            // Stream chunks
+            // Stream chunks - expect real streaming response
             if (response && typeof response === 'object' && Symbol.asyncIterator in response) {
+              // Real streaming: iterate over chunks
               for await (const chunk of response as AsyncIterable<any>) {
-                const text = chunk.response || chunk.content || '';
+                // Extract content from OpenAI-compatible format
+                const deltaContent = chunk.choices?.[0]?.delta?.content;
+                const text = deltaContent || chunk.response || chunk.content || '';
+                
                 if (text) {
                   fullMessage += text;
                   controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'chunk', content: text })}\n\n`));
                 }
               }
             } else {
-              // Fallback: non-streaming response, simulate chunks
+              // Not a stream - use direct response extraction (OpenAI format)
               const result = response as any;
-              fullMessage = result.response || result.content || 'No response generated.';
+              const primaryResponse = result.choices?.[0]?.message?.content;
+              const fallbackResponse = result.response || result.content;
+              fullMessage = primaryResponse || fallbackResponse || '';
               
-              // Simulate streaming by splitting into words
-              const words = fullMessage.split(' ');
-              for (let i = 0; i < words.length; i++) {
-                const word = words[i] + (i < words.length - 1 ? ' ' : '');
-                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'chunk', content: word })}\n\n`));
-                await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay between words
+              if (!fullMessage) {
+                throw new Error('AI returned empty streaming response');
               }
+              
+              // Send as single chunk (no simulated streaming)
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'chunk', content: fullMessage })}\n\n`));
             }
 
             // Store complete message
