@@ -4,6 +4,70 @@ import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 
+// ============================================================================
+// Error Handling
+// ============================================================================
+
+class AssistantError extends Error {
+  constructor(
+    message: string,
+    public userMessage: string,
+    public code: string,
+    public retryable: boolean = false
+  ) {
+    super(message);
+    this.name = 'AssistantError';
+  }
+}
+
+function createUserFriendlyError(
+  technicalMessage: string,
+  code: string
+): AssistantError {
+  const errorMap: Record<string, { userMessage: string; retryable: boolean }> = {
+    'ACCESS_DENIED': {
+      userMessage: "You don't have access to this workspace. Please check your permissions or contact your workspace administrator.",
+      retryable: false
+    },
+    'SESSION_NOT_FOUND': {
+      userMessage: "Your conversation session has expired. Please start a new conversation.",
+      retryable: false
+    },
+    'AI_UNAVAILABLE': {
+      userMessage: "The AI assistant is temporarily unavailable. Please try again in a moment.",
+      retryable: true
+    },
+    'TOOL_FAILED': {
+      userMessage: "I encountered an issue accessing the requested information. Let me try a different approach.",
+      retryable: true
+    },
+    'MEMORY_ERROR': {
+      userMessage: "I'm having trouble accessing conversation history. Your message was received but context may be limited.",
+      retryable: true
+    },
+    'RATE_LIMIT': {
+      userMessage: "You're sending messages too quickly. Please wait a moment before trying again.",
+      retryable: true
+    }
+  };
+
+  const errorInfo = errorMap[code] || {
+    userMessage: "Something went wrong. Please try again or contact support if the issue persists.",
+    retryable: true
+  };
+
+  return new AssistantError(
+    technicalMessage,
+    errorInfo.userMessage,
+    code,
+    errorInfo.retryable
+  );
+}
+
+// ============================================================================
+// Types
+// ============================================================================
+
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
@@ -81,7 +145,10 @@ export default class extends Service<Env> {
       .executeTakeFirst();
 
     if (!membership) {
-      throw new Error('Access denied: You are not a member of this workspace');
+      throw createUserFriendlyError(
+        'Access denied: Not a workspace member',
+        'ACCESS_DENIED'
+      );
     }
 
     // Get or create conversation session
@@ -152,6 +219,24 @@ export default class extends Service<Env> {
     // Get workspace context for the assistant
     const workspaceContext = await this.getWorkspaceContext(workspaceId);
 
+    // Search episodic memory for relevant past conversations
+    let relevantPastSessions: string[] = [];
+    try {
+      const episodicResults = await this.env.ASSISTANT_MEMORY.searchEpisodicMemory(
+        request.message,
+        { nMostRecent: 3 }
+      );
+      
+      if (episodicResults && episodicResults.results && episodicResults.results.length > 0) {
+        relevantPastSessions = episodicResults.results.map(result => 
+          `Past conversation (${new Date(result.createdAt).toLocaleDateString()}): ${result.summary}`
+        );
+        this.env.logger.info(`📚 Found ${episodicResults.results.length} relevant past conversations`);
+      }
+    } catch (error) {
+      this.env.logger.warn(`Failed to search episodic memory: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+
     // Get system prompt from procedural memory or use default
     let baseSystemPrompt = '';
     try {
@@ -193,11 +278,21 @@ ERROR HANDLING:
 - Guide users to relevant pages if you can't directly help`;
     }
 
-    // Build complete system prompt with workspace context
+    // Build complete system prompt with workspace context and past conversation context
+    let episodicContext = '';
+    if (relevantPastSessions.length > 0) {
+      episodicContext = `\n\nRELEVANT PAST CONVERSATIONS:\n${relevantPastSessions.join('\n')}`;
+    }
+
     const systemPrompt = `${baseSystemPrompt}
 
 CURRENT WORKSPACE CONTEXT:
-${workspaceContext}`;
+${workspaceContext}${episodicContext}
+
+KNOWLEDGE BASE ACCESS:
+- Use the 'search_knowledge' tool to look up compliance requirements, best practices, and regulatory details
+- Knowledge base includes: GDPR, SOC2, HIPAA, ISO27001, NIST CSF, PCI DSS
+- Always cite knowledge base articles when providing compliance guidance`;
 
     // Get recent conversation history from SmartMemory
     let conversationHistory: ChatMessage[] = [];
@@ -267,10 +362,12 @@ CRITICAL INSTRUCTIONS:
    - search_documents: When user asks about specific documents or topics
    - get_compliance_issues: For questions about problems, gaps, or issues
    - get_document_info: For details about a specific document
+   - search_knowledge: For questions about compliance frameworks, regulations, requirements, or best practices
 
 2. When calling tools, provide a brief explanation like:
    - "Let me check your compliance status..." (while calling get_compliance_status)
    - "I'll search for those documents..." (while calling search_documents)
+   - "Let me look that up in our knowledge base..." (while calling search_knowledge)
 
 3. ALWAYS call tools for data-driven questions. Don't make up answers.
 
@@ -293,6 +390,7 @@ Available tools:
 - search_documents: For finding specific documents or searching by topic
 - get_compliance_issues: For questions about problems, gaps, or specific issues
 - get_document_info: For details about a specific document (requires document ID)
+- search_knowledge: For questions about compliance frameworks, regulations, requirements, or best practices (GDPR, SOC2, HIPAA, ISO27001, etc.)
 
 Respond with this exact JSON structure:
 {
@@ -317,6 +415,14 @@ User: "Find documents about GDPR"
   "tools": ["search_documents"],
   "reasoning": "User wants to search for specific documents",
   "userFacingMessage": "Searching for GDPR-related documents..."
+}
+
+User: "What are GDPR data breach notification requirements?"
+{
+  "needsTools": true,
+  "tools": ["search_knowledge"],
+  "reasoning": "User asking about specific regulatory requirements from frameworks",
+  "userFacingMessage": "Let me look that up in our compliance knowledge base..."
 }
 
 User: "thank you"
@@ -438,7 +544,10 @@ User: "thank you"
       });
       
       // Re-throw - no fallbacks, no heuristics, genuine AI responses only
-      throw new Error(`AI Assistant unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw createUserFriendlyError(
+        `AI error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'AI_UNAVAILABLE'
+      );
     }
 
     // Store assistant message in database
@@ -930,6 +1039,28 @@ Workspace context: ${workspaceContext}`
           },
         },
       },
+      {
+        type: 'function',
+        function: {
+          name: 'search_knowledge',
+          description: 'Search the compliance knowledge base for regulations, requirements, and best practices. Use this for questions about specific frameworks (GDPR, SOC2, HIPAA, ISO27001, etc.)',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'Search query (e.g., "GDPR data retention requirements", "SOC2 access control best practices")',
+              },
+              framework: {
+                type: 'string',
+                enum: ['gdpr', 'soc2', 'hipaa', 'iso27001', 'nist_csf', 'pci_dss', 'all'],
+                description: 'Specific framework to search, or "all" for all frameworks',
+              },
+            },
+            required: ['query'],
+          },
+        },
+      },
     ];
   }
 
@@ -961,6 +1092,9 @@ Workspace context: ${workspaceContext}`
             break;
           case 'get_document_info':
             result = await this.toolGetDocumentInfo(workspaceId, args);
+            break;
+          case 'search_knowledge':
+            result = await this.toolSearchKnowledge(args);
             break;
           default:
             result = { error: `Unknown tool: ${toolCall.function.name}` };
@@ -1454,6 +1588,125 @@ RULES:
     return { success: true };
   }
 
+  // ============================================================================
+  // Knowledge Base Tool
+  // ============================================================================
+
+  private async toolSearchKnowledge(
+    args: { query: string; framework?: string }
+  ): Promise<any> {
+    try {
+      this.env.logger.info('🔍 Knowledge search started', { query: args.query, framework: args.framework });
+      
+      const proceduralMemory = await this.env.ASSISTANT_MEMORY.getProceduralMemory();
+      
+      // Search all knowledge articles stored in procedural memory
+      const knowledgeKeys = [
+        'kb_gdpr_data_minimization',
+        'kb_gdpr_breach_notification',
+        'kb_soc2_evidence',
+        'kb_hipaa_baa',
+        'kb_iso27001_risk',
+        'kb_access_control',
+        'kb_data_retention',
+        'kb_incident_response'
+      ];
+
+      const queryLower = args.query.toLowerCase();
+      const matchingArticles: any[] = [];
+
+      this.env.logger.info('📚 Searching through knowledge articles', { 
+        keyCount: knowledgeKeys.length,
+        queryLower 
+      });
+
+      // Search through all knowledge base articles
+      for (const key of knowledgeKeys) {
+        const article = await proceduralMemory.getProcedure(key);
+        
+        this.env.logger.info(`📖 Checking article ${key}`, { 
+          found: !!article,
+          length: article ? article.length : 0
+        });
+        
+        if (article) {
+          const articleLower = article.toLowerCase();
+          
+          // Simple keyword matching
+          const relevantKeywords = [
+            'gdpr', 'breach', 'notification', 'data', 'protection',
+            'soc2', 'soc 2', 'audit', 'evidence',
+            'hipaa', 'baa', 'business associate',
+            'iso', '27001', 'risk', 'assessment',
+            'access', 'control', 'retention', 'incident', 'response'
+          ];
+
+          const matchesQuery = relevantKeywords.some(keyword => 
+            queryLower.includes(keyword) && articleLower.includes(keyword)
+          );
+
+          if (matchesQuery || articleLower.includes(queryLower)) {
+            matchingArticles.push({
+              key,
+              content: article,
+              // Simple relevance scoring
+              relevance: articleLower.split(queryLower).length - 1
+            });
+            
+            this.env.logger.info(`✅ Article matched: ${key}`, { relevance: articleLower.split(queryLower).length - 1 });
+          }
+        }
+      }
+
+      this.env.logger.info('📊 Search complete', { matchCount: matchingArticles.length });
+
+      // Sort by relevance and return top 3
+      matchingArticles.sort((a, b) => b.relevance - a.relevance);
+      const topArticles = matchingArticles.slice(0, 3);
+
+      if (topArticles.length > 0) {
+        this.env.logger.info('✅ Returning knowledge base results', { count: topArticles.length });
+        return {
+          source: 'knowledge_base',
+          results: topArticles.map(article => ({
+            content: article.content,
+            relevance: article.relevance
+          }))
+        };
+      }
+
+      // Fallback to framework guides
+      if (args.framework && args.framework !== 'all') {
+        const guide = await proceduralMemory.getProcedure(`${args.framework}_guide`);
+        if (guide) {
+          this.env.logger.info('✅ Returning framework guide', { framework: args.framework });
+          return {
+            source: 'framework_guide',
+            framework: args.framework,
+            content: guide
+          };
+        }
+      }
+
+      this.env.logger.warn('⚠️ No knowledge found', { query: args.query });
+      return {
+        message: 'No specific knowledge found. Using general model knowledge.',
+        query: args.query
+      };
+    } catch (error) {
+      this.env.logger.error('❌ Knowledge search failed', {
+        error: error instanceof Error ? error.message : String(error),
+        query: args.query,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      return {
+        error: 'Knowledge search temporarily unavailable',
+        fallback: 'Using general model knowledge for this query'
+      };
+    }
+  }
+
   /**
    * Initialize SmartMemory with system prompts and knowledge base
    * This should be run once after deployment
@@ -1541,14 +1794,101 @@ AUDIT TYPES:
 - Type I: Design effectiveness at a point in time
 - Type II: Operating effectiveness over a period (6-12 months)`;
 
+      // HIPAA Guide
+      const HIPAA_GUIDE = `HIPAA (Health Insurance Portability and Accountability Act) Quick Reference
+
+KEY RULES:
+1. Privacy Rule - Protected Health Information (PHI) protection
+2. Security Rule - Electronic PHI (ePHI) safeguards
+3. Breach Notification Rule - Breach reporting requirements
+
+SAFEGUARDS REQUIRED:
+- Administrative: Policies, procedures, training
+- Physical: Facility access controls, workstation security
+- Technical: Access controls, audit controls, encryption
+
+KEY REQUIREMENTS:
+- Business Associate Agreements (BAAs)
+- Risk assessments
+- Workforce training
+- Breach notification (60 days)
+- Minimum necessary standard`;
+
+      // ISO 27001 Guide
+      const ISO27001_GUIDE = `ISO 27001 (Information Security Management) Quick Reference
+
+CORE COMPONENTS:
+1. Information Security Management System (ISMS)
+2. Risk assessment and treatment
+3. Statement of Applicability (SoA)
+
+CONTROL CATEGORIES (Annex A):
+- Organizational controls (37)
+- People controls (8)
+- Physical controls (14)
+- Technological controls (34)
+
+CERTIFICATION PROCESS:
+- Stage 1: Documentation review
+- Stage 2: Implementation audit
+- Surveillance audits (annual)
+- Recertification (3 years)`;
+
       // Store in procedural memory
       await proceduralMemory.putProcedure('system_prompt', SYSTEM_PROMPT);
       await proceduralMemory.putProcedure('gdpr_guide', GDPR_GUIDE);
       await proceduralMemory.putProcedure('soc2_guide', SOC2_GUIDE);
+      await proceduralMemory.putProcedure('hipaa_guide', HIPAA_GUIDE);
+      await proceduralMemory.putProcedure('iso27001_guide', ISO27001_GUIDE);
+
+      // Store detailed knowledge articles in procedural memory (globally accessible)
+      const knowledgeArticles = [
+        {
+          key: 'kb_gdpr_data_minimization',
+          content: 'GDPR Article 5 - Data Minimization Principle: Personal data must be adequate, relevant and limited to what is necessary in relation to the purposes for which they are processed. Organizations should collect only data that is directly relevant and necessary to accomplish a specified purpose. Regularly review data collection practices and delete unnecessary data. Tags: GDPR, data_protection, privacy, data_minimization'
+        },
+        {
+          key: 'kb_gdpr_breach_notification',
+          content: 'GDPR Data Breach Notification Requirements: Organizations must notify the relevant supervisory authority within 72 hours of becoming aware of a personal data breach, unless the breach is unlikely to result in a risk to individuals. The notification must include: 1) Nature of the breach (categories and number of data subjects/records affected), 2) Name and contact details of the DPO or contact point, 3) Description of likely consequences, 4) Measures taken or proposed to address the breach. If high risk to individuals, affected persons must also be notified without undue delay. Tags: GDPR, data_breach, incident_response, notification, 72_hours'
+        },
+        {
+          key: 'kb_soc2_evidence',
+          content: 'SOC 2 Type II Evidence Requirements: For SOC 2 Type II audits, provide evidence of control operating effectiveness over 6-12 months. Required evidence includes: access logs, change management tickets, incident reports, security awareness training records, vulnerability scan results, penetration test reports, and board-level security reviews. Evidence must demonstrate consistent application of controls throughout the audit period. Tags: SOC2, audit, evidence, type_ii, compliance'
+        },
+        {
+          key: 'kb_hipaa_baa',
+          content: 'HIPAA Business Associate Agreement (BAA) Requirements: A BAA is required when a business associate will create, receive, maintain, or transmit PHI on behalf of a covered entity. Must include: permitted uses and disclosures, safeguard requirements, breach notification obligations, subcontractor provisions, termination clauses, and audit rights. Both parties must sign before any PHI is shared. Tags: HIPAA, BAA, business_associate, contracts, PHI'
+        },
+        {
+          key: 'kb_iso27001_risk',
+          content: 'ISO 27001 Risk Assessment Methodology: Risk assessment must identify assets, threats, vulnerabilities, and existing controls. Calculate inherent risk (likelihood × impact), then residual risk after controls. Document risk treatment decisions: modify (implement controls), retain (accept risk), avoid (eliminate activity), or share (transfer to third party). Update risk register at least annually or when significant changes occur. Tags: ISO27001, risk_assessment, ISMS, risk_management'
+        },
+        {
+          key: 'kb_access_control',
+          content: 'Cross-Framework Access Control Best Practices: Implement least privilege access (all frameworks). Use role-based access control (RBAC) with regular reviews. Enforce multi-factor authentication for privileged access. Log all access attempts and review logs regularly. Revoke access immediately upon termination. Document access procedures and conduct annual access recertification. Applies to GDPR, SOC2, HIPAA, and ISO 27001. Tags: access_control, RBAC, MFA, least_privilege, security'
+        },
+        {
+          key: 'kb_data_retention',
+          content: 'Data Retention Policy Guidelines: Define retention periods based on legal, regulatory, and business requirements. GDPR requires data not be kept longer than necessary for its purpose. HIPAA requires medical records for 6+ years (varies by state). SOC 2 requires audit evidence for 7 years. Implement automated deletion processes and document retention schedule. Include data classification, retention periods by category, destruction methods, and legal holds. Tags: data_retention, privacy, records_management, GDPR, HIPAA'
+        },
+        {
+          key: 'kb_incident_response',
+          content: 'Incident Response Plan Components: Essential components: 1) Preparation (tools, training, contact lists), 2) Detection and analysis (monitoring, triage), 3) Containment strategies (short-term and long-term), 4) Eradication and recovery (remove threat, restore systems), 5) Post-incident review (lessons learned). Designate incident response team, define escalation procedures, maintain communication templates, conduct regular drills (at least annually), and document all incidents. Tags: incident_response, security, breach, SOC2, ISO27001, GDPR'
+        }
+      ];
+
+      // Store each knowledge article in procedural memory
+      for (const article of knowledgeArticles) {
+        try {
+          await proceduralMemory.putProcedure(article.key, article.content);
+        } catch (error) {
+          this.env.logger.warn(`Failed to store knowledge article: ${article.key}`);
+        }
+      }
 
       return {
         success: true,
-        message: 'SmartMemory initialized successfully with system prompt and compliance guides',
+        message: `SmartMemory initialized successfully with system prompt, ${knowledgeArticles.length} knowledge articles, and 5 framework guides`,
       };
     } catch (error) {
       console.error('Failed to initialize SmartMemory:', error);
