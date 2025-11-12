@@ -471,8 +471,12 @@ User: "thank you"
       .where('id', '=', session.id)
       .execute();
 
-    // Generate contextual suggestions
-    const suggestions = this.generateSuggestions(request.message, workspaceContext);
+    // Generate AI-powered contextual suggestions (async, no heuristics)
+    const suggestions = await this.generateSuggestions(
+      request.message, 
+      assistantMessage,
+      workspaceContext
+    );
 
     return {
       sessionId: session.id,
@@ -670,8 +674,12 @@ User: "thank you"
               .where('id', '=', session.id)
               .execute();
 
-            // Generate suggestions
-            const suggestions = self.generateSuggestions(request.message, workspaceContext);
+            // Generate AI-powered suggestions (async, no heuristics)
+            const suggestions = await self.generateSuggestions(
+              request.message,
+              fullMessage,
+              workspaceContext
+            );
 
             // Send completion event
             controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ 
@@ -752,37 +760,59 @@ User: "thank you"
     return context;
   }
 
-  private generateSuggestions(userMessage: string, context: string): string[] {
-    const lowerMessage = userMessage.toLowerCase();
-    const suggestions: string[] = [];
+  private async generateSuggestions(
+    userMessage: string, 
+    assistantResponse: string,
+    workspaceContext: string
+  ): Promise<string[]> {
+    // Generate AI-powered suggestions based on the conversation context
+    // This ensures NO heuristics or fallbacks - genuine AI reasoning only
+    
+    try {
+      const suggestionPrompt = {
+        role: 'system',
+        content: `You are a helpful compliance assistant. Based on the conversation context, suggest 2-3 relevant follow-up questions the user might want to ask.
 
-    if (lowerMessage.includes('score') || lowerMessage.includes('compliance')) {
-      suggestions.push('Show me detailed breakdown of my compliance issues');
-      suggestions.push('How can I improve my compliance score?');
+Rules:
+1. Suggestions must be natural, conversational questions
+2. Base suggestions on the actual conversation and workspace data
+3. Make suggestions actionable and specific
+4. Return ONLY a JSON array of strings, nothing else
+
+Example output:
+["Show me detailed breakdown of my compliance issues", "How can I improve my compliance score?"]
+
+Current conversation:
+User: ${userMessage}
+Assistant: ${assistantResponse}
+
+Workspace context: ${workspaceContext}`
+      };
+
+      const response = await this.env.AI.run('llama-3.3-70b', {
+        model: 'llama-3.3-70b',
+        messages: [suggestionPrompt] as any,
+        response_format: { type: 'json_object' },
+        temperature: 0.5,
+        max_tokens: 200,
+      });
+
+      const result = response.choices[0].message.content;
+      const parsed = JSON.parse(result);
+      
+      // Handle both array format and object with array property
+      const suggestions = Array.isArray(parsed) ? parsed : (parsed.suggestions || []);
+      
+      return suggestions.slice(0, 3); // Limit to 3 suggestions
+    } catch (error) {
+      this.env.logger.error('Failed to generate AI suggestions', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      // Return empty array instead of fallback suggestions
+      // This ensures we NEVER use heuristics
+      return [];
     }
-
-    if (lowerMessage.includes('gdpr') || lowerMessage.includes('privacy')) {
-      suggestions.push('What are the key GDPR requirements?');
-      suggestions.push('How do I handle data subject requests?');
-    }
-
-    if (lowerMessage.includes('soc') || lowerMessage.includes('soc2')) {
-      suggestions.push('Explain SOC 2 Trust Service Criteria');
-      suggestions.push('What controls do I need for SOC 2?');
-    }
-
-    if (lowerMessage.includes('issue') || lowerMessage.includes('problem')) {
-      suggestions.push('Show me all critical issues');
-      suggestions.push('What are the most common compliance gaps?');
-    }
-
-    if (suggestions.length === 0) {
-      suggestions.push('What is my current compliance status?');
-      suggestions.push('Show me compliance trends');
-      suggestions.push('What frameworks should I focus on?');
-    }
-
-    return suggestions.slice(0, 3);
   }
 
   // ============================================================================
