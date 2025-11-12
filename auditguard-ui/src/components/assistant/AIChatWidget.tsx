@@ -2,12 +2,24 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, Send, X, Minimize2, Maximize2 } from 'lucide-react';
+import { Bot, Send, X, Minimize2, Maximize2, ExternalLink, Download } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
+import 'highlight.js/styles/github-dark.css';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  actions?: Action[];
+}
+
+interface Action {
+  type: 'navigate' | 'download';
+  target?: string;
+  label?: string;
 }
 
 interface Suggestion {
@@ -20,6 +32,7 @@ interface Props {
 }
 
 export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -135,7 +148,8 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
       const assistantMessage: Message = {
         role: 'assistant',
         content: data.message,
-        timestamp: new Date()
+        timestamp: new Date(),
+        actions: data.actions || []
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -159,6 +173,14 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
   const handleSuggestionClick = (suggestion: string) => {
     setInput(suggestion);
     sendMessage(suggestion);
+  };
+
+  const handleAction = (action: Action) => {
+    if (action.type === 'navigate' && action.target) {
+      router.push(action.target);
+    } else if (action.type === 'download' && action.target) {
+      window.open(action.target, '_blank');
+    }
   };
 
   const clearConversation = () => {
@@ -277,7 +299,52 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
                         : 'bg-gray-100 text-gray-900'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    {message.role === 'assistant' ? (
+                      <div className="prose prose-sm max-w-none prose-headings:mt-2 prose-headings:mb-2 prose-p:my-1 prose-pre:my-2">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          rehypePlugins={[rehypeHighlight]}
+                          components={{
+                            // Customize rendering for better chat display
+                            h1: ({node, ...props}) => <h1 className="text-lg font-bold" {...props} />,
+                            h2: ({node, ...props}) => <h2 className="text-base font-bold" {...props} />,
+                            h3: ({node, ...props}) => <h3 className="text-sm font-bold" {...props} />,
+                            p: ({node, ...props}) => <p className="text-sm" {...props} />,
+                            code: ({node, inline, ...props}: any) => 
+                              inline ? (
+                                <code className="bg-gray-200 px-1 rounded text-xs" {...props} />
+                              ) : (
+                                <code className="text-xs" {...props} />
+                              ),
+                            pre: ({node, ...props}) => <pre className="bg-gray-800 text-gray-100 p-2 rounded overflow-x-auto" {...props} />,
+                            ul: ({node, ...props}) => <ul className="list-disc list-inside text-sm" {...props} />,
+                            ol: ({node, ...props}) => <ol className="list-decimal list-inside text-sm" {...props} />,
+                            a: ({node, ...props}) => <a className="text-blue-600 hover:underline" {...props} />,
+                          }}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
+                        
+                        {/* Action Buttons */}
+                        {message.actions && message.actions.length > 0 && (
+                          <div className="mt-3 pt-2 border-t border-gray-200 flex flex-wrap gap-2">
+                            {message.actions.map((action, actionIndex) => (
+                              <button
+                                key={actionIndex}
+                                onClick={() => handleAction(action)}
+                                className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs transition-colors"
+                              >
+                                {action.type === 'navigate' && <ExternalLink className="w-3 h-3" />}
+                                {action.type === 'download' && <Download className="w-3 h-3" />}
+                                {action.label || (action.type === 'navigate' ? 'View' : 'Download')}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    )}
                     <p className="text-xs opacity-70 mt-1">
                       {message.timestamp.toLocaleTimeString()}
                     </p>
