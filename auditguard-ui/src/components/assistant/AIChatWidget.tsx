@@ -246,7 +246,7 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-6 right-6 z-50 w-96 h-[600px] bg-white rounded-lg shadow-2xl flex flex-col"
+            className="fixed bottom-6 right-6 z-50 w-96 h-[760px] bg-white rounded-lg shadow-2xl flex flex-col"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b bg-blue-600 text-white rounded-t-lg">
