@@ -2269,6 +2269,187 @@ export default class extends Service<Env> {
         });
       }
 
+      // ==========================================================================
+      // AI ASSISTANT ROUTES
+      // ==========================================================================
+
+      // POST /api/workspaces/:id/assistant/chat - Send message to AI assistant
+      const assistantChatMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/assistant\/chat$/);
+      if (assistantChatMatch && assistantChatMatch[1] && request.method === 'POST') {
+        const startTime = Date.now();
+        const operation = 'assistant.chat';
+
+        try {
+          const workspaceId = assistantChatMatch[1];
+          const user = await this.validateSession(request);
+
+          const parseResult = await this.safeParseJSON<{
+            message: string;
+            sessionId?: string;
+            context?: {
+              currentPage?: string;
+              documentId?: string;
+            };
+          }>(request, ['message']);
+
+          if (!parseResult.success) {
+            return this.trackAndReturn(
+              operation,
+              startTime,
+              new Response(JSON.stringify({ error: (parseResult as any).error }), {
+                status: (parseResult as any).status,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              })
+            );
+          }
+
+          const result = await this.env.ASSISTANT_SERVICE.chat(workspaceId, user.userId, parseResult.data);
+
+          return this.trackAndReturn(
+            operation,
+            startTime,
+            new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            })
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await this.trackPerformance(operation, startTime, false, errorMessage);
+
+          return new Response(JSON.stringify({ error: errorMessage }), {
+            status: error instanceof Error && error.message.includes('Access denied') ? 403 : 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // GET /api/workspaces/:id/assistant/sessions - List conversation sessions
+      const assistantSessionsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/assistant\/sessions$/);
+      if (assistantSessionsMatch && assistantSessionsMatch[1] && request.method === 'GET') {
+        const startTime = Date.now();
+        const operation = 'assistant.listSessions';
+
+        try {
+          const workspaceId = assistantSessionsMatch[1];
+          const user = await this.validateSession(request);
+
+          const result = await this.env.ASSISTANT_SERVICE.listSessions(workspaceId, user.userId);
+
+          return this.trackAndReturn(
+            operation,
+            startTime,
+            new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            })
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await this.trackPerformance(operation, startTime, false, errorMessage);
+
+          return new Response(JSON.stringify({ error: errorMessage }), {
+            status: error instanceof Error && error.message.includes('Access denied') ? 403 : 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // GET /api/workspaces/:id/assistant/sessions/:sessionId - Get session history
+      const assistantSessionHistoryMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/assistant\/sessions\/([^\/]+)$/);
+      if (assistantSessionHistoryMatch && assistantSessionHistoryMatch[1] && assistantSessionHistoryMatch[2] && request.method === 'GET') {
+        const startTime = Date.now();
+        const operation = 'assistant.getSessionHistory';
+
+        try {
+          const workspaceId = assistantSessionHistoryMatch[1];
+          const sessionId = assistantSessionHistoryMatch[2];
+          const user = await this.validateSession(request);
+
+          const result = await this.env.ASSISTANT_SERVICE.getSessionHistory(sessionId, workspaceId, user.userId);
+
+          return this.trackAndReturn(
+            operation,
+            startTime,
+            new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            })
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await this.trackPerformance(operation, startTime, false, errorMessage);
+
+          return new Response(JSON.stringify({ error: errorMessage }), {
+            status: error instanceof Error && error.message.includes('Access denied') ? 403 : 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // DELETE /api/workspaces/:id/assistant/sessions/:sessionId - Delete session
+      if (assistantSessionHistoryMatch && assistantSessionHistoryMatch[1] && assistantSessionHistoryMatch[2] && request.method === 'DELETE') {
+        const startTime = Date.now();
+        const operation = 'assistant.deleteSession';
+
+        try {
+          const workspaceId = assistantSessionHistoryMatch[1];
+          const sessionId = assistantSessionHistoryMatch[2];
+          const user = await this.validateSession(request);
+
+          const result = await this.env.ASSISTANT_SERVICE.deleteSession(sessionId, workspaceId, user.userId);
+
+          return this.trackAndReturn(
+            operation,
+            startTime,
+            new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            })
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await this.trackPerformance(operation, startTime, false, errorMessage);
+
+          return new Response(JSON.stringify({ error: errorMessage }), {
+            status: error instanceof Error && error.message.includes('Access denied') ? 403 : 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // Match /api/assistant/initialize (admin-only)
+      if (path === '/api/assistant/initialize' && request.method === 'POST') {
+        const startTime = Date.now();
+        const operation = 'assistant.initialize';
+
+        try {
+          // For now, allow without auth for initial setup
+          // In production, add admin role check:
+          // const user = await this.validateSession(request);
+          // if (user.role !== 'admin') throw new Error('Admin access required');
+
+          const result = await this.env.ASSISTANT_SERVICE.initializeSmartMemory();
+
+          return this.trackAndReturn(
+            operation,
+            startTime,
+            new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            })
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await this.trackPerformance(operation, startTime, false, errorMessage);
+
+          return new Response(JSON.stringify({ error: errorMessage }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // ==========================================================================
+      // END AI ASSISTANT ROUTES
+      // ==========================================================================
+
+
       // Match /api/workspaces/:id/issues
       const workspaceIssuesMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues$/);
       if (workspaceIssuesMatch && workspaceIssuesMatch[1] && request.method === 'GET') {
@@ -2321,77 +2502,6 @@ export default class extends Service<Env> {
         return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
-      }
-
-      // ====== ASSISTANT ENDPOINTS ======
-      // Match /api/workspaces/:id/assistant/chat
-      const assistantChatMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/assistant\/chat$/);
-      if (assistantChatMatch && assistantChatMatch[1] && request.method === 'POST') {
-        const workspaceId = assistantChatMatch[1];
-        const user = await this.validateSession(request);
-
-        // CRITICAL FIX: Safe JSON parsing with field validation
-        const parseResult = await this.safeParseJSON<{
-          message: string;
-          sessionId?: string;
-        }>(request, ['message']);
-        if (!parseResult.success) {
-          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
-            status: (parseResult as any).status,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          });
-        }
-        const body = parseResult.data;
-
-        if (!body.message) {
-          return new Response(JSON.stringify({ error: 'Message is required' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          });
-        }
-
-        const result = await this.env.ASSISTANT_SERVICE.chat(workspaceId, user.userId, body);
-
-        return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        });
-      }
-
-      // Match /api/workspaces/:id/assistant/sessions
-      const assistantSessionsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/assistant\/sessions$/);
-      if (assistantSessionsMatch && assistantSessionsMatch[1] && request.method === 'GET') {
-        const workspaceId = assistantSessionsMatch[1];
-        const user = await this.validateSession(request);
-
-        const result = await this.env.ASSISTANT_SERVICE.listSessions(workspaceId, user.userId);
-
-        return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        });
-      }
-
-      // Match /api/workspaces/:id/assistant/sessions/:sessionId
-      const assistantSessionMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/assistant\/sessions\/([^\/]+)$/);
-      if (assistantSessionMatch && assistantSessionMatch[1] && assistantSessionMatch[2]) {
-        const workspaceId = assistantSessionMatch[1];
-        const sessionId = assistantSessionMatch[2];
-        const user = await this.validateSession(request);
-
-        if (request.method === 'GET') {
-          const result = await this.env.ASSISTANT_SERVICE.getSessionHistory(sessionId, workspaceId, user.userId);
-
-          return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          });
-        }
-
-        if (request.method === 'DELETE') {
-          const result = await this.env.ASSISTANT_SERVICE.deleteSession(sessionId, workspaceId, user.userId);
-
-          return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          });
-        }
       }
 
       // ====== BILLING & SUBSCRIPTION ENDPOINTS ======
@@ -3502,6 +3612,16 @@ export default class extends Service<Env> {
   }
 
   private getSessionId(request: Request): string | null {
+    // First check for Authorization Bearer token
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader) {
+      const match = authHeader.match(/Bearer\s+(.+)/i);
+      if (match?.[1]) {
+        return match[1];
+      }
+    }
+
+    // Fall back to cookie-based session
     const cookie = request.headers.get('Cookie');
     if (!cookie) return null;
 
