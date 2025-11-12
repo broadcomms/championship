@@ -26,6 +26,7 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -35,6 +36,55 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Load session ID and conversation history from localStorage on mount
+  useEffect(() => {
+    const loadConversationHistory = async () => {
+      // Get stored session ID for this workspace
+      const storageKey = `ai_session_${workspaceId}`;
+      const storedSessionId = localStorage.getItem(storageKey);
+      
+      if (storedSessionId) {
+        setSessionId(storedSessionId);
+        setIsLoadingHistory(true);
+        
+        try {
+          // Fetch conversation history from backend
+          const response = await fetch(
+            `/api/assistant/chat?workspaceId=${workspaceId}&sessionId=${storedSessionId}`,
+            {
+              method: 'GET',
+              credentials: 'include',
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            
+            // Convert backend messages to widget format
+            if (data.messages && Array.isArray(data.messages)) {
+              const loadedMessages: Message[] = data.messages.map((msg: any) => ({
+                role: msg.role,
+                content: msg.content,
+                timestamp: new Date(msg.created_at || msg.timestamp)
+              }));
+              
+              setMessages(loadedMessages);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load conversation history:', error);
+          // If loading fails, clear the stored session to start fresh
+          localStorage.removeItem(storageKey);
+          setSessionId(null);
+        } finally {
+          setIsLoadingHistory(false);
+        }
+      }
+    };
+
+    loadConversationHistory();
+  }, [workspaceId]);
 
   const sendMessage = async (messageText?: string) => {
     const messageToSend = messageText || input;
@@ -75,7 +125,12 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
 
       const data = await response.json();
       
-      setSessionId(data.sessionId);
+      // Save session ID for this workspace
+      if (data.sessionId) {
+        setSessionId(data.sessionId);
+        const storageKey = `ai_session_${workspaceId}`;
+        localStorage.setItem(storageKey, data.sessionId);
+      }
       
       const assistantMessage: Message = {
         role: 'assistant',
@@ -104,6 +159,16 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
   const handleSuggestionClick = (suggestion: string) => {
     setInput(suggestion);
     sendMessage(suggestion);
+  };
+
+  const clearConversation = () => {
+    if (confirm('Are you sure you want to clear this conversation? This cannot be undone.')) {
+      const storageKey = `ai_session_${workspaceId}`;
+      localStorage.removeItem(storageKey);
+      setSessionId(null);
+      setMessages([]);
+      setSuggestions([]);
+    }
   };
 
   return (
@@ -138,19 +203,41 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
               <div className="flex items-center space-x-2">
                 <Bot className="w-5 h-5" />
                 <span className="font-semibold">AuditGuard AI</span>
+                {sessionId && (
+                  <span className="text-xs opacity-70">• Active Session</span>
+                )}
               </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="hover:bg-blue-700 p-1 rounded"
-                aria-label="Close chat"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center space-x-2">
+                {messages.length > 0 && (
+                  <button
+                    onClick={clearConversation}
+                    className="hover:bg-blue-700 px-2 py-1 rounded text-xs"
+                    aria-label="Clear conversation"
+                    title="Clear conversation"
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="hover:bg-blue-700 p-1 rounded"
+                  aria-label="Close chat"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.length === 0 && (
+              {isLoadingHistory && (
+                <div className="text-center text-gray-500 py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-sm">Loading conversation history...</p>
+                </div>
+              )}
+              
+              {!isLoadingHistory && messages.length === 0 && (
                 <div className="text-center text-gray-500 mt-8">
                   <Bot className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                   <p className="mb-2 font-semibold">Hi! I'm your AI compliance assistant.</p>
