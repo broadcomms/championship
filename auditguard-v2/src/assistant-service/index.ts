@@ -47,6 +47,7 @@ interface ChatResponse {
 interface Action {
   type: 'navigate' | 'api_call' | 'download';
   target?: string;
+  label?: string;
   method?: string;
   payload?: unknown;
 }
@@ -64,6 +65,12 @@ export default class extends Service<Env> {
 
   async chat(workspaceId: string, userId: string, request: ChatRequest): Promise<ChatResponse> {
     const db = this.getDb();
+    
+    this.env.logger.info('🚀 CHAT REQUEST STARTED', {
+      workspaceId,
+      userId,
+      message: request.message.substring(0, 100)
+    });
 
     // Verify workspace access
     const membership = await db
@@ -244,7 +251,8 @@ ${workspaceContext}`;
 
     // Generate AI response
     let assistantMessage: string;
-    const actions: Action[] = [];
+    let decision: any = { needsTools: false, tools: [], reasoning: '' };
+    let toolResults: any = { messages: [], rawData: [] };
 
     try {
       // Workaround for Raindrop Zod validation: Ensure content is never null
@@ -373,7 +381,7 @@ User: "thank you"
         
         this.env.logger.info('Tools executed', {
           toolCount: toolCalls.length,
-          actionsGenerated: toolResults.actions.length
+          rawDataCount: toolResults.rawData.length
         });
         
         // Stage 3: Generate final response with tool results
@@ -399,11 +407,9 @@ User: "thank you"
         });
         
         assistantMessage = finalResponse.choices[0].message.content;
-        actions.push(...toolResults.actions);
         
         this.env.logger.info('Final response with tool results generated', {
           toolsExecuted: toolCalls.length,
-          actionsGenerated: actions.length,
           responseLength: assistantMessage.length
         });
       } else {
@@ -471,19 +477,34 @@ User: "thank you"
       .where('id', '=', session.id)
       .execute();
 
-    // Generate AI-powered contextual suggestions (async, no heuristics)
-    const suggestions = await this.generateSuggestions(
-      request.message, 
-      assistantMessage,
-      workspaceContext
-    );
+    // Post-process: Generate suggestions and actions using AI
+    this.env.logger.info('🔄 Starting post-processing for suggestions and actions');
+    const postProcessing = await this.postProcessResponse({
+      userMessage: request.message,
+      assistantResponse: assistantMessage,
+      toolsUsed: decision.needsTools ? decision.tools : [],
+      toolResults: decision.needsTools ? toolResults.rawData : [],
+      workspaceId: workspaceId,
+      workspaceContext: workspaceContext
+    });
 
-    return {
+    const response = {
       sessionId: session.id,
       message: assistantMessage,
-      suggestions,
-      actions,
+      suggestions: postProcessing.suggestions,
+      actions: postProcessing.actions,
     };
+
+    // Debug logging
+    this.env.logger.info(`📤 Chat Response Complete:`, {
+      messagePreview: assistantMessage.substring(0, 100),
+      actionsCount: postProcessing.actions.length,
+      suggestionsCount: postProcessing.suggestions.length,
+      actions: postProcessing.actions.map(a => ({ type: a.type, label: a.label })),
+      suggestions: postProcessing.suggestions
+    });
+    
+    return response;
   }
 
   /**
@@ -596,6 +617,12 @@ User: "thank you"
     const self = this;
 
     // Create a ReadableStream for Server-Sent Events
+    // Variables to capture for post-processing
+    let capturedUserMessage = request.message;
+    let capturedToolsUsed: string[] = [];
+    let capturedToolResults: any[] = [];
+    let capturedWorkspaceContext = '';
+
     const stream = new ReadableStream({
       async start(controller) {
         try {
@@ -674,18 +701,22 @@ User: "thank you"
               .where('id', '=', session.id)
               .execute();
 
-            // Generate AI-powered suggestions (async, no heuristics)
-            const suggestions = await self.generateSuggestions(
-              request.message,
-              fullMessage,
-              workspaceContext
-            );
+            // Post-process: Generate suggestions and actions using AI
+            // Note: streamChat doesn't use tools yet, so toolResults will be empty
+            const postProcessing = await self.postProcessResponse({
+              userMessage: request.message,
+              assistantResponse: fullMessage,
+              toolsUsed: [], // No tools in streaming yet
+              toolResults: [],
+              workspaceId: workspaceId,
+              workspaceContext: workspaceContext
+            });
 
-            // Send completion event
+            // Send completion event with post-processed suggestions and actions
             controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ 
               type: 'done', 
-              suggestions,
-              actions: []
+              suggestions: postProcessing.suggestions,
+              actions: postProcessing.actions
             })}\n\n`));
 
           } catch (error) {
@@ -906,9 +937,9 @@ Workspace context: ${workspaceContext}`
     toolCalls: any[],
     workspaceId: string,
     userId: string
-  ): Promise<{ messages: ChatMessage[]; actions: Action[] }> {
+  ): Promise<{ messages: ChatMessage[]; rawData: any[] }> {
     const messages: ChatMessage[] = [];
-    const actions: Action[] = [];
+    const rawData: any[] = [];
 
     for (const toolCall of toolCalls) {
       try {
@@ -935,6 +966,14 @@ Workspace context: ${workspaceContext}`
             result = { error: `Unknown tool: ${toolCall.function.name}` };
         }
 
+        // Store raw data for post-processing
+        rawData.push({
+          tool: toolCall.function.name,
+          args: args,
+          result: result,
+          workspaceId: workspaceId
+        });
+
         messages.push({
           role: 'assistant',
           content: `Tool result for ${toolCall.function.name}: ${JSON.stringify(result)}`,
@@ -948,7 +987,95 @@ Workspace context: ${workspaceContext}`
       }
     }
 
-    return { messages, actions };
+    return { messages, rawData };
+  }
+
+  /**
+   * Post-process conversation to generate contextual suggestions and actions
+   * This runs AFTER the response is generated, analyzing the full conversation
+   */
+  private async postProcessResponse(input: {
+    userMessage: string;
+    assistantResponse: string;
+    toolsUsed: string[];
+    toolResults: any[];
+    workspaceId: string;
+    workspaceContext: string;
+  }): Promise<{ suggestions: string[]; actions: Action[] }> {
+    try {
+      this.env.logger.info('🔄 Post-processing: Generating suggestions and actions');
+
+      const prompt = `You are a UX enhancement AI for a compliance management system. Analyze this conversation and generate:
+1. 2-3 relevant follow-up questions (suggestions)
+2. Action buttons for documents/pages mentioned
+
+CONVERSATION:
+User: ${input.userMessage}
+Assistant: ${input.assistantResponse}
+
+TOOLS USED: ${input.toolsUsed.length > 0 ? input.toolsUsed.join(', ') : 'none'}
+
+TOOL RESULTS:
+${JSON.stringify(input.toolResults, null, 2)}
+
+WORKSPACE: ${input.workspaceId}
+CONTEXT: ${input.workspaceContext}
+
+OUTPUT FORMAT (JSON only, no markdown):
+{
+  "suggestions": [
+    "Specific follow-up question 1",
+    "Specific follow-up question 2"
+  ],
+  "actions": [
+    {
+      "type": "navigate",
+      "target": "/workspaces/${input.workspaceId}/documents/{doc_id}",
+      "label": "View Document Name"
+    }
+  ]
+}
+
+RULES:
+- Suggestions must be natural questions users would actually ask next
+- Make suggestions specific to the data discussed (scores, frameworks, documents)
+- Actions must reference actual documents/pages from tool results
+- Extract document IDs from tool results (look for "id", "document_id" fields)
+- Only include actions if specific documents were mentioned
+- Maximum 3 suggestions, maximum 3 actions
+- If no relevant documents, return empty actions array
+- Be specific and actionable`;
+
+      const result = await this.env.AI.run('llama-3.3-70b', {
+        model: 'llama-3.3-70b',
+        messages: [{ role: 'system', content: prompt }] as any,
+        response_format: { type: 'json_object' },
+        temperature: 0.4, // Lower = more consistent
+        max_tokens: 400,
+      });
+
+      const parsed = JSON.parse(result.choices[0].message.content);
+
+      this.env.logger.info('✅ Post-processing complete', {
+        suggestions: parsed.suggestions?.length || 0,
+        actions: parsed.actions?.length || 0
+      });
+
+      return {
+        suggestions: parsed.suggestions || [],
+        actions: parsed.actions || []
+      };
+    } catch (error) {
+      this.env.logger.error('❌ Post-processing failed', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+
+      // Return empty arrays on failure - don't break the response
+      return {
+        suggestions: [],
+        actions: []
+      };
+    }
   }
 
   // ============================================================================

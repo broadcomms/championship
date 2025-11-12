@@ -148,6 +148,11 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
 
       const data = await response.json();
       
+      // Debug: Log the full response to understand structure
+      console.log('🔍 AI Response Data:', JSON.stringify(data, null, 2));
+      console.log('📊 Actions:', data.actions);
+      console.log('💡 Suggestions:', data.suggestions);
+      
       // Save session ID for this workspace
       if (data.sessionId) {
         setSessionId(data.sessionId);
@@ -166,7 +171,10 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
       
       // Set suggestions if available
       if (data.suggestions && data.suggestions.length > 0) {
+        console.log('✅ Setting suggestions:', data.suggestions);
         setSuggestions(data.suggestions);
+      } else {
+        console.log('⚠️ No suggestions in response');
       }
     } catch (error) {
       console.error('Chat error:', error);
