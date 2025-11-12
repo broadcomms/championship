@@ -52,23 +52,13 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
     setSuggestions([]);
 
     try {
-      // Get auth token from localStorage or cookies
-      const authToken = localStorage.getItem('auth_token') ||
-                       document.cookie.split('; ')
-                         .find(row => row.startsWith('session='))
-                         ?.split('=')[1];
-
-      if (!authToken) {
-        throw new Error('Not authenticated. Please log in.');
-      }
-
+      // Send request - the API route will read the HttpOnly session cookie
       const response = await fetch('/api/assistant/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
         },
-        credentials: 'include', // Include cookies for cross-origin requests
+        credentials: 'include', // Include HttpOnly cookies
         body: JSON.stringify({
           workspaceId,
           message: messageToSend,
