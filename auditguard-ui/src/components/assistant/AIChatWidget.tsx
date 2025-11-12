@@ -79,7 +79,9 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
               const loadedMessages: Message[] = data.messages.map((msg: any) => ({
                 role: msg.role,
                 content: msg.content,
-                timestamp: new Date(msg.created_at || msg.timestamp)
+                timestamp: msg.created_at ? new Date(msg.created_at) : 
+                          msg.timestamp ? new Date(msg.timestamp) : 
+                          new Date() // Fallback to current time if neither exists
               }));
               
               setMessages(loadedMessages);
