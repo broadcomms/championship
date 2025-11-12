@@ -1,0 +1,867 @@
+ions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2054ms, 2 rows read, ENAM, DB: 968.0KB
+  2. ✅ validateSession (29ms)
+  3. ✅ validateSession (137ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (168ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854ab4850ac72
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (31ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1854ms, 1 rows read, ENAM, DB: 968.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:40 PM] 🔗 Trace: 388abe78a30ef6184739562c29ef833b
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:40 PM] 🔗 Trace: d225df96c8810f1fac7a7a49dcdb9f63 (68ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (38ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2111ms, 2 rows read, ENAM, DB: 968.0KB
+  2. ✅ validateSession (38ms)
+  3. ✅ validateSession (38ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (68ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854ad9e3d6d93
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (30ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2127ms, 1 rows read, ENAM, DB: 968.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:40 PM] 🔗 Trace: 58e634c647321b07f63ead6790514ac0
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:41 PM] 🔗 Trace: 5cfcc5dd2383d886772724e99af73990 (227ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (179ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2484ms, 2 rows read, ENAM, DB: 968.0KB
+  2. ✅ validateSession (179ms)
+  3. ✅ validateSession (179ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (227ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854b5dd12ab5d
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (48ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1858ms, 1 rows read, ENAM, DB: 968.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:41 PM] 🔗 Trace: b3d8fb81d1544b7211e10706d82b7d07
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:41 PM] 🔗 Trace: c5b138f925771289106240f46410c8dd (72ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2289ms, 2 rows read, ENAM, DB: 968.0KB
+  2. ✅ validateSession (32ms)
+  3. ✅ validateSession (32ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (72ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854b848f7ab08
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (40ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.156ms, 1 rows read, ENAM, DB: 968.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:42 PM] 🔗 Trace: 31099a11576c59b62e847b43e8d8071e
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:42 PM] 🔗 Trace: d45f7c56b51837e6b9a33755126fec78 (76ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (45ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2109ms, 2 rows read, ENAM, DB: 968.0KB
+  2. ✅ validateSession (45ms)
+  3. ✅ validateSession (45ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (76ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854b95c99d8d9
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (31ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2024ms, 1 rows read, ENAM, DB: 968.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:42 PM] 🔗 Trace: 8504106f4ae0016c239f3802f3c6fc4d
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:43 PM] 🔗 Trace: 93ac589dd03ba8896281289fba30ddbc (73ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ validateSession (37ms)
+     service: AUTH_SERVICE
+  2. ❌ fetch (73ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854bf9b2ca1ec
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  3. ✅ sql.all (36ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1777ms, 1 rows read, ENAM, DB: 968.0KB
+  4. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:43 PM] 🔗 Trace: 759f0663172c06dd926cee0ec1d9bc19
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:44 PM] 🔗 Trace: 841a02dcc26b74f271147656eb42dd8e (25ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory-actor
+  1. ✅ getProcedure (0ms)
+  2. ✅ getMemory (0ms)
+
+[11/12/2025, 2:10:44 PM] 🔗 Trace: f53fd19dd97be9aaf59a7893f338cf8f (70ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (38ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2481ms, 2 rows read, ENAM, DB: 968.0KB
+  2. ✅ validateSession (38ms)
+  3. ✅ validateSession (38ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (70ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854c9bf18ab9a
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1169ms, 1 rows read, ENAM, DB: 968.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:44 PM] 🔗 Trace: b89c0ed153ee1da2f9a1cae23a1c7684
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:44 PM] 🔗 Trace: 1dd6843fe6d77ee562cd5c6dfde9b879 (84ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (52ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.1789ms, 2 rows read, ENAM, DB: 968.0KB
+  2. ✅ validateSession (52ms)
+  3. ✅ validateSession (52ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (84ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854cac90ff80e
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1545ms, 1 rows read, ENAM, DB: 968.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:45 PM] 🔗 Trace: fa385fa69637052b990b6b7d723fbb69
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:45 PM] 🔗 Trace: 229cfb25fff8c8e37f794b8a4aa2f3ae (82ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (53ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.3059ms, 2 rows read, ENAM, DB: 968.0KB
+  2. ✅ validateSession (53ms)
+  3. ✅ validateSession (53ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (82ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854cbefe71117
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (29ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1881ms, 1 rows read, ENAM, DB: 968.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:45 PM] 🔗 Trace: efc1c3757df8a549fa40c56b96bf1daf
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:46 PM] 🔗 Trace: 6e392cd802ac8fe91162f9a45edcefbe (72ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (42ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2174ms, 2 rows read, ENAM, DB: 968.0KB
+  2. ✅ validateSession (42ms)
+  3. ✅ validateSession (157ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (187ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854d1dfa4ac46
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (30ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1465ms, 1 rows read, ENAM, DB: 968.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:46 PM] 🔗 Trace: db640a5725f0aafde61592738f1bb373
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:46 PM] 🔗 Trace: 1bccabc4d99fcae5b705a99027b29ea0 (69ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (40ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2789ms, 2 rows read, ENAM, DB: 968.0KB
+  2. ✅ validateSession (40ms)
+  3. ✅ validateSession (40ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (69ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854d44f2aac82
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (29ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2606ms, 1 rows read, ENAM, DB: 968.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:46 PM] 🔗 Trace: 1c74a2aed5f0608f79bf5bede34f34b9
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:46 PM] 🔗 Trace: e3423704e6ac6237e04304fe479db1d7 (64ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (25ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2213ms, 2 rows read, ENAM, DB: 968.0KB
+  2. ✅ validateSession (25ms)
+  3. ✅ validateSession (25ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (64ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854d54e4bc109
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (39ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1775ms, 1 rows read, ENAM, DB: 968.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:46 PM] 🔗 Trace: b6fc113e23dbe411dc6415bbd730b7ed
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:47 PM] 🔗 Trace: 2130975b3689c041ff81d0a2c43c407f (193ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ validateSession (62ms)
+     service: AUTH_SERVICE
+  2. ❌ fetch (193ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854db3ccbab78
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  3. ✅ sql.all (131ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2574ms, 1 rows read, ENAM, DB: 972.0KB
+  4. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:47 PM] 🔗 Trace: 55f04b55cd2d681e9fb059d29c230928
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:47 PM] 🔗 Trace: 841a02dcc26b74f271147656eb42dd8e (623ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (123ms)
+  2. ✅ putMemory (623ms)
+  3. ✅ vector_index.upsert (500ms)
+     count: 1
+     index: MEMORY_SEARCH
+
+[11/12/2025, 2:10:47 PM] 🔗 Trace: e58cd417405c37d93858dad2ee1c71c3 (84ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (46ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.3075ms, 2 rows read, ENAM, DB: 972.0KB
+  2. ✅ validateSession (46ms)
+  3. ✅ validateSession (46ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (84ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854dd58b5ac9f
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (38ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1861ms, 1 rows read, ENAM, DB: 972.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:47 PM] 🔗 Trace: 891f60e35f0911af1c3f32f0adf27e99
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:48 PM] 🔗 Trace: 756c659723089dcf9b4049a4bb23c844 (63ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (34ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.193ms, 2 rows read, ENAM, DB: 972.0KB
+  2. ✅ validateSession (34ms)
+  3. ✅ validateSession (34ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (63ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854de6ab70c26
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (29ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2154ms, 1 rows read, ENAM, DB: 972.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:48 PM] 🔗 Trace: cb953dc116422028fdffa44f4ad1ff6e
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:48 PM] 🔗 Trace: fe8a23e90897d7e5ddee286c7eb37aa0 (61ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (31ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2599ms, 2 rows read, ENAM, DB: 972.0KB
+  2. ✅ validateSession (31ms)
+  3. ✅ validateSession (31ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (61ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854df4b269113
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (30ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1728ms, 1 rows read, ENAM, DB: 972.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:48 PM] 🔗 Trace: c16db7e4564aba5466202dd58cb19dad
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:49 PM] 🔗 Trace: c9c4286b0702cb51b4a267f705da2c5c (56ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (29ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2303ms, 2 rows read, ENAM, DB: 972.0KB
+  2. ✅ validateSession (29ms)
+  3. ✅ validateSession (29ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (56ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854e57cf074a5
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (27ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1473ms, 1 rows read, ENAM, DB: 972.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:49 PM] 🔗 Trace: 0abb1814bf1a5a5af064d3dc7d51d92c
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:49 PM] 🔗 Trace: eb2cf9199009c5e71dae4a5824d55786 (69ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (34ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2218ms, 2 rows read, ENAM, DB: 972.0KB
+  2. ✅ validateSession (34ms)
+  3. ✅ validateSession (34ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (69ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854e65f6c11fc
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1995ms, 1 rows read, ENAM, DB: 972.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:49 PM] 🔗 Trace: b91d2df3cab39107532025a297d96abb
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:49 PM] 🔗 Trace: 38a9769e8204b19d1fd494084a791047 (64ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2454ms, 2 rows read, ENAM, DB: 972.0KB
+  2. ✅ validateSession (35ms)
+  3. ✅ validateSession (35ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (64ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854e76bd7ec71
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (29ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1953ms, 1 rows read, ENAM, DB: 972.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:49 PM] 🔗 Trace: 0990bb9555f4acc2632d52c8299212eb
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:49 PM] 🔗 Trace: 24d9dae72805bf005f2cbb6e5b75c7b6 (85ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (45ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2303ms, 2 rows read, ENAM, DB: 972.0KB
+  2. ✅ validateSession (45ms)
+  3. ✅ validateSession (45ms)
+     service: AUTH_SERVICE
+  4. ❌ fetch (85ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9r7xj68wet91y7fjjkhpjsa
+     http.method: GET
+     http.url: https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/realtime/wks_1762918181968_rd5sde
+     http.scheme: https
+     http.host: svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: undefined
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99d854e84a1eab2a
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ❌ 500
+  5. ✅ sql.all (40ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1915ms, 1 rows read, ENAM, DB: 972.0KB
+  6. ❌ fetch (0ms)
+     service: REALTIME_SERVICE
+
+[11/12/2025, 2:10:49 PM] 🔗 Trace: 5bad354378980728e1b08a1337f3f263
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: api-gateway
+  1. ✅ log
+     level: ERROR
+     message: Error in fetch handler: TypeError: Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details.
+     fields: {}
+
+[11/12/2025, 2:10:54 PM] 🔗 Trace: 4198e1913ce99cc2cb2535e5e0696e45 (349ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
+  1. ✅ sql.all (43ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2541ms, 2 rows read, ENAM, DB: 972.0KB
+  2. ✅ validateSession (43ms)
+  3. ✅ getProcedure (0ms)
+  4. ✅ getMemory (0ms)
+
+[11/12/2025, 2:10:54 PM] 🔗 Trace: 4198e1913ce99cc2cb2535e5e0696e45 (988ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (225ms)
+  2. ✅ putMemory (988ms)
+  3. ✅ vector_index.upsert (763ms)
+     count: 1
+     index: MEMORY_SEARCH
+
+[11/12/2025, 2:10:57 PM] 🔗 Trace: 4198e1913ce99cc2cb2535e5e0696e45 (2115ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (1426ms)
+  2. ✅ putMemory (2115ms)
+  3. ✅ vector_index.upsert (689ms)
+     count: 1
+     index: MEMORY_SEARCH
+

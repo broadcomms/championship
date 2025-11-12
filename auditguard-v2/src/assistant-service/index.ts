@@ -247,45 +247,184 @@ ${workspaceContext}`;
     const actions: Action[] = [];
 
     try {
-      // Call AI without tool calling (Raindrop's Zod validator rejects null content in tool-only responses)
-      // This is a platform limitation - re-enable tools when Raindrop supports OpenAI-spec tool responses
-      const aiResponse = await this.env.AI.run('llama-3.3-70b', {
-        model: 'llama-3.3-70b',
-        messages: messages.slice(-6) as any, // Use last 6 messages for context window
-        temperature: 0.7,
-        max_tokens: 2000,
-      });
+      // Workaround for Raindrop Zod validation: Ensure content is never null
+      // Instruct AI to always provide text alongside tool calls to satisfy validator
+      const systemMessage = {
+        role: 'system',
+        content: `You are a helpful compliance assistant for AuditGuardX.
 
-      // Extract response using OpenAI-compatible format (per Raindrop docs)
-      const result = aiResponse as any;
-      
-      // Primary extraction path: OpenAI-style choices array
-      const primaryResponse = result.choices?.[0]?.message?.content;
-      
-      // Fallback paths for different response formats
-      const fallbackResponse = result.response || result.content;
-      
-      // Get actual text content
-      const responseText = primaryResponse || fallbackResponse || '';
-      
-      // Log the response structure for debugging
-      this.env.logger.info('AI Response Structure', {
-        hasChoices: !!result.choices,
-        hasMessage: !!result.choices?.[0]?.message,
-        hasContent: !!primaryResponse,
-        hasFallback: !!fallbackResponse,
-        responseLength: responseText.length
+CRITICAL INSTRUCTIONS:
+1. You have access to these tools - USE THEM whenever relevant:
+   - get_compliance_status: For ANY question about scores, status, or compliance
+   - search_documents: When user asks about specific documents or topics
+   - get_compliance_issues: For questions about problems, gaps, or issues
+   - get_document_info: For details about a specific document
+
+2. When calling tools, provide a brief explanation like:
+   - "Let me check your compliance status..." (while calling get_compliance_status)
+   - "I'll search for those documents..." (while calling search_documents)
+
+3. ALWAYS call tools for data-driven questions. Don't make up answers.
+
+Context: ${workspaceContext}`
+      };
+
+      // TWO-STAGE APPROACH: First decide what to do, then execute tools if needed
+      // Stage 1: Decision phase - analyze user request and decide on tool usage
+      this.env.logger.info('Stage 1: Analyzing user request', {
+        messageCount: messages.length,
+        model: 'llama-3.3-70b'
       });
       
-      // Direct response (tools disabled due to Raindrop platform limitation)
-      if (!responseText) {
-        throw new Error('AI returned empty response');
+      const decisionPrompt = {
+        role: 'system',
+        content: `You are an AI decision maker for a compliance assistant. Analyze the user's request and respond ONLY with a JSON object indicating what tools to use.
+
+Available tools:
+- get_compliance_status: For questions about scores, status, overall compliance
+- search_documents: For finding specific documents or searching by topic
+- get_compliance_issues: For questions about problems, gaps, or specific issues
+- get_document_info: For details about a specific document (requires document ID)
+
+Respond with this exact JSON structure:
+{
+  "needsTools": true/false,
+  "tools": ["tool_name"],
+  "reasoning": "Why these tools are needed",
+  "userFacingMessage": "Brief message to show user while processing"
+}
+
+Examples:
+User: "What is my compliance score?"
+{
+  "needsTools": true,
+  "tools": ["get_compliance_status"],
+  "reasoning": "User asking for current compliance score",
+  "userFacingMessage": "Let me check your current compliance status..."
+}
+
+User: "Find documents about GDPR"
+{
+  "needsTools": true,
+  "tools": ["search_documents"],
+  "reasoning": "User wants to search for specific documents",
+  "userFacingMessage": "Searching for GDPR-related documents..."
+}
+
+User: "thank you"
+{
+  "needsTools": false,
+  "tools": [],
+  "reasoning": "Simple acknowledgment, no data needed",
+  "userFacingMessage": "You're welcome! Let me know if you need anything else."
+}`
+      };
+      
+      let decisionResponse: any;
+      try {
+        decisionResponse = await this.env.AI.run('llama-3.3-70b', {
+          model: 'llama-3.3-70b',
+          messages: [
+            decisionPrompt,
+            ...messages.slice(-3) // Last 3 messages for context
+          ] as any,
+          response_format: { type: 'json_object' },
+          temperature: 0.3,
+          max_tokens: 500,
+        });
+        
+        this.env.logger.info('Decision stage completed', {
+          hasResponse: !!decisionResponse
+        });
+      } catch (decisionError: any) {
+        this.env.logger.error('Decision stage failed', {
+          error: decisionError?.message || String(decisionError)
+        });
+        throw decisionError;
       }
-      assistantMessage = responseText;
       
-      this.env.logger.info('AI response generated', { 
-        length: assistantMessage.length
+      const decision = JSON.parse(decisionResponse.choices[0].message.content);
+      
+      this.env.logger.info('AI Decision', {
+        needsTools: decision.needsTools,
+        tools: decision.tools,
+        reasoning: decision.reasoning
       });
+      
+      // Stage 2: Execute tools if needed
+      if (decision.needsTools && decision.tools && decision.tools.length > 0) {
+        this.env.logger.info('Stage 2: Executing tools', {
+          toolCount: decision.tools.length,
+          tools: decision.tools
+        });
+        
+        // Convert tool names to tool calls format
+        const toolCalls = decision.tools.map((toolName: string, index: number) => ({
+          id: `call_${Date.now()}_${index}`,
+          type: 'function',
+          function: {
+            name: toolName,
+            arguments: '{}'  // Empty args for now - tools use workspace context
+          }
+        }));
+        
+        // Execute the tools
+        const toolResults = await this.executeTools(toolCalls, workspaceId, userId);
+        
+        this.env.logger.info('Tools executed', {
+          toolCount: toolCalls.length,
+          actionsGenerated: toolResults.actions.length
+        });
+        
+        // Stage 3: Generate final response with tool results
+        this.env.logger.info('Stage 3: Generating final response with tool results');
+        
+        const finalResponse = await this.env.AI.run('llama-3.3-70b', {
+          model: 'llama-3.3-70b',
+          messages: [
+            systemMessage,
+            ...messages.slice(-5),
+            {
+              role: 'assistant',
+              content: decision.userFacingMessage
+            },
+            ...toolResults.messages,
+            {
+              role: 'user',
+              content: 'Based on the tool results above, provide a comprehensive, helpful answer to my original question.'
+            }
+          ] as any,
+          temperature: 0.7,
+          max_tokens: 1500,
+        });
+        
+        assistantMessage = finalResponse.choices[0].message.content;
+        actions.push(...toolResults.actions);
+        
+        this.env.logger.info('Final response with tool results generated', {
+          toolsExecuted: toolCalls.length,
+          actionsGenerated: actions.length,
+          responseLength: assistantMessage.length
+        });
+      } else {
+        // No tools needed - use decision's message or generate response
+        if (decision.userFacingMessage) {
+          assistantMessage = decision.userFacingMessage;
+        } else {
+          // Fallback: generate conversational response
+          const simpleResponse = await this.env.AI.run('llama-3.3-70b', {
+            model: 'llama-3.3-70b',
+            messages: [systemMessage, ...messages.slice(-5)] as any,
+            temperature: 0.7,
+            max_tokens: 1000,
+          });
+          assistantMessage = simpleResponse.choices[0].message.content;
+        }
+        
+        this.env.logger.info('Direct response (no tools needed)', {
+          responseLength: assistantMessage.length
+        });
+      }
     } catch (error) {
       this.env.logger.error('AI inference failed', {
         error: error instanceof Error ? error.message : String(error),
