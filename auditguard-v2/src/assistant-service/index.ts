@@ -235,47 +235,26 @@ export default class extends Service<Env> {
     this.env.logger.info('🔍 CHECKPOINT A: Before episodic memory search');
 
     // Search episodic memory for relevant past conversations
+    // SKIP FOR NOW - This is causing execution to hang
     let relevantPastSessions: string[] = [];
-    try {
-      const episodicResults = await this.env.ASSISTANT_MEMORY.searchEpisodicMemory(
-        request.message,
-        { nMostRecent: 3 }
-      );
-
-      console.log('🔍 CHECKPOINT B: After episodic memory search', {
-        hasResults: !!(episodicResults && episodicResults.results)
-      });
-      this.env.logger.info('🔍 CHECKPOINT B: After episodic memory search');
-
-      if (episodicResults && episodicResults.results && episodicResults.results.length > 0) {
-        relevantPastSessions = episodicResults.results.map(result =>
-          `Past conversation (${new Date(result.createdAt).toLocaleDateString()}): ${result.summary}`
-        );
-        this.env.logger.info(`📚 Found ${episodicResults.results.length} relevant past conversations`);
-      }
-    } catch (error) {
-      console.log('⚠️ Episodic memory search error:', error);
-      this.env.logger.warn(`Failed to search episodic memory: ${error instanceof Error ? error.message : 'Unknown'}`);
-    }
+    console.log('🔍 SKIPPING episodic memory search temporarily');
+    this.env.logger.info('🔍 SKIPPING episodic memory search - moving to procedural memory');
+    
+    console.log('🔍 CHECKPOINT B: Skipped episodic memory (disabled)');
+    this.env.logger.info('🔍 CHECKPOINT B: Skipped episodic memory');
 
     console.log('🔍 CHECKPOINT C: Before procedural memory retrieval');
     this.env.logger.info('🔍 CHECKPOINT C: Before procedural memory retrieval');
 
     // Get system prompt from procedural memory or use default
+    // SKIP FOR NOW - Using default prompt to avoid blocking
     let baseSystemPrompt = '';
-    try {
-      const proceduralMemory = await this.env.ASSISTANT_MEMORY.getProceduralMemory();
-      console.log('🔍 CHECKPOINT D: Got procedural memory instance');
-      const storedPrompt = await proceduralMemory.getProcedure('system_prompt');
-      console.log('🔍 CHECKPOINT E: After getProcedure call', { hasPrompt: !!storedPrompt });
-      if (storedPrompt) {
-        baseSystemPrompt = storedPrompt;
-      }
-    } catch (error) {
-      console.log('⚠️ Procedural memory error:', error);
-      this.env.logger.warn(`Failed to retrieve system prompt from procedural memory: ${error instanceof Error ? error.message : 'Unknown'}`);
-    }
-
+    console.log('🔍 SKIPPING procedural memory - using default prompt');
+    this.env.logger.info('🔍 SKIPPING procedural memory - using default prompt');
+    
+    console.log('🔍 CHECKPOINT D: Skipped procedural memory (disabled)');
+    console.log('🔍 CHECKPOINT E: Skipped getProcedure call (disabled)');
+    
     console.log('🔍 CHECKPOINT F: After procedural memory section');
     this.env.logger.info('🔍 CHECKPOINT F: After procedural memory section');
 
@@ -326,47 +305,14 @@ KNOWLEDGE BASE ACCESS:
 - DO NOT answer compliance questions from memory - always check the knowledge base first`;
 
     // Get recent conversation history from SmartMemory
+    // SKIP FOR NOW - Using simple single-turn conversation to avoid blocking
     let conversationHistory: ChatMessage[] = [];
-    try {
-      // Get the working memory session
-      const workingMemory = await this.env.ASSISTANT_MEMORY.getWorkingMemorySession(memorySessionId);
-
-      // Retrieve recent memories from conversation timeline
-      const memories = await workingMemory.getMemory({
-        timeline: 'conversation',
-        nMostRecent: 10,
-      });
-
-      if (memories && Array.isArray(memories)) {
-        // Parse role from agent field or key
-        conversationHistory = memories.map((mem) => {
-          // Use agent field to determine role, fallback to key
-          const role = mem.agent === 'user' ? 'user' :
-                      mem.agent === 'assistant' ? 'assistant' :
-                      // Fallback to key field for role identification
-                      (mem.key === 'user' ? 'user' : 'assistant');
-          return {
-            role: role as 'user' | 'assistant',
-            content: mem.content,
-          };
-        });
-      }
-    } catch (error) {
-      this.env.logger.warn(`Failed to retrieve memory: ${error instanceof Error ? error.message : 'Unknown'}`);
-    }
-
-    // Store user message in SmartMemory with proper structure
-    try {
-      const workingMemory = await this.env.ASSISTANT_MEMORY.getWorkingMemorySession(memorySessionId);
-      await workingMemory.putMemory({
-        content: request.message,
-        timeline: 'conversation',
-        key: 'user', // Use key to differentiate message types
-        agent: 'user', // Use agent field for originator info
-      });
-    } catch (error) {
-      this.env.logger.error(`Failed to store user message in memory: ${error instanceof Error ? error.message : 'Unknown'}`);
-    }
+    console.log('🔍 SKIPPING working memory retrieval - using empty conversation history');
+    this.env.logger.info('🔍 SKIPPING working memory retrieval');
+    
+    // Skip storing user message in SmartMemory for now
+    console.log('🔍 SKIPPING putMemory call - not storing in SmartMemory');
+    this.env.logger.info('🔍 SKIPPING putMemory call');
 
     // Build messages for AI
     const messages: ChatMessage[] = [
@@ -1882,33 +1828,55 @@ RULES:
       // Step 2: Search vector index for similar knowledge articles
       try {
         // Note: After raindrop build generate, KNOWLEDGE_EMBEDDINGS will be available in Env
+        this.env.logger.info('🔍 Querying vector index', {
+          framework: args.framework,
+          query: args.query.substring(0, 100)
+        });
+        
+        // Query without filter to get all relevant results
+        // Then filter in-memory if needed (more reliable than metadata filtering)
         const vectorResults = await (this.env as any).KNOWLEDGE_EMBEDDINGS.query(queryEmbedding, {
-          topK: 5,
-          returnMetadata: true,
-          filter: args.framework && args.framework !== 'all' 
-            ? { framework: args.framework }
-            : undefined
+          topK: args.framework && args.framework !== 'all' ? 10 : 5,
+          returnMetadata: true
         });
         
         // Debug: Log the full response structure
         this.env.logger.info('📊 Vector search RAW response', { 
           type: typeof vectorResults,
           keys: Object.keys(vectorResults || {}),
-          fullResponse: JSON.stringify(vectorResults).substring(0, 500)
+          matchCount: vectorResults.matches?.length || 0,
+          firstMatchMetadata: vectorResults.matches?.[0]?.metadata
         });
+        
+        // Filter by framework if specified
+        let filteredMatches = vectorResults.matches || [];
+        if (args.framework && args.framework !== 'all' && filteredMatches.length > 0) {
+          const beforeFilter = filteredMatches.length;
+          filteredMatches = filteredMatches.filter(m => 
+            m.metadata?.framework === args.framework || 
+            m.metadata?.framework === args.framework.toUpperCase()
+          );
+          this.env.logger.info('🔍 Filtered by framework', {
+            framework: args.framework,
+            beforeFilter,
+            afterFilter: filteredMatches.length
+          });
+          // Take top 5 after filtering
+          filteredMatches = filteredMatches.slice(0, 5);
+        }
         
         this.env.logger.info('📊 Vector search complete', { 
-          resultsCount: vectorResults.matches?.length || 0 
+          resultsCount: filteredMatches.length
         });
         
-        if (!vectorResults.matches || vectorResults.matches.length === 0) {
+        if (filteredMatches.length === 0) {
           this.env.logger.warn('⚠️ No semantic matches found, trying text fallback');
           return await this.fallbackTextSearch(args);
         }
         
         // Step 3: Retrieve full articles from database
         const db = this.getDb();
-        const articleIds = vectorResults.matches.map(m => m.id);
+        const articleIds = filteredMatches.map(m => m.id);
         
         const articles = await db
           .selectFrom('knowledge_base')
@@ -1919,21 +1887,21 @@ RULES:
         
         // Step 4: Sort by relevance score from vector search
         const sortedArticles = articles.sort((a, b) => {
-          const scoreA = vectorResults.matches.find(m => m.id === a.id)?.score || 0;
-          const scoreB = vectorResults.matches.find(m => m.id === b.id)?.score || 0;
+          const scoreA = filteredMatches.find(m => m.id === a.id)?.score || 0;
+          const scoreB = filteredMatches.find(m => m.id === b.id)?.score || 0;
           return scoreB - scoreA; // Higher score first
         });
         
         this.env.logger.info('✅ Semantic search successful', { 
           articlesFound: sortedArticles.length,
-          topScore: vectorResults.matches[0]?.score
+          topScore: filteredMatches[0]?.score
         });
         
         return {
           source: 'knowledge_base_semantic',
           count: sortedArticles.length,
           results: sortedArticles.map(a => {
-            const match = vectorResults.matches.find(m => m.id === a.id);
+            const match = filteredMatches.find(m => m.id === a.id);
             return {
               title: a.title,
               content: a.content,
