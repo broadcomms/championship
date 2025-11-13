@@ -128,15 +128,19 @@ export default class extends Service<Env> {
   }
 
   async chat(workspaceId: string, userId: string, request: ChatRequest): Promise<ChatResponse> {
+    // CRITICAL DEBUG: This should appear first
+    console.log('🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥');
+    this.env.logger.info('🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥');
+
     this.env.logger.info('🚨 CHAT METHOD CALLED (non-streaming)', {
       workspaceId,
       userId,
       message: request.message.substring(0, 100),
       hasSessionId: !!request.sessionId
     });
-    
+
     const db = this.getDb();
-    
+
     this.env.logger.info('🚀 CHAT REQUEST STARTED', {
       workspaceId,
       userId,
