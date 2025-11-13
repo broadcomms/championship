@@ -1,6 +1,6 @@
 import { Service } from '@liquidmetal-ai/raindrop-framework';
 import { Env } from './raindrop.gen';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 
@@ -344,10 +344,14 @@ KNOWLEDGE BASE ACCESS:
       { role: 'user', content: request.message },
     ];
 
+    this.env.logger.info('📝 Messages built', { messageCount: messages.length });
+
     // Generate AI response
     let assistantMessage: string;
     let decision: any = { needsTools: false, tools: [], reasoning: '' };
     let toolResults: any = { messages: [], rawData: [] };
+
+    this.env.logger.info('🤖 Starting 4-stage AI pipeline');
 
     try {
       // Workaround for Raindrop Zod validation: Ensure content is never null
@@ -383,19 +387,27 @@ Context: ${workspaceContext}`
       
       const decisionPrompt = {
         role: 'system',
-        content: `You are an AI decision maker for a compliance assistant. Analyze the user's request and respond ONLY with a JSON object indicating what tools to use.
+        content: `You are an AI decision maker for a compliance assistant. Analyze the user's request and respond ONLY with a JSON object indicating what tools to use WITH their arguments.
 
 Available tools:
-- get_compliance_status: For questions about scores, status, overall compliance
+- get_compliance_status: For questions about scores, status, overall compliance (no args needed)
 - search_documents: For finding specific documents or searching by topic
-- get_compliance_issues: For questions about problems, gaps, or specific issues
+  Args: { "query": "search terms" }
+- get_compliance_issues: For questions about problems, gaps, or specific issues (no args needed)
 - get_document_info: For details about a specific document (requires document ID)
-- search_knowledge: For questions about compliance frameworks, regulations, requirements, or best practices (GDPR, SOC2, HIPAA, ISO27001, etc.)
+  Args: { "documentId": "doc_xxxxx" }
+- search_knowledge: For questions about compliance frameworks, regulations, requirements, or best practices
+  Args: { "query": "what user is asking about", "framework": "gdpr|soc2|hipaa|iso27001|nist_csf|pci_dss|all" }
 
 Respond with this exact JSON structure:
 {
   "needsTools": true/false,
-  "tools": ["tool_name"],
+  "toolCalls": [
+    {
+      "name": "tool_name",
+      "arguments": { "arg": "value" }
+    }
+  ],
   "reasoning": "Why these tools are needed",
   "userFacingMessage": "Brief message to show user while processing"
 }
@@ -404,7 +416,12 @@ Examples:
 User: "What is my compliance score?"
 {
   "needsTools": true,
-  "tools": ["get_compliance_status"],
+  "toolCalls": [
+    {
+      "name": "get_compliance_status",
+      "arguments": {}
+    }
+  ],
   "reasoning": "User asking for current compliance score",
   "userFacingMessage": "Let me check your current compliance status..."
 }
@@ -412,7 +429,12 @@ User: "What is my compliance score?"
 User: "Find documents about GDPR"
 {
   "needsTools": true,
-  "tools": ["search_documents"],
+  "toolCalls": [
+    {
+      "name": "search_documents",
+      "arguments": { "query": "GDPR" }
+    }
+  ],
   "reasoning": "User wants to search for specific documents",
   "userFacingMessage": "Searching for GDPR-related documents..."
 }
@@ -420,15 +442,33 @@ User: "Find documents about GDPR"
 User: "What are GDPR data breach notification requirements?"
 {
   "needsTools": true,
-  "tools": ["search_knowledge"],
-  "reasoning": "User asking about specific regulatory requirements from frameworks",
+  "toolCalls": [
+    {
+      "name": "search_knowledge",
+      "arguments": { "query": "breach notification requirements", "framework": "gdpr" }
+    }
+  ],
+  "reasoning": "User asking about specific GDPR regulatory requirements",
   "userFacingMessage": "Let me look that up in our compliance knowledge base..."
+}
+
+User: "What are the requirements for incident response?"
+{
+  "needsTools": true,
+  "toolCalls": [
+    {
+      "name": "search_knowledge",
+      "arguments": { "query": "incident response requirements", "framework": "all" }
+    }
+  ],
+  "reasoning": "User asking about general incident response across frameworks",
+  "userFacingMessage": "Searching our knowledge base for incident response guidance..."
 }
 
 User: "thank you"
 {
   "needsTools": false,
-  "tools": [],
+  "toolCalls": [],
   "reasoning": "Simple acknowledgment, no data needed",
   "userFacingMessage": "You're welcome! Let me know if you need anything else."
 }`
@@ -461,24 +501,24 @@ User: "thank you"
       
       this.env.logger.info('AI Decision', {
         needsTools: decision.needsTools,
-        tools: decision.tools,
+        toolCalls: decision.toolCalls,
         reasoning: decision.reasoning
       });
       
       // Stage 2: Execute tools if needed
-      if (decision.needsTools && decision.tools && decision.tools.length > 0) {
+      if (decision.needsTools && decision.toolCalls && decision.toolCalls.length > 0) {
         this.env.logger.info('Stage 2: Executing tools', {
-          toolCount: decision.tools.length,
-          tools: decision.tools
+          toolCount: decision.toolCalls.length,
+          tools: decision.toolCalls.map((tc: any) => tc.name)
         });
         
-        // Convert tool names to tool calls format
-        const toolCalls = decision.tools.map((toolName: string, index: number) => ({
+        // Convert decision tool calls to execution format
+        const toolCalls = decision.toolCalls.map((tc: any, index: number) => ({
           id: `call_${Date.now()}_${index}`,
           type: 'function',
           function: {
-            name: toolName,
-            arguments: '{}'  // Empty args for now - tools use workspace context
+            name: tc.name,
+            arguments: JSON.stringify(tc.arguments || {})
           }
         }));
         
@@ -1598,99 +1638,47 @@ RULES:
     try {
       this.env.logger.info('🔍 Knowledge search started', { query: args.query, framework: args.framework });
       
-      const proceduralMemory = await this.env.ASSISTANT_MEMORY.getProceduralMemory();
+      const db = this.getDb();
       
-      // Search all knowledge articles stored in procedural memory
-      const knowledgeKeys = [
-        'kb_gdpr_data_minimization',
-        'kb_gdpr_breach_notification',
-        'kb_soc2_evidence',
-        'kb_hipaa_baa',
-        'kb_iso27001_risk',
-        'kb_access_control',
-        'kb_data_retention',
-        'kb_incident_response'
-      ];
-
-      const queryLower = args.query.toLowerCase();
-      const matchingArticles: any[] = [];
-
-      this.env.logger.info('📚 Searching through knowledge articles', { 
-        keyCount: knowledgeKeys.length,
-        queryLower 
-      });
-
-      // Search through all knowledge base articles
-      for (const key of knowledgeKeys) {
-        const article = await proceduralMemory.getProcedure(key);
-        
-        this.env.logger.info(`📖 Checking article ${key}`, { 
-          found: !!article,
-          length: article ? article.length : 0
-        });
-        
-        if (article) {
-          const articleLower = article.toLowerCase();
-          
-          // Simple keyword matching
-          const relevantKeywords = [
-            'gdpr', 'breach', 'notification', 'data', 'protection',
-            'soc2', 'soc 2', 'audit', 'evidence',
-            'hipaa', 'baa', 'business associate',
-            'iso', '27001', 'risk', 'assessment',
-            'access', 'control', 'retention', 'incident', 'response'
-          ];
-
-          const matchesQuery = relevantKeywords.some(keyword => 
-            queryLower.includes(keyword) && articleLower.includes(keyword)
-          );
-
-          if (matchesQuery || articleLower.includes(queryLower)) {
-            matchingArticles.push({
-              key,
-              content: article,
-              // Simple relevance scoring
-              relevance: articleLower.split(queryLower).length - 1
-            });
-            
-            this.env.logger.info(`✅ Article matched: ${key}`, { relevance: articleLower.split(queryLower).length - 1 });
-          }
-        }
+      // Build query with basic filters
+      let query = db
+        .selectFrom('knowledge_base')
+        .select(['id', 'title', 'content', 'category', 'framework', 'tags'])
+        .where('is_active', '=', 1);
+      
+      // Add framework filter if specified
+      if (args.framework && args.framework !== 'all') {
+        query = query.where('framework', '=', args.framework as any);
       }
-
-      this.env.logger.info('📊 Search complete', { matchCount: matchingArticles.length });
-
-      // Sort by relevance and return top 3
-      matchingArticles.sort((a, b) => b.relevance - a.relevance);
-      const topArticles = matchingArticles.slice(0, 3);
-
-      if (topArticles.length > 0) {
-        this.env.logger.info('✅ Returning knowledge base results', { count: topArticles.length });
+      
+      const allResults = await query.execute();
+      
+      // Simple text matching in memory (will upgrade to full-text search after migration)
+      const queryLower = args.query.toLowerCase();
+      const matchedResults = allResults.filter(r => {
+        const searchableText = `${r.title} ${r.content} ${r.tags || ''}`.toLowerCase();
+        return searchableText.includes(queryLower);
+      }).slice(0, 3);
+      
+      this.env.logger.info('📊 Search complete', { matchCount: matchedResults.length });
+      
+      if (matchedResults.length > 0) {
+        this.env.logger.info('✅ Returning knowledge base results', { count: matchedResults.length });
         return {
           source: 'knowledge_base',
-          results: topArticles.map(article => ({
-            content: article.content,
-            relevance: article.relevance
+          count: matchedResults.length,
+          results: matchedResults.map(r => ({
+            title: r.title,
+            content: r.content,
+            framework: r.framework,
+            category: r.category
           }))
         };
       }
 
-      // Fallback to framework guides
-      if (args.framework && args.framework !== 'all') {
-        const guide = await proceduralMemory.getProcedure(`${args.framework}_guide`);
-        if (guide) {
-          this.env.logger.info('✅ Returning framework guide', { framework: args.framework });
-          return {
-            source: 'framework_guide',
-            framework: args.framework,
-            content: guide
-          };
-        }
-      }
-
       this.env.logger.warn('⚠️ No knowledge found', { query: args.query });
       return {
-        message: 'No specific knowledge found. Using general model knowledge.',
+        message: 'No specific knowledge found in database.',
         query: args.query
       };
     } catch (error) {

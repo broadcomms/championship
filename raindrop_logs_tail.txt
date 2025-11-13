@@ -7,144 +7,453 @@ Press Ctrl+C to stop
 🔄 Started streaming logs for auditguard-v2@01k9r7xj68wet91y7fjjkhpjsa
    Organization: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
    User: user_01K8RV423SG75TDJC3014RQN9B
-   Time: 11/12/2025, 3:59:11 PM
-[11/12/2025, 3:59:32 PM] 🔗 Trace: 30f6dc8c8af5e33aa6d474c5829d3e74 (258ms total)
+   Time: 11/12/2025, 7:45:22 PM
+[11/12/2025, 7:45:33 PM] 🔗 Trace: 39c8bc3206bf750a92efd44b1de0414b (185ms total)
   Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
-  1. ✅ sql.all (258ms)
+  1. ✅ sql.all (32ms)
      🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2943ms, 2 rows read, ENAM, DB: 984.0KB
-  2. ✅ validateSession (258ms)
-
-[11/12/2025, 3:59:33 PM] 🔗 Trace: 30f6dc8c8af5e33aa6d474c5829d3e74 (1406ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory-actor
-  1. ✅ ai.run (506ms)
-  2. ✅ putMemory (1406ms)
-  3. ✅ vector_index.upsert (900ms)
-     count: 1
-     index: MEMORY_SEARCH
-
-[11/12/2025, 3:59:36 PM] 🔗 Trace: 30f6dc8c8af5e33aa6d474c5829d3e74 (939ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory-actor
-  1. ✅ ai.run (133ms)
-  2. ✅ putMemory (939ms)
-  3. ✅ vector_index.upsert (806ms)
-     count: 1
-     index: MEMORY_SEARCH
-
-[11/12/2025, 3:59:58 PM] 🔗 Trace: 1c5bd33181b2042a564f5aca3a6006da (31ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory-actor
-  1. ✅ getProcedure (0ms)
-  2. ✅ getMemory (0ms)
-  3. ✅ sql.all (37ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2324ms, 2 rows read, ENAM, DB: 984.0KB
-  4. ✅ validateSession (37ms)
-  5. ✅ validateSession (41ms)
+     📊 meta: 0.2394ms, 2 rows read, ENAM, DB: 1084.0KB
+  2. ✅ validateSession (32ms)
+  3. ✅ validateSession (36ms)
      service: AUTH_SERVICE
-  6. ✅ sql.all (31ms)
+  4. ✅ log
+     level: INFO
+     message: 🚀 CHAT REQUEST STARTED
+     fields: {"workspaceId":"wks_1762918181968_rd5sde","userId":"usr_bootstrap_admin","message":"what are the requirements for GDPR breach notification?"}
+  5. ✅ sql.all (35ms)
      🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.189ms, 1 rows read, ENAM, DB: 984.0KB
-  7. ✅ sql.all (40ms)
-     🗄️  SQL Query: select * from "conversation_sessions" where "id" = ? and "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1856ms, 1 rows read, ENAM, DB: 984.0KB
-  8. ✅ sql.all (44ms)
-     🗄️  SQL Query: insert into "conversation_messages" ("id", "session_id", "role", "content", "created_at") values (?, ?, ?, ?, ?)
-     📊 meta: 0.2308ms, 4 rows written, ENAM, DB: 984.0KB
-  9. ✅ sql.all (40ms)
-     🗄️  SQL Query: select "name", "description" from "workspaces" where "id" = ?
-     📊 meta: 0.1979ms, 1 rows read, ENAM, DB: 984.0KB
-  10. ✅ sql.all (29ms)
-     🗄️  SQL Query: select * from "workspace_scores" where "workspace_id" = ? order by "calculated_at" desc limit ?
-     📊 meta: 0.2571ms, 4 rows read, ENAM, DB: 984.0KB
-  11. ✅ sql.all (32ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.2135ms, 1 rows read, ENAM, DB: 984.0KB
-  12. ✅ sql.all (31ms)
-     🗄️  SQL Query: select count("compliance_issues"."id") as "count" from "compliance_issues" inner join "compliance_checks" on "compliance_issues"."check_id" = "compliance_checks"."id" where "compliance_checks"."workspace_id" = ? and "compliance_issues"."status" = ?
-     📊 meta: 0.2402ms, 2 rows read, ENAM, DB: 984.0KB
-  13. ✅ smartmemory.getWorkingMemorySession (0ms)
-     smartMemory: ASSISTANT_MEMORY
-     sessionId: 01k9wxg4jcng9dnvv50w22ay83
-  14. ✅ agent_working_memory.getMemory (25ms)
-     smartMemory: ASSISTANT_MEMORY
-     sessionId: 01k9wxg4jcng9dnvv50w22ay83
-     timeline: conversation
-     hasKey: false
-     nMostRecent: 10
-     hasTimeRange: false
-     resultCount: 10
-  15. ✅ smartmemory.getWorkingMemorySession (0ms)
-     smartMemory: ASSISTANT_MEMORY
-     sessionId: 01k9wxg4jcng9dnvv50w22ay83
+     📊 meta: 0.1535ms, 1 rows read, ENAM, DB: 1084.0KB
 
-[11/12/2025, 3:59:58 PM] 🔗 Trace: ac25a69efc1422712f98fe89f5d888ac
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-service
-  1. ✅ Event (0ms)
+[11/12/2025, 7:45:38 PM] 🔗 Trace: 39c8bc3206bf750a92efd44b1de0414b (63ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory:retriever-agent
+  1. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  2. ✅ comprehensiveSearch (0ms)
+  3. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  4. ✅ comprehensiveSearch (0ms)
+  5. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  6. ✅ comprehensiveSearch (0ms)
+  7. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  8. ✅ comprehensiveSearch (0ms)
+  9. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  10. ✅ comprehensiveSearch (0ms)
+  11. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  12. ✅ comprehensiveSearch (0ms)
+  13. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  14. ✅ comprehensiveSearch (0ms)
+  15. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  16. ✅ comprehensiveSearch (0ms)
+  17. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  18. ✅ comprehensiveSearch (0ms)
+  19. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  20. ✅ comprehensiveSearch (0ms)
+  21. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  22. ✅ comprehensiveSearch (0ms)
+  23. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  24. ✅ comprehensiveSearch (0ms)
+  25. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  26. ✅ comprehensiveSearch (0ms)
+  27. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  28. ✅ comprehensiveSearch (0ms)
+  29. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  30. ✅ comprehensiveSearch (0ms)
+  31. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  32. ✅ comprehensiveSearch (0ms)
+  33. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  34. ✅ comprehensiveSearch (0ms)
+  35. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  36. ✅ comprehensiveSearch (0ms)
+  37. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  38. ✅ comprehensiveSearch (0ms)
+  39. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  40. ✅ comprehensiveSearch (0ms)
+  41. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  42. ✅ comprehensiveSearch (0ms)
+  43. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  44. ✅ comprehensiveSearch (0ms)
+  45. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  46. ✅ comprehensiveSearch (0ms)
+  47. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  48. ✅ comprehensiveSearch (0ms)
+  49. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  50. ✅ comprehensiveSearch (0ms)
+  51. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  52. ✅ comprehensiveSearch (0ms)
+  53. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  54. ✅ comprehensiveSearch (0ms)
+  55. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  56. ✅ comprehensiveSearch (0ms)
+  57. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  58. ✅ comprehensiveSearch (0ms)
+  59. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  60. ✅ comprehensiveSearch (0ms)
+  61. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  62. ✅ comprehensiveSearch (0ms)
+  63. ✅ ai.run (481ms)
+  64. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+]
+  65. ✅ comprehensiveSearch (0ms)
+  66. ✅ ragSearch (2251ms)
+  67. ✅ searchEpisodicMemory (2251ms)
+  68. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  69. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  70. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  71. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  72. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  73. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  74. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  75. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  76. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  77. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  78. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  79. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  80. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  81. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  82. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  83. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  84. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  85. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  86. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  87. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  88. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  89. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  90. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  91. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  92. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  93. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  94. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  95. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  96. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  97. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  98. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  99. ✅ ai.run (494ms)
+  100. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  101. ✅ storage.setAlarm (0ms)
+     scheduledTime: 1762994768953
+  102. ✅ ai.run (82ms)
+  103. ✅ console.log
+     severity: info
+     message: [
+  "Scheduled cleanup alarm in 30000ms for reason: searchEpisodicMemory temporary session"
+]
+  104. ✅ vector_index.query (63ms)
+     index: SEMANTIC_INDEX
+  105. ✅ vector_index.query (63ms)
+     index: SEMANTIC_INDEX
+  106. ✅ vector_index.query (63ms)
+     index: SEMANTIC_INDEX
+  107. ✅ comprehensiveSearch (183ms)
+  108. ✅ comprehensiveSearch (186ms)
+  109. ✅ comprehensiveSearch (189ms)
+  110. ✅ comprehensiveSearch (190ms)
+  111. ✅ comprehensiveSearch (192ms)
+  112. ✅ comprehensiveSearch (198ms)
+  113. ✅ comprehensiveSearch (202ms)
+  114. ✅ comprehensiveSearch (202ms)
+  115. ✅ comprehensiveSearch (202ms)
+  116. ✅ comprehensiveSearch (203ms)
+  117. ✅ comprehensiveSearch (207ms)
+  118. ✅ comprehensiveSearch (207ms)
+  119. ✅ comprehensiveSearch (207ms)
+  120. ✅ comprehensiveSearch (207ms)
+  121. ✅ comprehensiveSearch (213ms)
+  122. ✅ comprehensiveSearch (224ms)
+  123. ✅ comprehensiveSearch (225ms)
+  124. ✅ comprehensiveSearch (225ms)
+  125. ✅ comprehensiveSearch (229ms)
+  126. ✅ comprehensiveSearch (234ms)
+  127. ✅ comprehensiveSearch (237ms)
+  128. ✅ comprehensiveSearch (237ms)
+  129. ✅ comprehensiveSearch (239ms)
+  130. ✅ comprehensiveSearch (240ms)
+  131. ✅ comprehensiveSearch (243ms)
+  132. ✅ comprehensiveSearch (245ms)
+  133. ✅ comprehensiveSearch (246ms)
+  134. ✅ comprehensiveSearch (253ms)
+  135. ✅ comprehensiveSearch (256ms)
+  136. ✅ comprehensiveSearch (260ms)
+  137. ✅ comprehensiveSearch (296ms)
 
-[11/12/2025, 4:00:00 PM] 🔗 Trace: 1c5bd33181b2042a564f5aca3a6006da (828ms total)
+[11/12/2025, 7:45:41 PM] 🔗 Trace: 39c8bc3206bf750a92efd44b1de0414b (941ms total)
   Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory-actor
   1. ✅ ai.run (91ms)
-  2. ✅ putMemory (828ms)
-  3. ✅ vector_index.upsert (737ms)
+  2. ✅ putMemory (941ms)
+  3. ✅ vector_index.upsert (850ms)
      count: 1
      index: MEMORY_SEARCH
 
-[11/12/2025, 4:00:16 PM] 🔗 Trace: 146efa3b89f8c404092e0b1bb35e97dd (333ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
-  1. ✅ sql.all (39ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2271ms, 2 rows read, ENAM, DB: 984.0KB
-  2. ✅ validateSession (39ms)
-  3. ✅ getProcedure (0ms)
-  4. ✅ getMemory (0ms)
-  5. ✅ validateSession (47ms)
-     service: AUTH_SERVICE
-  6. ✅ sql.all (37ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1962ms, 1 rows read, ENAM, DB: 984.0KB
-  7. ✅ sql.all (37ms)
-     🗄️  SQL Query: select * from "conversation_sessions" where "id" = ? and "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.2103ms, 1 rows read, ENAM, DB: 984.0KB
-  8. ✅ sql.all (36ms)
-     🗄️  SQL Query: insert into "conversation_messages" ("id", "session_id", "role", "content", "created_at") values (?, ?, ?, ?, ?)
-     📊 meta: 0.1825ms, 4 rows written, ENAM, DB: 984.0KB
-  9. ✅ sql.all (32ms)
-     🗄️  SQL Query: select "name", "description" from "workspaces" where "id" = ?
-     📊 meta: 0.2218ms, 1 rows read, ENAM, DB: 984.0KB
-  10. ✅ sql.all (30ms)
-     🗄️  SQL Query: select * from "workspace_scores" where "workspace_id" = ? order by "calculated_at" desc limit ?
-     📊 meta: 0.2209ms, 4 rows read, ENAM, DB: 984.0KB
-  11. ✅ sql.all (36ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1815ms, 1 rows read, ENAM, DB: 984.0KB
-  12. ✅ sql.all (30ms)
-     🗄️  SQL Query: select count("compliance_issues"."id") as "count" from "compliance_issues" inner join "compliance_checks" on "compliance_issues"."check_id" = "compliance_checks"."id" where "compliance_checks"."workspace_id" = ? and "compliance_issues"."status" = ?
-     📊 meta: 0.2428ms, 2 rows read, ENAM, DB: 984.0KB
-  13. ✅ smartmemory.getWorkingMemorySession (0ms)
-     smartMemory: ASSISTANT_MEMORY
-     sessionId: 01k9wxg4jcng9dnvv50w22ay83
-  14. ✅ agent_working_memory.getMemory (20ms)
-     smartMemory: ASSISTANT_MEMORY
-     sessionId: 01k9wxg4jcng9dnvv50w22ay83
-     timeline: conversation
-     hasKey: false
-     nMostRecent: 10
-     hasTimeRange: false
-     resultCount: 10
-  15. ✅ smartmemory.getWorkingMemorySession (0ms)
-     smartMemory: ASSISTANT_MEMORY
-     sessionId: 01k9wxg4jcng9dnvv50w22ay83
-
-[11/12/2025, 4:00:17 PM] 🔗 Trace: 3ca84fa749fb12f18ef0e5b32abfb7fa
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-service
-  1. ✅ Event (0ms)
-
-[11/12/2025, 4:00:20 PM] 🔗 Trace: 146efa3b89f8c404092e0b1bb35e97dd (829ms total)
+[11/12/2025, 7:46:08 PM] 🔗 Trace: d177b1e07b7e0ed97ec8e6f9dc6f2cb3
   Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory-actor
-  1. ✅ ai.run (115ms)
-  2. ✅ putMemory (829ms)
-  3. ✅ vector_index.upsert (714ms)
-     count: 1
-     index: MEMORY_SEARCH
+  1. ✅ console.log
+     severity: info
+     message: [
+  "Processing cleanup alarm triggered at undefined"
+]
+  2. ✅ alarm (0ms)
+  3. ✅ console.log
+     severity: info
+     message: [
+  "Processing cleanup alarm for reason: searchEpisodicMemory temporary session"
+]
+  4. ✅ storage.deleteAll (0ms)
+  5. ✅ console.log
+     severity: info
+     message: [
+  "Successfully cleaned up all data from working memory actor (searchEpisodicMemory temporary session)"
+]
 
 ^C

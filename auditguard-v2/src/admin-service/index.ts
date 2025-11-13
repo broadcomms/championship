@@ -1,6 +1,6 @@
 import { Service } from '@liquidmetal-ai/raindrop-framework';
 import { Env } from './raindrop.gen';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 
@@ -2819,5 +2819,220 @@ export default class extends Service<Env> {
       });
       throw new Error('Failed to cleanup orphaned vectors');
     }
+  }
+
+  // ============================================================================
+  // Knowledge Base Management
+  // ============================================================================
+
+  async listKnowledgeBase(
+    adminUserId: string,
+    filters?: {
+      category?: string;
+      framework?: string;
+      search?: string;
+      isActive?: boolean;
+    }
+  ): Promise<any[]> {
+    const db = this.getDb();
+
+    // Verify admin
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Admin access required');
+    }
+
+    // Standard query for listing
+    let query = db
+      .selectFrom('knowledge_base')
+      .selectAll()
+      .orderBy('sort_order', 'asc')
+      .orderBy('created_at', 'desc');
+
+    if (filters?.category) {
+      query = query.where('category', '=', filters.category as any);
+    }
+
+    if (filters?.framework) {
+      query = query.where('framework', '=', filters.framework as any);
+    }
+
+    if (filters?.isActive !== undefined) {
+      query = query.where('is_active', '=', filters.isActive ? 1 : 0);
+    }
+
+    const results = await query.execute();
+    
+    // Simple text search in memory if search provided
+    if (filters?.search) {
+      const searchLower = filters.search.toLowerCase();
+      return results.filter(r => 
+        r.title.toLowerCase().includes(searchLower) ||
+        r.content.toLowerCase().includes(searchLower) ||
+        (r.tags && r.tags.toLowerCase().includes(searchLower))
+      );
+    }
+
+    return results;
+  }
+
+  async getKnowledgeArticle(adminUserId: string, articleId: string): Promise<any> {
+    const db = this.getDb();
+
+    // Verify admin
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Admin access required');
+    }
+
+    const article = await db
+      .selectFrom('knowledge_base')
+      .selectAll()
+      .where('id', '=', articleId)
+      .executeTakeFirst();
+
+    if (!article) {
+      throw new Error('Article not found');
+    }
+
+    return article;
+  }
+
+  async createKnowledgeArticle(
+    adminUserId: string,
+    input: {
+      title: string;
+      content: string;
+      category: 'framework_guide' | 'compliance_article' | 'best_practice';
+      framework?: 'gdpr' | 'soc2' | 'hipaa' | 'iso27001' | 'nist_csf' | 'pci_dss';
+      tags: string[];
+      sort_order?: number;
+    }
+  ): Promise<any> {
+    const db = this.getDb();
+
+    // Verify admin
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Admin access required');
+    }
+
+    const result = await db
+      .insertInto('knowledge_base')
+      .values({
+        title: input.title,
+        content: input.content,
+        category: input.category,
+        framework: input.framework || null,
+        tags: JSON.stringify(input.tags),
+        sort_order: input.sort_order || 0,
+        created_by: adminUserId,
+        is_active: 1,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      })
+      .returning(['id', 'title', 'created_at'])
+      .executeTakeFirst();
+
+    await this.logAdminAction(adminUserId, 'create_knowledge_article', 'knowledge_base', (result?.id as any) || null, {
+      title: input.title,
+      category: input.category,
+    });
+
+    this.env.logger.info('Knowledge article created', {
+      articleId: result?.id,
+      title: input.title,
+      adminUserId,
+    });
+
+    return result;
+  }
+
+  async updateKnowledgeArticle(
+    adminUserId: string,
+    articleId: string,
+    input: {
+      title?: string;
+      content?: string;
+      category?: 'framework_guide' | 'compliance_article' | 'best_practice';
+      framework?: 'gdpr' | 'soc2' | 'hipaa' | 'iso27001' | 'nist_csf' | 'pci_dss' | null;
+      tags?: string[];
+      sort_order?: number;
+      is_active?: boolean;
+    }
+  ): Promise<any> {
+    const db = this.getDb();
+
+    // Verify admin
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Admin access required');
+    }
+
+    // Check article exists
+    const existing = await db
+      .selectFrom('knowledge_base')
+      .select('id')
+      .where('id', '=', articleId)
+      .executeTakeFirst();
+
+    if (!existing) {
+      throw new Error('Article not found');
+    }
+
+    const updateData: any = { updated_at: Date.now() };
+    if (input.title !== undefined) updateData.title = input.title;
+    if (input.content !== undefined) updateData.content = input.content;
+    if (input.category !== undefined) updateData.category = input.category;
+    if (input.framework !== undefined) updateData.framework = input.framework;
+    if (input.tags !== undefined) updateData.tags = JSON.stringify(input.tags);
+    if (input.sort_order !== undefined) updateData.sort_order = input.sort_order;
+    if (input.is_active !== undefined) updateData.is_active = input.is_active ? 1 : 0;
+
+    const result = await db
+      .updateTable('knowledge_base')
+      .set(updateData)
+      .where('id', '=', articleId)
+      .returning(['id', 'title', 'updated_at'])
+      .executeTakeFirst();
+
+    await this.logAdminAction(adminUserId, 'update_knowledge_article', 'knowledge_base', articleId, {
+      updates: Object.keys(input),
+    });
+
+    this.env.logger.info('Knowledge article updated', {
+      articleId,
+      adminUserId,
+    });
+
+    return result;
+  }
+
+  async deleteKnowledgeArticle(adminUserId: string, articleId: string): Promise<{ success: boolean }> {
+    const db = this.getDb();
+
+    // Verify admin
+    const isAdmin = await this.isAdmin(adminUserId);
+    if (!isAdmin) {
+      throw new Error('Admin access required');
+    }
+
+    // Soft delete by setting is_active to false
+    const result = await db
+      .updateTable('knowledge_base')
+      .set({ is_active: 0, updated_at: Date.now() })
+      .where('id', '=', articleId)
+      .execute();
+
+    await this.logAdminAction(adminUserId, 'delete_knowledge_article', 'knowledge_base', articleId, {
+      soft_delete: true,
+    });
+
+    this.env.logger.info('Knowledge article deleted', {
+      articleId,
+      adminUserId,
+    });
+
+    return { success: true };
   }
 }

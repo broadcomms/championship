@@ -318,6 +318,20 @@ export type compliance_reports = {
     status: string;
 };
 
+export type knowledge_base = {
+    id: string;
+    title: string;
+    content: string;
+    category: 'framework_guide' | 'compliance_article' | 'best_practice';
+    framework: 'gdpr' | 'soc2' | 'hipaa' | 'iso27001' | 'nist_csf' | 'pci_dss' | null;
+    tags: string; // JSON array as string
+    created_at: number;
+    updated_at: number;
+    created_by: string | null;
+    is_active: number; // 1 = active, 0 = deleted
+    sort_order: number;
+};
+
 export type DB = {
     documents: documents;
     sessions: sessions;
@@ -328,6 +342,7 @@ export type DB = {
     compliance_frameworks: compliance_frameworks;
     compliance_issues: compliance_issues;
     compliance_reports: compliance_reports;
+    knowledge_base: knowledge_base;
     document_chunks: document_chunks;
     document_processing_steps: document_processing_steps;
     workspace_scores: workspace_scores;
