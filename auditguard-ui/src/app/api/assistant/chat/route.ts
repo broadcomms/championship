@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Call backend assistant service via API gateway
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || 'https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run';
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || 'https://svc-01k9xqdrf5rkvbtfsp3q727ab4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run';
     
     console.log(`[AI Assistant] Calling backend: ${backendUrl}/api/workspaces/${workspaceId}/assistant/chat`);
     
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || 'https://svc-01k9r7xp13e47zjxe7wj3g2ev4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run';
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || 'https://svc-01k9xqdrf5rkvbtfsp3q727ab4.01k8njsj98qqesz0ppxff2yq4n.lmapp.run';
     
     let endpoint = `${backendUrl}/api/workspaces/${workspaceId}/assistant/sessions`;
     if (sessionId) {

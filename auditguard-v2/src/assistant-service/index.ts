@@ -128,6 +128,13 @@ export default class extends Service<Env> {
   }
 
   async chat(workspaceId: string, userId: string, request: ChatRequest): Promise<ChatResponse> {
+    this.env.logger.info('🚨 CHAT METHOD CALLED (non-streaming)', {
+      workspaceId,
+      userId,
+      message: request.message.substring(0, 100),
+      hasSessionId: !!request.sessionId
+    });
+    
     const db = this.getDb();
     
     this.env.logger.info('🚀 CHAT REQUEST STARTED', {
@@ -219,6 +226,10 @@ export default class extends Service<Env> {
     // Get workspace context for the assistant
     const workspaceContext = await this.getWorkspaceContext(workspaceId);
 
+    // Add checkpoint before SmartMemory operations
+    console.log('🔍 CHECKPOINT A: Before episodic memory search');
+    this.env.logger.info('🔍 CHECKPOINT A: Before episodic memory search');
+
     // Search episodic memory for relevant past conversations
     let relevantPastSessions: string[] = [];
     try {
@@ -226,28 +237,43 @@ export default class extends Service<Env> {
         request.message,
         { nMostRecent: 3 }
       );
-      
+
+      console.log('🔍 CHECKPOINT B: After episodic memory search', {
+        hasResults: !!(episodicResults && episodicResults.results)
+      });
+      this.env.logger.info('🔍 CHECKPOINT B: After episodic memory search');
+
       if (episodicResults && episodicResults.results && episodicResults.results.length > 0) {
-        relevantPastSessions = episodicResults.results.map(result => 
+        relevantPastSessions = episodicResults.results.map(result =>
           `Past conversation (${new Date(result.createdAt).toLocaleDateString()}): ${result.summary}`
         );
         this.env.logger.info(`📚 Found ${episodicResults.results.length} relevant past conversations`);
       }
     } catch (error) {
+      console.log('⚠️ Episodic memory search error:', error);
       this.env.logger.warn(`Failed to search episodic memory: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
+
+    console.log('🔍 CHECKPOINT C: Before procedural memory retrieval');
+    this.env.logger.info('🔍 CHECKPOINT C: Before procedural memory retrieval');
 
     // Get system prompt from procedural memory or use default
     let baseSystemPrompt = '';
     try {
       const proceduralMemory = await this.env.ASSISTANT_MEMORY.getProceduralMemory();
+      console.log('🔍 CHECKPOINT D: Got procedural memory instance');
       const storedPrompt = await proceduralMemory.getProcedure('system_prompt');
+      console.log('🔍 CHECKPOINT E: After getProcedure call', { hasPrompt: !!storedPrompt });
       if (storedPrompt) {
         baseSystemPrompt = storedPrompt;
       }
     } catch (error) {
+      console.log('⚠️ Procedural memory error:', error);
       this.env.logger.warn(`Failed to retrieve system prompt from procedural memory: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
+
+    console.log('🔍 CHECKPOINT F: After procedural memory section');
+    this.env.logger.info('🔍 CHECKPOINT F: After procedural memory section');
 
     // Fall back to default if not found
     if (!baseSystemPrompt) {
@@ -292,7 +318,8 @@ ${workspaceContext}${episodicContext}
 KNOWLEDGE BASE ACCESS:
 - Use the 'search_knowledge' tool to look up compliance requirements, best practices, and regulatory details
 - Knowledge base includes: GDPR, SOC2, HIPAA, ISO27001, NIST CSF, PCI DSS
-- Always cite knowledge base articles when providing compliance guidance`;
+- MANDATORY: Always use search_knowledge for questions about frameworks, regulations, or "what are the requirements"
+- DO NOT answer compliance questions from memory - always check the knowledge base first`;
 
     // Get recent conversation history from SmartMemory
     let conversationHistory: ChatMessage[] = [];
@@ -344,7 +371,12 @@ KNOWLEDGE BASE ACCESS:
       { role: 'user', content: request.message },
     ];
 
+    // Use multiple logging methods to ensure visibility
+    console.log('📝 Messages built (console.log)', { messageCount: messages.length });
     this.env.logger.info('📝 Messages built', { messageCount: messages.length });
+
+    console.log('🔍 CHECKPOINT: About to start AI pipeline - line 357 reached!');
+    this.env.logger.info('🔍 CHECKPOINT: About to start AI pipeline - if you see this, code reached line 357!');
 
     // Generate AI response
     let assistantMessage: string;
@@ -396,8 +428,14 @@ Available tools:
 - get_compliance_issues: For questions about problems, gaps, or specific issues (no args needed)
 - get_document_info: For details about a specific document (requires document ID)
   Args: { "documentId": "doc_xxxxx" }
-- search_knowledge: For questions about compliance frameworks, regulations, requirements, or best practices
-  Args: { "query": "what user is asking about", "framework": "gdpr|soc2|hipaa|iso27001|nist_csf|pci_dss|all" }
+- search_knowledge: **USE THIS FOR ANY QUESTION ABOUT:**
+  * Compliance regulations (GDPR, SOC2, HIPAA, ISO27001, NIST CSF, PCI DSS)
+  * Legal requirements, notification timelines, breach procedures
+  * Best practices, checklists, implementation guides
+  * "What are the requirements for...", "How do I...", "What does GDPR say about..."
+  Args: { "query": "user's exact question", "framework": "gdpr|soc2|hipaa|iso27001|nist_csf|pci_dss|all" }
+  
+IMPORTANT: Questions about compliance frameworks MUST use search_knowledge, NOT your training data!
 
 Respond with this exact JSON structure:
 {
@@ -474,6 +512,17 @@ User: "thank you"
 }`
       };
       
+      // 🔍 DEBUG: Log what question is being sent to decision maker
+      const lastUserMessage = messages[messages.length - 1];
+      this.env.logger.info('🎯 STAGE 1 INPUT:', {
+        userQuestion: lastUserMessage?.content?.substring(0, 200),
+        messageCount: messages.length,
+        lastThreeMessages: messages.slice(-3).map(m => ({
+          role: m.role,
+          content: m.content?.substring(0, 100)
+        }))
+      });
+      
       let decisionResponse: any;
       try {
         decisionResponse = await this.env.AI.run('llama-3.3-70b', {
@@ -499,10 +548,13 @@ User: "thank you"
       
       const decision = JSON.parse(decisionResponse.choices[0].message.content);
       
-      this.env.logger.info('AI Decision', {
+      // 🔍 DEBUG: Log the FULL decision response to see what AI decided
+      this.env.logger.info('🎯 STAGE 1 DECISION (FULL):', {
         needsTools: decision.needsTools,
         toolCalls: decision.toolCalls,
-        reasoning: decision.reasoning
+        reasoning: decision.reasoning,
+        userFacingMessage: decision.userFacingMessage,
+        rawDecisionJson: JSON.stringify(decision).substring(0, 1000) // First 1000 chars
       });
       
       // Stage 2: Execute tools if needed
@@ -661,6 +713,13 @@ User: "thank you"
    * Returns a ReadableStream that emits chunks as they're generated
    */
   async streamChat(workspaceId: string, userId: string, request: ChatRequest): Promise<ReadableStream> {
+    this.env.logger.info('🚨 streamChat METHOD CALLED', {
+      workspaceId,
+      userId,
+      message: request.message.substring(0, 100),
+      hasSessionId: !!request.sessionId
+    });
+    
     const db = this.getDb();
 
     // Verify workspace access
@@ -770,7 +829,7 @@ User: "thank you"
     let capturedUserMessage = request.message;
     let capturedToolsUsed: string[] = [];
     let capturedToolResults: any[] = [];
-    let capturedWorkspaceContext = '';
+    let capturedWorkspaceContext = workspaceContext;
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -778,12 +837,117 @@ User: "thank you"
           // Send session ID first
           controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'session', sessionId: session.id })}\n\n`));
 
-          // Call AI with streaming (if platform supports it, otherwise simulate)
+          // 🚀 TWO-STAGE PIPELINE: First decide on tools, then execute + generate response
+          
+          // STAGE 1: Decision Phase - What tools should we use?
+          self.env.logger.info('🎯 STAGE 1: Analyzing user request for tool needs');
+          
+          const decisionPrompt = {
+            role: 'system',
+            content: `You are an AI decision maker for a compliance assistant. Analyze the user's request and respond ONLY with a JSON object indicating what tools to use WITH their arguments.
+
+Available tools:
+- get_compliance_status: For questions about scores, status, overall compliance (no args needed)
+- search_documents: For finding specific documents or searching by topic
+  Args: { "query": "search terms" }
+- get_compliance_issues: For questions about problems, gaps, or specific issues (no args needed)
+- search_knowledge: **USE THIS FOR ANY QUESTION ABOUT:**
+  * Compliance regulations (GDPR, SOC2, HIPAA, ISO27001, NIST CSF, PCI DSS)
+  * Legal requirements, notification timelines, breach procedures
+  * Best practices, checklists, implementation guides
+  * "What are the requirements for...", "How do I...", "What does GDPR say about..."
+  Args: { "query": "user's exact question", "framework": "gdpr|soc2|hipaa|iso27001|nist_csf|pci_dss|all" }
+  
+IMPORTANT: Questions about compliance frameworks MUST use search_knowledge, NOT your training data!
+
+Respond with this exact JSON structure:
+{
+  "needsTools": true/false,
+  "toolCalls": [{ "name": "tool_name", "arguments": { "arg": "value" } }],
+  "reasoning": "Why these tools are needed",
+  "userFacingMessage": "Brief message to show user while processing"
+}`
+          };
+          
+          let decision: any = { needsTools: false, toolCalls: [], reasoning: '', userFacingMessage: '' };
+          
+          try {
+            const decisionResponse = await self.env.AI.run('llama-3.3-70b', {
+              model: 'llama-3.3-70b',
+              messages: [
+                decisionPrompt,
+                ...messages.slice(-3) // Last 3 messages for context
+              ] as any,
+              response_format: { type: 'json_object' },
+              temperature: 0.3,
+              max_tokens: 500,
+            });
+            
+            decision = JSON.parse(decisionResponse.choices[0].message.content);
+            
+            self.env.logger.info('🎯 STAGE 1 DECISION:', {
+              needsTools: decision.needsTools,
+              toolCalls: decision.toolCalls?.map((tc: any) => tc.name),
+              reasoning: decision.reasoning
+            });
+          } catch (decisionError: any) {
+            self.env.logger.error('Stage 1 decision failed, continuing without tools', {
+              error: decisionError?.message || String(decisionError)
+            });
+          }
+
+          // STAGE 2: Execute tools if needed
+          let toolResultMessages: any[] = [];
+          if (decision.needsTools && decision.toolCalls && decision.toolCalls.length > 0) {
+            self.env.logger.info('🛠️ STAGE 2: Executing tools', {
+              toolCount: decision.toolCalls.length,
+              tools: decision.toolCalls.map((tc: any) => tc.name)
+            });
+            
+            // Send user-facing message while tools are running
+            if (decision.userFacingMessage) {
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'chunk', content: decision.userFacingMessage + '\n\n' })}\n\n`));
+            }
+            
+            // Convert decision tool calls to execution format
+            const toolCalls = decision.toolCalls.map((tc: any, index: number) => ({
+              id: `call_${Date.now()}_${index}`,
+              type: 'function',
+              function: {
+                name: tc.name,
+                arguments: JSON.stringify(tc.arguments || {})
+              }
+            }));
+            
+            // Execute the tools
+            const toolResults = await self.executeTools(toolCalls, workspaceId, userId);
+            toolResultMessages = toolResults.messages;
+            capturedToolsUsed = decision.toolCalls.map((tc: any) => tc.name);
+            capturedToolResults = toolResults.rawData;
+            
+            self.env.logger.info('🛠️ Tools executed', {
+              toolCount: toolCalls.length,
+              resultsCount: toolResults.rawData.length
+            });
+          }
+
+          // STAGE 3: Generate final AI response with streaming
+          self.env.logger.info('🤖 STAGE 3: Generating final response with streaming');
+          
+          // Build final messages array with tool results
+          const finalMessages = decision.needsTools && toolResultMessages.length > 0
+            ? [...messages.slice(-5), ...toolResultMessages, { 
+                role: 'user', 
+                content: 'Based on the tool results above, provide a comprehensive, helpful answer to my original question.' 
+              }]
+            : messages.slice(-6);
+
+          // Call AI with streaming
           try {
             // Attempt streaming AI call
             const response = await self.env.AI.run('llama-3.3-70b', {
               model: 'llama-3.3-70b',
-              messages: messages.slice(-6) as any,
+              messages: finalMessages as any,
               temperature: 0.7,
               max_tokens: 2000,
               stream: true, // Enable streaming
@@ -851,14 +1015,13 @@ User: "thank you"
               .execute();
 
             // Post-process: Generate suggestions and actions using AI
-            // Note: streamChat doesn't use tools yet, so toolResults will be empty
             const postProcessing = await self.postProcessResponse({
               userMessage: request.message,
               assistantResponse: fullMessage,
-              toolsUsed: [], // No tools in streaming yet
-              toolResults: [],
+              toolsUsed: capturedToolsUsed,
+              toolResults: capturedToolResults,
               workspaceId: workspaceId,
-              workspaceContext: workspaceContext
+              workspaceContext: capturedWorkspaceContext
             });
 
             // Send completion event with post-processed suggestions and actions
@@ -1721,6 +1884,13 @@ RULES:
           filter: args.framework && args.framework !== 'all' 
             ? { framework: args.framework }
             : undefined
+        });
+        
+        // Debug: Log the full response structure
+        this.env.logger.info('📊 Vector search RAW response', { 
+          type: typeof vectorResults,
+          keys: Object.keys(vectorResults || {}),
+          fullResponse: JSON.stringify(vectorResults).substring(0, 500)
         });
         
         this.env.logger.info('📊 Vector search complete', { 
