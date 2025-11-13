@@ -1629,60 +1629,156 @@ RULES:
   }
 
   // ============================================================================
-  // Knowledge Base Tool
+  // Knowledge Base Tool with Semantic Search
   // ============================================================================
+
+  /**
+   * Generate embedding for text using Raindrop AI
+   * Uses the same model as document embeddings for consistency (bge-small-en)
+   */
+  private async generateEmbedding(text: string): Promise<number[]> {
+    try {
+      // Use Raindrop's AI to generate embeddings with bge-small-en model
+      const response: any = await this.env.AI.run('bge-small-en', {
+        text: [text]
+      } as any);
+      
+      // Extract embedding array
+      const embedding = Array.isArray(response.data) ? response.data[0] : response[0];
+      return embedding;
+    } catch (error) {
+      this.env.logger.error('Failed to generate embedding', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw new Error('Embedding generation failed');
+    }
+  }
+
+  /**
+   * Fallback text search when semantic search fails
+   */
+  private async fallbackTextSearch(
+    args: { query: string; framework?: string }
+  ): Promise<any> {
+    const db = this.getDb();
+    
+    let query = db
+      .selectFrom('knowledge_base')
+      .select(['id', 'title', 'content', 'category', 'framework', 'tags'])
+      .where('is_active', '=', 1);
+    
+    if (args.framework && args.framework !== 'all') {
+      query = query.where('framework', '=', args.framework as any);
+    }
+    
+    const allResults = await query.execute();
+    
+    const queryLower = args.query.toLowerCase();
+    const matchedResults = allResults.filter(r => {
+      const searchableText = `${r.title} ${r.content} ${r.tags || ''}`.toLowerCase();
+      return searchableText.includes(queryLower);
+    }).slice(0, 3);
+    
+    return {
+      source: 'knowledge_base_text_fallback',
+      count: matchedResults.length,
+      results: matchedResults.map(r => ({
+        title: r.title,
+        content: r.content,
+        framework: r.framework,
+        category: r.category
+      }))
+    };
+  }
 
   private async toolSearchKnowledge(
     args: { query: string; framework?: string }
   ): Promise<any> {
     try {
-      this.env.logger.info('🔍 Knowledge search started', { query: args.query, framework: args.framework });
+      this.env.logger.info('🔍 Semantic knowledge search started', { 
+        query: args.query, 
+        framework: args.framework 
+      });
       
-      const db = this.getDb();
-      
-      // Build query with basic filters
-      let query = db
-        .selectFrom('knowledge_base')
-        .select(['id', 'title', 'content', 'category', 'framework', 'tags'])
-        .where('is_active', '=', 1);
-      
-      // Add framework filter if specified
-      if (args.framework && args.framework !== 'all') {
-        query = query.where('framework', '=', args.framework as any);
+      // Step 1: Generate query embedding
+      let queryEmbedding: number[];
+      try {
+        queryEmbedding = await this.generateEmbedding(args.query);
+        this.env.logger.info('✅ Query embedding generated', { 
+          dimensions: queryEmbedding.length 
+        });
+      } catch (embeddingError) {
+        this.env.logger.warn('⚠️ Embedding generation failed, falling back to text search');
+        return await this.fallbackTextSearch(args);
       }
       
-      const allResults = await query.execute();
-      
-      // Simple text matching in memory (will upgrade to full-text search after migration)
-      const queryLower = args.query.toLowerCase();
-      const matchedResults = allResults.filter(r => {
-        const searchableText = `${r.title} ${r.content} ${r.tags || ''}`.toLowerCase();
-        return searchableText.includes(queryLower);
-      }).slice(0, 3);
-      
-      this.env.logger.info('📊 Search complete', { matchCount: matchedResults.length });
-      
-      if (matchedResults.length > 0) {
-        this.env.logger.info('✅ Returning knowledge base results', { count: matchedResults.length });
+      // Step 2: Search vector index for similar knowledge articles
+      try {
+        // Note: After raindrop build generate, KNOWLEDGE_EMBEDDINGS will be available in Env
+        const vectorResults = await (this.env as any).KNOWLEDGE_EMBEDDINGS.query(queryEmbedding, {
+          topK: 5,
+          returnMetadata: true,
+          filter: args.framework && args.framework !== 'all' 
+            ? { framework: args.framework }
+            : undefined
+        });
+        
+        this.env.logger.info('📊 Vector search complete', { 
+          resultsCount: vectorResults.matches?.length || 0 
+        });
+        
+        if (!vectorResults.matches || vectorResults.matches.length === 0) {
+          this.env.logger.warn('⚠️ No semantic matches found, trying text fallback');
+          return await this.fallbackTextSearch(args);
+        }
+        
+        // Step 3: Retrieve full articles from database
+        const db = this.getDb();
+        const articleIds = vectorResults.matches.map(m => m.id);
+        
+        const articles = await db
+          .selectFrom('knowledge_base')
+          .selectAll()
+          .where('id', 'in', articleIds)
+          .where('is_active', '=', 1)
+          .execute();
+        
+        // Step 4: Sort by relevance score from vector search
+        const sortedArticles = articles.sort((a, b) => {
+          const scoreA = vectorResults.matches.find(m => m.id === a.id)?.score || 0;
+          const scoreB = vectorResults.matches.find(m => m.id === b.id)?.score || 0;
+          return scoreB - scoreA; // Higher score first
+        });
+        
+        this.env.logger.info('✅ Semantic search successful', { 
+          articlesFound: sortedArticles.length,
+          topScore: vectorResults.matches[0]?.score
+        });
+        
         return {
-          source: 'knowledge_base',
-          count: matchedResults.length,
-          results: matchedResults.map(r => ({
-            title: r.title,
-            content: r.content,
-            framework: r.framework,
-            category: r.category
-          }))
+          source: 'knowledge_base_semantic',
+          count: sortedArticles.length,
+          results: sortedArticles.map(a => {
+            const match = vectorResults.matches.find(m => m.id === a.id);
+            return {
+              title: a.title,
+              content: a.content,
+              framework: a.framework,
+              category: a.category,
+              relevance: match?.score || 0
+            };
+          })
         };
+        
+      } catch (vectorError) {
+        this.env.logger.warn('⚠️ Vector search failed, falling back to text search', {
+          error: vectorError instanceof Error ? vectorError.message : String(vectorError)
+        });
+        return await this.fallbackTextSearch(args);
       }
-
-      this.env.logger.warn('⚠️ No knowledge found', { query: args.query });
-      return {
-        message: 'No specific knowledge found in database.',
-        query: args.query
-      };
+      
     } catch (error) {
-      this.env.logger.error('❌ Knowledge search failed', {
+      this.env.logger.error('❌ Knowledge search failed completely', {
         error: error instanceof Error ? error.message : String(error),
         query: args.query,
         stack: error instanceof Error ? error.stack : undefined
@@ -1883,6 +1979,111 @@ CERTIFICATION PROCESS:
       return {
         success: false,
         message: `Failed to initialize SmartMemory: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
+  }
+
+  /**
+   * Initialize knowledge base embeddings in vector index
+   * This generates embeddings for all knowledge base articles and stores them
+   * in the KNOWLEDGE_EMBEDDINGS vector index for semantic search
+   */
+  async initializeKnowledgeEmbeddings(): Promise<{ success: boolean; message: string; stats?: any }> {
+    try {
+      this.env.logger.info('🚀 Starting knowledge base embedding initialization');
+      
+      const db = this.getDb();
+      
+      // Step 1: Get all active knowledge base articles
+      const articles = await db
+        .selectFrom('knowledge_base')
+        .selectAll()
+        .where('is_active', '=', 1)
+        .execute();
+      
+      if (articles.length === 0) {
+        return {
+          success: false,
+          message: 'No knowledge base articles found. Run migration 0003_knowledge_base.sql first.'
+        };
+      }
+      
+      this.env.logger.info(`📚 Found ${articles.length} knowledge base articles to process`);
+      
+      // Step 2: Generate embeddings for each article
+      const vectors: Array<{ id: string; values: number[]; metadata: any }> = [];
+      let successCount = 0;
+      let failureCount = 0;
+      
+      for (const article of articles) {
+        try {
+          // Create searchable text (title + content)
+          const searchableText = `${article.title}\n\n${article.content}`;
+          
+          // Generate embedding
+          const embedding = await this.generateEmbedding(searchableText);
+          
+          // Prepare vector with metadata
+          vectors.push({
+            id: article.id,
+            values: embedding,
+            metadata: {
+              title: article.title,
+              category: article.category,
+              framework: article.framework || 'general',
+              tags: article.tags
+            }
+          });
+          
+          successCount++;
+          
+          if (successCount % 10 === 0) {
+            this.env.logger.info(`✅ Processed ${successCount}/${articles.length} articles...`);
+          }
+          
+        } catch (error) {
+          failureCount++;
+          this.env.logger.error(`Failed to process article ${article.id}`, {
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+      
+      // Step 3: Upsert all vectors to the index in batches
+      this.env.logger.info(`📤 Uploading ${vectors.length} embeddings to vector index...`);
+      
+      const batchSize = 100;
+      for (let i = 0; i < vectors.length; i += batchSize) {
+        const batch = vectors.slice(i, i + batchSize);
+        await (this.env as any).KNOWLEDGE_EMBEDDINGS.upsert(batch);
+        
+        this.env.logger.info(`   Uploaded batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(vectors.length / batchSize)}`);
+      }
+      
+      const stats = {
+        totalArticles: articles.length,
+        successfulEmbeddings: successCount,
+        failedEmbeddings: failureCount,
+        vectorsUploaded: vectors.length,
+        dimensions: vectors[0]?.values.length || 384
+      };
+      
+      this.env.logger.info('✅ Knowledge base embedding initialization complete', stats);
+      
+      return {
+        success: true,
+        message: `Successfully initialized ${vectors.length} knowledge base embeddings`,
+        stats
+      };
+      
+    } catch (error) {
+      this.env.logger.error('Failed to initialize knowledge base embeddings', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      return {
+        success: false,
+        message: `Failed to initialize knowledge base embeddings: ${error instanceof Error ? error.message : 'Unknown error'}`
       };
     }
   }

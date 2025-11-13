@@ -1,226 +1,762 @@
+patrick@DESKTOP-PC01:~/championship/auditguard-v2$ curl -X POST https://your-domain.com/api/assistant/initialize-knowledge-embeddings
+
+
 patrick@DESKTOP-PC01:~/championship/auditguard-v2$ raindrop logs tail
 Using organization: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
 Using user: user_01K8RV423SG75TDJC3014RQN9B
-Tailing logs for auditguard-v2@01k9r7xj68wet91y7fjjkhpjsa using Riverjack service...
+Tailing logs for auditguard-v2@01k9xbstrakw4wahybcy89yy11 using Riverjack service...
 Press Ctrl+C to stop
 
-🔄 Started streaming logs for auditguard-v2@01k9r7xj68wet91y7fjjkhpjsa
+🔄 Started streaming logs for auditguard-v2@01k9xbstrakw4wahybcy89yy11
    Organization: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
    User: user_01K8RV423SG75TDJC3014RQN9B
-   Time: 11/12/2025, 7:45:22 PM
-[11/12/2025, 7:45:33 PM] 🔗 Trace: 39c8bc3206bf750a92efd44b1de0414b (185ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: auth-service
-  1. ✅ sql.all (32ms)
+   Time: 11/12/2025, 9:14:41 PM
+[11/12/2025, 9:14:46 PM] 🔗 Trace: a612b368cd4fdae4129fc607c361eb2c (509ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (225ms)
      🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2394ms, 2 rows read, ENAM, DB: 1084.0KB
-  2. ✅ validateSession (32ms)
-  3. ✅ validateSession (36ms)
+     📊 meta: 0.3078ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (225ms)
+  3. ✅ sql.all (51ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2387ms, 1 rows read, ENAM, DB: 620.0KB
+  4. ✅ getSessionHistory (132ms)
+  5. ✅ validateSession (327ms)
      service: AUTH_SERVICE
-  4. ✅ log
+  6. ✅ fetch (604ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9xbstrakw4wahybcy89yy11
+     http.method: GET
+     http.url: https://svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762996083561_13hei/assistant/sessions/conv_1762997070147_eupwch
+     http.scheme: https
+     http.host: svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: undici
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: *
+     http.authorization: [REDACTED]
+     http.cf_ray: 99dac1edeacd78a5
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (42ms)
+     🗄️  SQL Query: select "id", "started_at", "message_count" from "conversation_sessions" where "id" = ? and "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.6286ms, 1 rows read, ENAM, DB: 620.0KB
+  8. ✅ getSessionHistory (235ms)
+     service: ASSISTANT_SERVICE
+  9. ✅ sql.all (39ms)
+     🗄️  SQL Query: select "role", "content", "created_at" from "conversation_messages" where "session_id" = ? order by "created_at" asc
+     📊 meta: 0.9469ms, 28 rows read, ENAM, DB: 620.0KB
+  10. ✅ sql.run (42ms)
+     🗄️  SQL Query: 
+          INSERT INTO performance_metrics (operation, start_time, end_time, duration, success, meta_info, error, created_at)
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        
+     📊 meta: 1.4329ms, 2 rows read, 5 rows written, ENAM, DB: 620.0KB
+
+[11/12/2025, 9:14:46 PM] 🔗 Trace: c31c49343c112f7628214108b99c2060 (378ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (225ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2827ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (225ms)
+  3. ✅ sql.all (37ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1269ms, 1 rows read, ENAM, DB: 620.0KB
+  4. ✅ getMembers (88ms)
+  5. ✅ validateSession (334ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (492ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9xbstrakw4wahybcy89yy11
+     http.method: GET
+     http.url: https://svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762996083561_13hei/members
+     http.scheme: https
+     http.host: svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762996083561_13hei
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99dac1edba4bc730
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (51ms)
+     🗄️  SQL Query: select "workspace_members"."user_id", "users"."email", "workspace_members"."role", "workspace_members"."added_at", "workspace_members"."added_by" from "workspace_members" inner join "users" on "users"."id" = "workspace_members"."user_id" where "workspace_members"."workspace_id" = ?
+     📊 meta: 0.2653ms, 2 rows read, ENAM, DB: 620.0KB
+  8. ✅ getMembers (158ms)
+     service: WORKSPACE_SERVICE
+
+[11/12/2025, 9:14:46 PM] 🔗 Trace: 1bd82d92000630f4d1b050f10c9e27d8 (319ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (241ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 1.5879ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (241ms)
+  3. ✅ sql.all (41ms)
+     🗄️  SQL Query: select "id", "email", "created_at" from "users" where "id" = ?
+     📊 meta: 0.2545ms, 1 rows read, ENAM, DB: 620.0KB
+  4. ✅ getUserById (80ms)
+  5. ✅ validateSession (337ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (416ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9xbstrakw4wahybcy89yy11
+     http.method: GET
+     http.url: https://svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/auth/me
+     http.scheme: https
+     http.host: svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762996083561_13hei
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99dac1edde84964a
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (39ms)
+     🗄️  SQL Query: select "user_id" from "admin_users" where "user_id" = ?
+     📊 meta: 0.6402ms, 1 rows read, ENAM, DB: 620.0KB
+  8. ✅ getUserById (79ms)
+     service: AUTH_SERVICE
+
+[11/12/2025, 9:14:46 PM] 🔗 Trace: b13db5b7e45f33d721f54ab9a64d0efe (420ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (226ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.1963ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (226ms)
+  3. ✅ sql.all (40ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.6042ms, 1 rows read, ENAM, DB: 620.0KB
+  4. ✅ getWorkspaceStats (134ms)
+  5. ✅ validateSession (328ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (525ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9xbstrakw4wahybcy89yy11
+     http.method: GET
+     http.url: https://svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762996083561_13hei/stats
+     http.scheme: https
+     http.host: svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762996083561_13hei
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99dac1edee2aab9c
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (52ms)
+     🗄️  SQL Query: select count("id") as "count" from "compliance_checks" where "workspace_id" = ?
+     📊 meta: 0.6278ms, ENAM, DB: 620.0KB
+  8. ✅ getWorkspaceStats (197ms)
+     service: USAGE_SERVICE
+  9. ✅ sql.all (53ms)
+     🗄️  SQL Query: select count("compliance_issues"."id") as "count" from "compliance_issues" inner join "compliance_checks" on "compliance_issues"."check_id" = "compliance_checks"."id" where "compliance_checks"."workspace_id" = ? and "compliance_issues"."status" = ?
+     📊 meta: 0.4911ms, ENAM, DB: 620.0KB
+  10. ✅ sql.all (56ms)
+     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
+     📊 meta: 0.6847ms, ENAM, DB: 620.0KB
+  11. ✅ sql.all (60ms)
+     🗄️  SQL Query: select "overall_score" from "workspace_scores" where "workspace_id" = ? order by "calculated_at" desc limit ?
+     📊 meta: 0.4922ms, 1 rows read, ENAM, DB: 620.0KB
+  12. ✅ sql.all (34ms)
+     🗄️  SQL Query: select sum("file_size") as "total" from "documents" where "workspace_id" = ?
+     📊 meta: 0.2699ms, ENAM, DB: 620.0KB
+
+[11/12/2025, 9:14:46 PM] 🔗 Trace: 0fbbfa4272597ac001030255632665c1 (385ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (225ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.1599ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (225ms)
+  3. ✅ sql.all (40ms)
+     🗄️  SQL Query: select "id", "name", "description", "owner_id", "created_at", "updated_at" from "workspaces" where "id" = ?
+     📊 meta: 0.5922ms, 1 rows read, ENAM, DB: 620.0KB
+  4. ✅ getWorkspace (92ms)
+  5. ✅ validateSession (327ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (485ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9xbstrakw4wahybcy89yy11
+     http.method: GET
+     http.url: https://svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762996083561_13hei
+     http.scheme: https
+     http.host: svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762996083561_13hei
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99dac1edbdd7ac81
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (52ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1756ms, 1 rows read, ENAM, DB: 620.0KB
+  8. ✅ getWorkspace (158ms)
+     service: WORKSPACE_SERVICE
+
+[11/12/2025, 9:14:47 PM] 🔗 Trace: 55203a0022bbf493bcd88ea45f98a593 (144ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (39ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2462ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (39ms)
+  3. ✅ sql.all (57ms)
+     🗄️  SQL Query: select "id", "email", "created_at" from "users" where "id" = ?
+     📊 meta: 1.171ms, 1 rows read, ENAM, DB: 620.0KB
+  4. ✅ getUserById (102ms)
+  5. ✅ validateSession (43ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (146ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9xbstrakw4wahybcy89yy11
+     http.method: GET
+     http.url: https://svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/auth/me
+     http.scheme: https
+     http.host: svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762996083561_13hei
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99dac1f14c42880c
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (45ms)
+     🗄️  SQL Query: select "user_id" from "admin_users" where "user_id" = ?
+     📊 meta: 0.1485ms, 1 rows read, ENAM, DB: 620.0KB
+  8. ✅ getUserById (103ms)
+     service: AUTH_SERVICE
+
+[11/12/2025, 9:14:47 PM] 🔗 Trace: 13eac28d8d8d535cb75e74c49b2f2465 (136ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (43ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.3972ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (43ms)
+  3. ✅ sql.all (52ms)
+     🗄️  SQL Query: select "id", "name", "description", "owner_id", "created_at", "updated_at" from "workspaces" where "id" = ?
+     📊 meta: 0.3111ms, 1 rows read, ENAM, DB: 620.0KB
+  4. ✅ getWorkspace (90ms)
+  5. ✅ validateSession (49ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (140ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9xbstrakw4wahybcy89yy11
+     http.method: GET
+     http.url: https://svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762996083561_13hei
+     http.scheme: https
+     http.host: svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762996083561_13hei
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99dac1f238fa52e6
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (38ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2474ms, 1 rows read, ENAM, DB: 620.0KB
+  8. ✅ getWorkspace (91ms)
+     service: WORKSPACE_SERVICE
+
+[11/12/2025, 9:14:47 PM] 🔗 Trace: 91cbe5815232c83ee3c233ae6b69a9d0 (37ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (37ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2601ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (37ms)
+
+[11/12/2025, 9:14:47 PM] 🔗 Trace: 65599f7640b6bcf5ebb997407136db45 (44ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (44ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.3557ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (44ms)
+
+[11/12/2025, 9:14:47 PM] 🔗 Trace: 298a3975060fd6d7a3e28ec8e004210b (46ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (46ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2474ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (46ms)
+
+[11/12/2025, 9:14:47 PM] 🔗 Trace: b4051a245e6041ffdd37f3926ad99e49 (39ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (39ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2815ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (39ms)
+
+[11/12/2025, 9:14:47 PM] 🔗 Trace: 65599f7640b6bcf5ebb997407136db45 (196ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: api-gateway
+  1. ✅ validateSession (49ms)
+     service: AUTH_SERVICE
+  2. ✅ fetch (196ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9xbstrakw4wahybcy89yy11
+     http.method: GET
+     http.url: https://svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762996083561_13hei/members
+     http.scheme: https
+     http.host: svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762996083561_13hei
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99dac1f24e2aaae0
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  3. ✅ getMembers (147ms)
+     service: WORKSPACE_SERVICE
+
+[11/12/2025, 9:14:47 PM] 🔗 Trace: b4051a245e6041ffdd37f3926ad99e49 (146ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: assistant-service
+  1. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2271ms, 1 rows read, ENAM, DB: 620.0KB
+  2. ✅ getSessionHistory (102ms)
+  3. ✅ validateSession (44ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (192ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9xbstrakw4wahybcy89yy11
+     http.method: GET
+     http.url: https://svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1762996083561_13hei/assistant/sessions/conv_1762997070147_eupwch
+     http.scheme: https
+     http.host: svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: undici
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: undefined
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: *
+     http.authorization: [REDACTED]
+     http.cf_ray: 99dac1f2d94978a5
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "id", "started_at", "message_count" from "conversation_sessions" where "id" = ? and "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2192ms, 1 rows read, ENAM, DB: 620.0KB
+  6. ✅ getSessionHistory (105ms)
+     service: ASSISTANT_SERVICE
+  7. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "role", "content", "created_at" from "conversation_messages" where "session_id" = ? order by "created_at" asc
+     📊 meta: 0.3576ms, 28 rows read, ENAM, DB: 620.0KB
+  8. ✅ sql.run (43ms)
+     🗄️  SQL Query: 
+          INSERT INTO performance_metrics (operation, start_time, end_time, duration, success, meta_info, error, created_at)
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        
+     📊 meta: 0.3368ms, 2 rows read, 5 rows written, ENAM, DB: 620.0KB
+
+[11/12/2025, 9:14:47 PM] 🔗 Trace: 298a3975060fd6d7a3e28ec8e004210b (99ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: workspace-service
+  1. ✅ sql.all (48ms)
+     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."updated_at", "workspace_members"."role" from "workspace_members" inner join "workspaces" on "workspaces"."id" = "workspace_members"."workspace_id" where "workspace_members"."user_id" = ?
+     📊 meta: 0.5517ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ getWorkspaces (102ms)
+  3. ✅ validateSession (145ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (327ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9xbstrakw4wahybcy89yy11
+     http.method: GET
+     http.url: https://svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces
+     http.scheme: https
+     http.host: svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762996083561_13hei
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99dac1f17d76a23a
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (54ms)
+     🗄️  SQL Query: select count("user_id") as "count" from "workspace_members" where "workspace_id" = ?
+     📊 meta: 0.2893ms, 1 rows read, ENAM, DB: 620.0KB
+  6. ✅ getWorkspaces (182ms)
+     service: WORKSPACE_SERVICE
+
+[11/12/2025, 9:14:47 PM] 🔗 Trace: d61affa8fc85b924cff921b35221d0aa (109ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (33ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2708ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (33ms)
+  3. ✅ validateSession (39ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (111ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01k9xbstrakw4wahybcy89yy11
+     http.method: GET
+     http.url: https://svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces
+     http.scheme: https
+     http.host: svc-01k9xbsysfh3nh0rgyh8wgjppr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: http://localhost:3000/workspaces/wks_1762996083561_13hei
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.9
+     http.authorization: undefined
+     http.cf_ray: 99dac1f4afae36a1
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (33ms)
+     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."updated_at", "workspace_members"."role" from "workspace_members" inner join "workspaces" on "workspaces"."id" = "workspace_members"."workspace_id" where "workspace_members"."user_id" = ?
+     📊 meta: 0.3241ms, 2 rows read, ENAM, DB: 620.0KB
+  6. ✅ getWorkspaces (71ms)
+  7. ✅ getWorkspaces (72ms)
+     service: WORKSPACE_SERVICE
+  8. ✅ sql.all (38ms)
+     🗄️  SQL Query: select count("user_id") as "count" from "workspace_members" where "workspace_id" = ?
+     📊 meta: 0.2244ms, 1 rows read, ENAM, DB: 620.0KB
+
+
+
+
+
+# 4. Test semantic search
+# Ask: "What are GDPR data breach notification requirements?"
+# Verify vector search is used in logs
+
+^[[1;2C[11/12/2025, 9:15:48 PM] 🔗 Trace: 5b0aedaa03f2184f4ed7298edd1ab56f (34ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: auth-service
+  1. ✅ sql.all (34ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2271ms, 2 rows read, ENAM, DB: 620.0KB
+  2. ✅ validateSession (34ms)
+
+[11/12/2025, 9:15:48 PM] 🔗 Trace: 5b0aedaa03f2184f4ed7298edd1ab56f (520ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: api-gateway
+  1. ✅ validateSession (154ms)
+     service: AUTH_SERVICE
+  2. ✅ log
      level: INFO
      message: 🚀 CHAT REQUEST STARTED
-     fields: {"workspaceId":"wks_1762918181968_rd5sde","userId":"usr_bootstrap_admin","message":"what are the requirements for GDPR breach notification?"}
-  5. ✅ sql.all (35ms)
+     fields: {"workspaceId":"wks_1762996083561_13hei","userId":"usr_bootstrap_admin","message":"What are GDPR data breach notification requirements?"}
+  3. ✅ sql.all (39ms)
      🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1535ms, 1 rows read, ENAM, DB: 1084.0KB
+     📊 meta: 0.2533ms, 1 rows read, ENAM, DB: 620.0KB
+  4. ✅ sql.all (34ms)
+     🗄️  SQL Query: select * from "conversation_sessions" where "id" = ? and "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1831ms, 1 rows read, ENAM, DB: 620.0KB
+  5. ✅ sql.all (47ms)
+     🗄️  SQL Query: insert into "conversation_messages" ("id", "session_id", "role", "content", "created_at") values (?, ?, ?, ?, ?)
+     📊 meta: 1.3739ms, 4 rows written, ENAM, DB: 620.0KB
+  6. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "name", "description" from "workspaces" where "id" = ?
+     📊 meta: 0.3516ms, 1 rows read, ENAM, DB: 620.0KB
+  7. ✅ sql.all (37ms)
+     🗄️  SQL Query: select * from "workspace_scores" where "workspace_id" = ? order by "calculated_at" desc limit ?
+     📊 meta: 0.2822ms, 1 rows read, ENAM, DB: 620.0KB
+  8. ✅ sql.all (32ms)
+     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
+     📊 meta: 0.3254ms, ENAM, DB: 620.0KB
+  9. ✅ sql.all (33ms)
+     🗄️  SQL Query: select count("compliance_issues"."id") as "count" from "compliance_issues" inner join "compliance_checks" on "compliance_issues"."check_id" = "compliance_checks"."id" where "compliance_checks"."workspace_id" = ? and "compliance_issues"."status" = ?
+     📊 meta: 0.9408ms, ENAM, DB: 620.0KB
 
-[11/12/2025, 7:45:38 PM] 🔗 Trace: 39c8bc3206bf750a92efd44b1de0414b (63ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory:retriever-agent
-  1. ✅ console.log
+[11/12/2025, 9:15:49 PM] 🔗 Trace: 5b0aedaa03f2184f4ed7298edd1ab56f (2644ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: assistant-memory:memory:retriever-agent
+  1. ✅ ai.run (994ms)
+  2. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  2. ✅ comprehensiveSearch (0ms)
-  3. ✅ console.log
+  3. ✅ comprehensiveSearch (0ms)
+  4. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  4. ✅ comprehensiveSearch (0ms)
-  5. ✅ console.log
+  5. ✅ comprehensiveSearch (0ms)
+  6. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  6. ✅ comprehensiveSearch (0ms)
-  7. ✅ console.log
+  7. ✅ comprehensiveSearch (0ms)
+  8. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  8. ✅ comprehensiveSearch (0ms)
-  9. ✅ console.log
+  9. ✅ comprehensiveSearch (0ms)
+  10. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  10. ✅ comprehensiveSearch (0ms)
-  11. ✅ console.log
+  11. ✅ comprehensiveSearch (0ms)
+  12. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  12. ✅ comprehensiveSearch (0ms)
-  13. ✅ console.log
+  13. ✅ comprehensiveSearch (0ms)
+  14. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  14. ✅ comprehensiveSearch (0ms)
-  15. ✅ console.log
+  15. ✅ comprehensiveSearch (0ms)
+  16. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  16. ✅ comprehensiveSearch (0ms)
-  17. ✅ console.log
+  17. ✅ comprehensiveSearch (0ms)
+  18. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  18. ✅ comprehensiveSearch (0ms)
-  19. ✅ console.log
+  19. ✅ comprehensiveSearch (0ms)
+  20. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  20. ✅ comprehensiveSearch (0ms)
-  21. ✅ console.log
+  21. ✅ comprehensiveSearch (0ms)
+  22. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  22. ✅ comprehensiveSearch (0ms)
-  23. ✅ console.log
+  23. ✅ comprehensiveSearch (0ms)
+  24. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  24. ✅ comprehensiveSearch (0ms)
-  25. ✅ console.log
+  25. ✅ comprehensiveSearch (0ms)
+  26. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  26. ✅ comprehensiveSearch (0ms)
-  27. ✅ console.log
+  27. ✅ comprehensiveSearch (0ms)
+  28. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  28. ✅ comprehensiveSearch (0ms)
-  29. ✅ console.log
+  29. ✅ comprehensiveSearch (0ms)
+  30. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  30. ✅ comprehensiveSearch (0ms)
-  31. ✅ console.log
+  31. ✅ comprehensiveSearch (0ms)
+  32. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  32. ✅ comprehensiveSearch (0ms)
-  33. ✅ console.log
+  33. ✅ comprehensiveSearch (0ms)
+  34. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  34. ✅ comprehensiveSearch (0ms)
-  35. ✅ console.log
+  35. ✅ comprehensiveSearch (0ms)
+  36. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  36. ✅ comprehensiveSearch (0ms)
-  37. ✅ console.log
+  37. ✅ comprehensiveSearch (0ms)
+  38. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  38. ✅ comprehensiveSearch (0ms)
-  39. ✅ console.log
+  39. ✅ comprehensiveSearch (0ms)
+  40. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  40. ✅ comprehensiveSearch (0ms)
-  41. ✅ console.log
+  41. ✅ comprehensiveSearch (0ms)
+  42. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  42. ✅ comprehensiveSearch (0ms)
-  43. ✅ console.log
+  43. ✅ comprehensiveSearch (0ms)
+  44. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  44. ✅ comprehensiveSearch (0ms)
-  45. ✅ console.log
+  45. ✅ comprehensiveSearch (0ms)
+  46. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  46. ✅ comprehensiveSearch (0ms)
-  47. ✅ console.log
+  47. ✅ comprehensiveSearch (0ms)
+  48. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
 ]
-  48. ✅ comprehensiveSearch (0ms)
-  49. ✅ console.log
-     severity: info
-     message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
-]
-  50. ✅ comprehensiveSearch (0ms)
+  49. ✅ comprehensiveSearch (0ms)
+  50. ✅ ai.run (1835ms)
   51. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "No relationships found for any of the entities"
 ]
-  52. ✅ comprehensiveSearch (0ms)
+  52. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
   53. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "No relationships found for any of the entities"
 ]
-  54. ✅ comprehensiveSearch (0ms)
+  54. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
   55. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "No relationships found for any of the entities"
 ]
-  56. ✅ comprehensiveSearch (0ms)
+  56. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
   57. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "No relationships found for any of the entities"
 ]
-  58. ✅ comprehensiveSearch (0ms)
+  58. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
   59. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "No relationships found for any of the entities"
 ]
-  60. ✅ comprehensiveSearch (0ms)
+  60. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
   61. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "No relationships found for any of the entities"
 ]
-  62. ✅ comprehensiveSearch (0ms)
-  63. ✅ ai.run (481ms)
+  62. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  63. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
   64. ✅ console.log
      severity: info
      message: [
-  "Searching for relationships with entities: gdpr:REGULATION, breach notification:PROCESS"
+  "No relationships found for any of the entities"
 ]
-  65. ✅ comprehensiveSearch (0ms)
-  66. ✅ ragSearch (2251ms)
-  67. ✅ searchEpisodicMemory (2251ms)
+  65. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  66. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
+  67. ✅ console.log
+     severity: info
+     message: [
+  "No relationships found for any of the entities"
+]
   68. ✅ console.log
      severity: info
      message: [
@@ -256,188 +792,48 @@ Press Ctrl+C to stop
      message: [
   "No relationships found for any of the entities"
 ]
-  75. ✅ console.log
+
+[11/12/2025, 9:15:52 PM] 🔗 Trace: 5b0aedaa03f2184f4ed7298edd1ab56f (95ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: assistant-memory:memory:retriever-agent
+  1. ✅ console.log
+     severity: info
+     message: [
+  "Searching for relationships with entities: gdpr:REGULATION, data breach:EVENT, notification:PROCESS"
+]
+  2. ✅ comprehensiveSearch (0ms)
+  3. ✅ ragSearch (3289ms)
+  4. ✅ searchEpisodicMemory (3289ms)
+  5. ✅ getProcedure (0ms)
+  6. ✅ getMemory (0ms)
+  7. ✅ console.log
      severity: info
      message: [
   "No relationships found for any of the entities"
 ]
-  76. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  77. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  78. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  79. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  80. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  81. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  82. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  83. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  84. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  85. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  86. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  87. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  88. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  89. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  90. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  91. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  92. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  93. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  94. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  95. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  96. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  97. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  98. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  99. ✅ ai.run (494ms)
-  100. ✅ console.log
-     severity: info
-     message: [
-  "No relationships found for any of the entities"
-]
-  101. ✅ storage.setAlarm (0ms)
-     scheduledTime: 1762994768953
-  102. ✅ ai.run (82ms)
-  103. ✅ console.log
+  8. ✅ storage.setAlarm (0ms)
+     scheduledTime: 1763000182152
+  9. ✅ console.log
      severity: info
      message: [
   "Scheduled cleanup alarm in 30000ms for reason: searchEpisodicMemory temporary session"
 ]
-  104. ✅ vector_index.query (63ms)
-     index: SEMANTIC_INDEX
-  105. ✅ vector_index.query (63ms)
-     index: SEMANTIC_INDEX
-  106. ✅ vector_index.query (63ms)
-     index: SEMANTIC_INDEX
-  107. ✅ comprehensiveSearch (183ms)
-  108. ✅ comprehensiveSearch (186ms)
-  109. ✅ comprehensiveSearch (189ms)
-  110. ✅ comprehensiveSearch (190ms)
-  111. ✅ comprehensiveSearch (192ms)
-  112. ✅ comprehensiveSearch (198ms)
-  113. ✅ comprehensiveSearch (202ms)
-  114. ✅ comprehensiveSearch (202ms)
-  115. ✅ comprehensiveSearch (202ms)
-  116. ✅ comprehensiveSearch (203ms)
-  117. ✅ comprehensiveSearch (207ms)
-  118. ✅ comprehensiveSearch (207ms)
-  119. ✅ comprehensiveSearch (207ms)
-  120. ✅ comprehensiveSearch (207ms)
-  121. ✅ comprehensiveSearch (213ms)
-  122. ✅ comprehensiveSearch (224ms)
-  123. ✅ comprehensiveSearch (225ms)
-  124. ✅ comprehensiveSearch (225ms)
-  125. ✅ comprehensiveSearch (229ms)
-  126. ✅ comprehensiveSearch (234ms)
-  127. ✅ comprehensiveSearch (237ms)
-  128. ✅ comprehensiveSearch (237ms)
-  129. ✅ comprehensiveSearch (239ms)
-  130. ✅ comprehensiveSearch (240ms)
-  131. ✅ comprehensiveSearch (243ms)
-  132. ✅ comprehensiveSearch (245ms)
-  133. ✅ comprehensiveSearch (246ms)
-  134. ✅ comprehensiveSearch (253ms)
-  135. ✅ comprehensiveSearch (256ms)
-  136. ✅ comprehensiveSearch (260ms)
-  137. ✅ comprehensiveSearch (296ms)
 
-[11/12/2025, 7:45:41 PM] 🔗 Trace: 39c8bc3206bf750a92efd44b1de0414b (941ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory-actor
-  1. ✅ ai.run (91ms)
-  2. ✅ putMemory (941ms)
-  3. ✅ vector_index.upsert (850ms)
+[11/12/2025, 9:15:52 PM] 🔗 Trace: 5b0aedaa03f2184f4ed7298edd1ab56f (316ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (316ms)
+
+[11/12/2025, 9:15:56 PM] 🔗 Trace: 5b0aedaa03f2184f4ed7298edd1ab56f (808ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (77ms)
+  2. ✅ putMemory (808ms)
+  3. ✅ vector_index.upsert (731ms)
      count: 1
      index: MEMORY_SEARCH
 
-[11/12/2025, 7:46:08 PM] 🔗 Trace: d177b1e07b7e0ed97ec8e6f9dc6f2cb3
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9r7xj68wet91y7fjjkhpjsa, Script: assistant-memory:memory-actor
+# nd of response
+
+[11/12/2025, 9:16:22 PM] 🔗 Trace: 8956d562a9a190e614dca9f580ffea86
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01k9xbstrakw4wahybcy89yy11, Script: assistant-memory:memory-actor
   1. ✅ console.log
      severity: info
      message: [
@@ -456,4 +852,58 @@ Press Ctrl+C to stop
   "Successfully cleaned up all data from working memory actor (searchEpisodicMemory temporary session)"
 ]
 
-^C
+What are GDPR data breach notification requirements?
+
+9:15:47 PM
+
+The General Data Protection Regulation (GDPR) has specific requirements for notifying the relevant authorities and affected individuals in the event of a personal data breach. According to Article 33 and 34 of the GDPR, organizations must notify the supervisory authority within 72 hours of becoming aware of a breach.
+
+The notification to the supervisory authority must include the following information:
+
+The nature of the breach, including the categories and approximate number of data subjects affected.
+The name and contact details of the Data Protection Officer (DPO) or other contact point.
+A description of the likely consequences of the breach.
+Measures taken or proposed to address the breach and mitigate its effects.
+In addition to notifying the supervisory authority, organizations may also be required to notify the affected individuals if the breach is likely to result in a high risk to their rights and freedoms. This individual notification must be provided in clear and plain language and include:
+
+A description of the breach.
+The name and contact details of the DPO.
+A description of the likely consequences of the breach.
+Measures taken or proposed to mitigate the effects of the breach.
+It's essential to document all breaches, regardless of whether notification is required. This documentation should include the facts relating to the breach, the effects of the breach, and any remedial action taken. This documentation must be available for review by the supervisory authority.
+
+Failure to comply with the GDPR's breach notification requirements can result in significant penalties, up to €10 million or 2% of the organization's global annual turnover.
+
+There are some exemptions to the notification requirements, such as:
+
+If the breached data was encrypted and the encryption key was not compromised.
+If subsequent measures were taken to render the data unintelligible.
+If notification would require disproportionate effort, in which case a public communication may be accepted.
+In summary, the GDPR's data breach notification requirements are designed to ensure that organizations take prompt and effective action to mitigate the effects of a breach and protect the rights and freedoms of affected individuals. By understanding and complying with these requirements, organizations can demonstrate their commitment to data protection and minimize the risk of non-compliance penalties.
+
+9:15:58 PM
+
+Suggestions:
+
+What are the specific requirements for documenting a personal data breach under the GDPR?
+How do we determine if a breach is likely to result in a high risk to the rights and freedoms of affected individuals?
+What are the consequences of failing to comply with the GDPR's breach notification requirements?^C
+patrick@DESKTOP-PC01:~/championship/auditguard-v2$ 
+
+
+CONSOLE LOG
+
+react-dom.development.js:8016 [Violation] 'click' handler took 177ms
+AIChatWidget.tsx:152 🔍 AI Response Data: {
+  "sessionId": "conv_1762997070147_eupwch",
+  "message": "The General Data Protection Regulation (GDPR) has specific requirements for notifying the relevant authorities and affected individuals in the event of a personal data breach. According to Article 33 and 34 of the GDPR, organizations must notify the supervisory authority within 72 hours of becoming aware of a breach.\n\nThe notification to the supervisory authority must include the following information:\n\n1. The nature of the breach, including the categories and approximate number of data subjects affected.\n2. The name and contact details of the Data Protection Officer (DPO) or other contact point.\n3. A description of the likely consequences of the breach.\n4. Measures taken or proposed to address the breach and mitigate its effects.\n\nIn addition to notifying the supervisory authority, organizations may also be required to notify the affected individuals if the breach is likely to result in a high risk to their rights and freedoms. This individual notification must be provided in clear and plain language and include:\n\n1. A description of the breach.\n2. The name and contact details of the DPO.\n3. A description of the likely consequences of the breach.\n4. Measures taken or proposed to mitigate the effects of the breach.\n\nIt's essential to document all breaches, regardless of whether notification is required. This documentation should include the facts relating to the breach, the effects of the breach, and any remedial action taken. This documentation must be available for review by the supervisory authority.\n\nFailure to comply with the GDPR's breach notification requirements can result in significant penalties, up to €10 million or 2% of the organization's global annual turnover.\n\nThere are some exemptions to the notification requirements, such as:\n\n* If the breached data was encrypted and the encryption key was not compromised.\n* If subsequent measures were taken to render the data unintelligible.\n* If notification would require disproportionate effort, in which case a public communication may be accepted.\n\nIn summary, the GDPR's data breach notification requirements are designed to ensure that organizations take prompt and effective action to mitigate the effects of a breach and protect the rights and freedoms of affected individuals. By understanding and complying with these requirements, organizations can demonstrate their commitment to data protection and minimize the risk of non-compliance penalties.",
+  "suggestions": [
+    "What are the specific requirements for documenting a personal data breach under the GDPR?",
+    "How do we determine if a breach is likely to result in a high risk to the rights and freedoms of affected individuals?",
+    "What are the consequences of failing to comply with the GDPR's breach notification requirements?"
+  ],
+  "actions": []
+}
+AIChatWidget.tsx:153 📊 Actions: []
+AIChatWidget.tsx:154 💡 Suggestions: (3) ['What are the specific requirements for documenting a personal data breach under the GDPR?', 'How do we determine if a breach is likely to resul… the rights and freedoms of affected individuals?', "What are the consequences of failing to comply with the GDPR's breach notification requirements?"]
+AIChatWidget.tsx:174 ✅ Setting suggestions: (3) ['What are the specific requirements for documenting a personal data breach under the GDPR?', 'How do we determine if a breach is likely to resul… the rights and freedoms of affected individuals?', "What are the consequences of failing to comply with the GDPR's breach notification requirements?"]

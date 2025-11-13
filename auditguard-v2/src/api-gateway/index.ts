@@ -2507,6 +2507,37 @@ export default class extends Service<Env> {
         }
       }
 
+      // Initialize knowledge base embeddings
+      if (path === '/api/assistant/initialize-knowledge-embeddings' && request.method === 'POST') {
+        const startTime = Date.now();
+        const operation = 'assistant.initialize-knowledge-embeddings';
+
+        try {
+          // For now, allow without auth for initial setup
+          // In production, add admin role check:
+          // const user = await this.validateSession(request);
+          // if (user.role !== 'admin') throw new Error('Admin access required');
+
+          const result = await this.env.ASSISTANT_SERVICE.initializeKnowledgeEmbeddings();
+
+          return this.trackAndReturn(
+            operation,
+            startTime,
+            new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            })
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await this.trackPerformance(operation, startTime, false, errorMessage);
+
+          return new Response(JSON.stringify({ error: errorMessage }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
       // ==========================================================================
       // END AI ASSISTANT ROUTES
       // ==========================================================================
