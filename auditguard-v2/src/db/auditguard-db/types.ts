@@ -193,6 +193,8 @@ export type subscription_plans = {
     description: string | null;
     price_monthly: number;
     price_yearly: number;
+    stripe_price_id_monthly: string | null;
+    stripe_price_id_yearly: string | null;
     features: string;
     limits: string;
     is_active: number;
@@ -205,10 +207,13 @@ export type subscriptions = {
     plan_id: string;
     stripe_customer_id: string | null;
     stripe_subscription_id: string | null;
+    stripe_price_id: string | null;
     status: string;
     current_period_start: number;
     current_period_end: number;
     cancel_at_period_end: number;
+    trial_end: number | null;
+    canceled_at: number | null;
     created_at: number;
     updated_at: number;
 };
@@ -332,6 +337,44 @@ export type knowledge_base = {
     sort_order: number;
 };
 
+export type stripe_customers = {
+    id: string;
+    workspace_id: string;
+    stripe_customer_id: string;
+    email: string;
+    payment_method_id: string | null;
+    created_at: number;
+    updated_at: number;
+};
+
+export type stripe_payment_methods = {
+    id: string;
+    workspace_id: string;
+    stripe_payment_method_id: string;
+    type: string;
+    last4: string | null;
+    brand: string | null;
+    exp_month: number | null;
+    exp_year: number | null;
+    is_default: number;
+    created_at: number;
+};
+
+export type billing_history = {
+    id: string;
+    workspace_id: string;
+    stripe_invoice_id: string | null;
+    stripe_charge_id: string | null;
+    amount: number;
+    currency: string;
+    status: string;
+    description: string | null;
+    invoice_pdf: string | null;
+    period_start: number | null;
+    period_end: number | null;
+    created_at: number;
+};
+
 export type DB = {
     documents: documents;
     sessions: sessions;
@@ -351,6 +394,9 @@ export type DB = {
     conversation_messages: conversation_messages;
     subscription_plans: subscription_plans;
     subscriptions: subscriptions;
+    stripe_customers: stripe_customers;
+    stripe_payment_methods: stripe_payment_methods;
+    billing_history: billing_history;
     usage_tracking: usage_tracking;
     usage_summaries: usage_summaries;
     admin_users: admin_users;

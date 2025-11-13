@@ -2682,6 +2682,58 @@ export default class extends Service<Env> {
         }
       }
 
+      // Match /api/workspaces/:id/payment-methods
+      const paymentMethodsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/payment-methods$/);
+      if (paymentMethodsMatch && paymentMethodsMatch[1]) {
+        const workspaceId = paymentMethodsMatch[1];
+        const user = await this.validateSession(request);
+
+        if (request.method === 'GET') {
+          const result = await this.env.BILLING_SERVICE.listPaymentMethods(workspaceId, user.userId);
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // Match /api/workspaces/:id/payment-methods/:paymentMethodId/set-default
+      const setDefaultPaymentMethodMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/payment-methods\/([^\/]+)\/set-default$/);
+      if (setDefaultPaymentMethodMatch && setDefaultPaymentMethodMatch[1] && setDefaultPaymentMethodMatch[2] && request.method === 'POST') {
+        const workspaceId = setDefaultPaymentMethodMatch[1];
+        const paymentMethodId = setDefaultPaymentMethodMatch[2];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.BILLING_SERVICE.setDefaultPaymentMethod(workspaceId, user.userId, paymentMethodId);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/payment-methods/:paymentMethodId
+      const removePaymentMethodMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/payment-methods\/([^\/]+)$/);
+      if (removePaymentMethodMatch && removePaymentMethodMatch[1] && removePaymentMethodMatch[2] && request.method === 'DELETE') {
+        const workspaceId = removePaymentMethodMatch[1];
+        const paymentMethodId = removePaymentMethodMatch[2];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.BILLING_SERVICE.removePaymentMethod(workspaceId, user.userId, paymentMethodId);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/workspaces/:id/billing-history
+      const billingHistoryMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/billing-history$/);
+      if (billingHistoryMatch && billingHistoryMatch[1] && request.method === 'GET') {
+        const workspaceId = billingHistoryMatch[1];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.BILLING_SERVICE.getBillingHistory(workspaceId, user.userId);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // ====== USAGE & LIMITS ENDPOINTS ======
       // Match /api/workspaces/:id/usage
       const usageMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/usage$/);

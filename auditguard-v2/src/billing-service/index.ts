@@ -3,6 +3,7 @@ import { Env } from './raindrop.gen';
 import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
+import Stripe from 'stripe';
 
 interface CreateSubscriptionInput {
   workspaceId: string;
@@ -24,6 +25,13 @@ export default class extends Service<Env> {
   private getDb(): Kysely<DB> {
     return new Kysely<DB>({
       dialect: new D1Dialect({ database: this.env.AUDITGUARD_DB }),
+    });
+  }
+
+  private getStripeClient(): Stripe {
+    return new Stripe(this.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2025-10-29.clover',
+      typescript: true,
     });
   }
 
@@ -119,28 +127,79 @@ export default class extends Service<Env> {
     };
   }
 
-  async createSubscription(userId: string, input: CreateSubscriptionInput): Promise<{
+  async createStripeCustomer(workspaceId: string, email: string): Promise<{ customerId: string }> {
+    const db = this.getDb();
+    const stripe = this.getStripeClient();
+
+    // Check if customer already exists
+    const existing = await (db as any)
+      .selectFrom('stripe_customers')
+      .select('stripe_customer_id')
+      .where('workspace_id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (existing) {
+      return { customerId: existing.stripe_customer_id };
+    }
+
+    // Create Stripe customer
+    const customer = await stripe.customers.create({
+      email,
+      metadata: { workspace_id: workspaceId },
+    });
+
+    // Store in database
+    const now = Date.now();
+    await (db as any)
+      .insertInto('stripe_customers')
+      .values({
+        id: crypto.randomUUID(),
+        workspace_id: workspaceId,
+        stripe_customer_id: customer.id,
+        email,
+        payment_method_id: null,
+        created_at: now,
+        updated_at: now,
+      })
+      .execute();
+
+    this.env.logger.info(`Stripe customer created: ${customer.id} for workspace ${workspaceId}`);
+
+    return { customerId: customer.id };
+  }
+
+  async createSubscription(
+    userId: string,
+    input: CreateSubscriptionInput
+  ): Promise<{
     subscriptionId: string;
     status: string;
+    clientSecret?: string;
   }> {
     const db = this.getDb();
+    const stripe = this.getStripeClient();
 
-    // Verify workspace ownership
+    // Verify workspace ownership and get user email
     const workspace = await db
       .selectFrom('workspaces')
-      .select(['id', 'owner_id'])
-      .where('id', '=', input.workspaceId)
+      .innerJoin('users', 'workspaces.owner_id', 'users.id')
+      .select(['workspaces.id', 'workspaces.owner_id', 'users.email'])
+      .where('workspaces.id', '=', input.workspaceId)
       .executeTakeFirst();
 
     if (!workspace || workspace.owner_id !== userId) {
       throw new Error('Access denied: Only workspace owner can manage subscriptions');
     }
 
-    // Get plan details
-    const plan = await db.selectFrom('subscription_plans').selectAll().where('id', '=', input.planId).executeTakeFirst();
+    // Get plan details with Stripe price ID
+    const plan = await db
+      .selectFrom('subscription_plans')
+      .selectAll()
+      .where('id', '=', input.planId)
+      .executeTakeFirst();
 
-    if (!plan) {
-      throw new Error('Invalid plan');
+    if (!plan || !plan.stripe_price_id_monthly) {
+      throw new Error('Invalid plan or Stripe price not configured');
     }
 
     // Check if subscription already exists
@@ -154,34 +213,83 @@ export default class extends Service<Env> {
       throw new Error('Subscription already exists. Use update endpoint to change plans.');
     }
 
-    // For demo purposes, create subscription without actual Stripe call
-    // In production, you would call Stripe API here
-    const subscriptionId = `sub_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    const now = Date.now();
-    const periodEnd = now + 30 * 24 * 60 * 60 * 1000; // 30 days
+    // Create or get Stripe customer
+    const { customerId } = await this.createStripeCustomer(input.workspaceId, workspace.email);
 
+    // Attach payment method if provided
+    if (input.paymentMethodId) {
+      await stripe.paymentMethods.attach(input.paymentMethodId, {
+        customer: customerId,
+      });
+
+      // Set as default payment method
+      await stripe.customers.update(customerId, {
+        invoice_settings: {
+          default_payment_method: input.paymentMethodId,
+        },
+      });
+
+      // Store payment method in database
+      const pm = await stripe.paymentMethods.retrieve(input.paymentMethodId);
+      await (db as any)
+        .insertInto('stripe_payment_methods')
+        .values({
+          id: crypto.randomUUID(),
+          workspace_id: input.workspaceId,
+          stripe_payment_method_id: pm.id,
+          type: pm.type,
+          last4: pm.card?.last4 || null,
+          brand: pm.card?.brand || null,
+          exp_month: pm.card?.exp_month || null,
+          exp_year: pm.card?.exp_year || null,
+          is_default: 1,
+          created_at: Date.now(),
+        })
+        .execute();
+    }
+
+    // Create Stripe subscription
+    const stripeSubscription = await stripe.subscriptions.create({
+      customer: customerId,
+      items: [{ price: plan.stripe_price_id_monthly }],
+      payment_behavior: 'default_incomplete',
+      payment_settings: { save_default_payment_method: 'on_subscription' },
+      expand: ['latest_invoice.payment_intent'],
+      metadata: { workspace_id: input.workspaceId },
+    });
+
+    // Store subscription in database
+    const now = Date.now();
     await db
       .insertInto('subscriptions')
       .values({
-        id: subscriptionId,
+        id: stripeSubscription.id,
         workspace_id: input.workspaceId,
         plan_id: input.planId,
-        stripe_customer_id: null, // Would be from Stripe
-        stripe_subscription_id: null, // Would be from Stripe
-        status: 'active',
-        current_period_start: now,
-        current_period_end: periodEnd,
+        stripe_customer_id: customerId,
+        stripe_subscription_id: stripeSubscription.id,
+        stripe_price_id: plan.stripe_price_id_monthly,
+        status: stripeSubscription.status,
+        current_period_start: (stripeSubscription as any).current_period_start * 1000,
+        current_period_end: (stripeSubscription as any).current_period_end * 1000,
         cancel_at_period_end: 0,
+        trial_end: (stripeSubscription as any).trial_end ? (stripeSubscription as any).trial_end * 1000 : null,
+        canceled_at: null,
         created_at: now,
         updated_at: now,
       })
       .execute();
 
-    this.env.logger.info(`Subscription created: ${subscriptionId} for workspace ${input.workspaceId}`);
+    this.env.logger.info(`Stripe subscription created: ${stripeSubscription.id} for workspace ${input.workspaceId}`);
+
+    // Return client secret for payment confirmation
+    const invoice = stripeSubscription.latest_invoice as Stripe.Invoice;
+    const paymentIntent = (invoice as any)?.payment_intent as Stripe.PaymentIntent;
 
     return {
-      subscriptionId,
-      status: 'active',
+      subscriptionId: stripeSubscription.id,
+      status: stripeSubscription.status,
+      clientSecret: paymentIntent?.client_secret || undefined,
     };
   }
 
@@ -190,6 +298,7 @@ export default class extends Service<Env> {
     newPlanId: string;
   }> {
     const db = this.getDb();
+    const stripe = this.getStripeClient();
 
     // Verify workspace ownership
     const workspace = await db
@@ -199,31 +308,72 @@ export default class extends Service<Env> {
       .executeTakeFirst();
 
     if (!workspace || workspace.owner_id !== userId) {
-      throw new Error('Access denied');
+      throw new Error('Access denied: Only workspace owner can manage subscriptions');
     }
 
-    // Get subscription
+    // Get current subscription
     const subscription = await db
       .selectFrom('subscriptions')
       .selectAll()
       .where('workspace_id', '=', input.workspaceId)
       .executeTakeFirst();
 
-    if (!subscription) {
+    if (!subscription || !subscription.stripe_subscription_id) {
       throw new Error('No active subscription found');
     }
 
-    // Update subscription (in production, update Stripe first)
+    // Get new plan details with Stripe price ID
+    const newPlan = await db
+      .selectFrom('subscription_plans')
+      .selectAll()
+      .where('id', '=', input.planId)
+      .executeTakeFirst();
+
+    if (!newPlan || !newPlan.stripe_price_id_monthly) {
+      throw new Error('Invalid plan or Stripe price not configured');
+    }
+
+    // If already on this plan, no changes needed
+    if (subscription.plan_id === input.planId) {
+      return {
+        success: true,
+        newPlanId: input.planId,
+      };
+    }
+
+    // Get current Stripe subscription to find the subscription item
+    const stripeSubscription = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
+
+    if (!stripeSubscription.items.data[0]) {
+      throw new Error('No subscription items found');
+    }
+
+    // Update Stripe subscription with new price
+    const updatedSubscription = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
+      items: [
+        {
+          id: stripeSubscription.items.data[0].id,
+          price: newPlan.stripe_price_id_monthly,
+        },
+      ],
+      proration_behavior: 'create_prorations', // Prorate the difference
+    });
+
+    // Update local database
     await db
       .updateTable('subscriptions')
       .set({
         plan_id: input.planId,
+        stripe_price_id: newPlan.stripe_price_id_monthly,
+        status: updatedSubscription.status,
+        current_period_start: (updatedSubscription as any).current_period_start * 1000,
+        current_period_end: (updatedSubscription as any).current_period_end * 1000,
         updated_at: Date.now(),
       })
       .where('workspace_id', '=', input.workspaceId)
       .execute();
 
-    this.env.logger.info(`Subscription updated to plan ${input.planId} for workspace ${input.workspaceId}`);
+    this.env.logger.info(`Stripe subscription ${subscription.stripe_subscription_id} updated to plan ${input.planId} for workspace ${input.workspaceId}`);
 
     return {
       success: true,
@@ -236,6 +386,7 @@ export default class extends Service<Env> {
     cancelAtPeriodEnd: boolean;
   }> {
     const db = this.getDb();
+    const stripe = this.getStripeClient();
 
     // Verify workspace ownership
     const workspace = await db
@@ -245,34 +396,62 @@ export default class extends Service<Env> {
       .executeTakeFirst();
 
     if (!workspace || workspace.owner_id !== userId) {
-      throw new Error('Access denied');
+      throw new Error('Access denied: Only workspace owner can manage subscriptions');
+    }
+
+    // Get current subscription
+    const subscription = await db
+      .selectFrom('subscriptions')
+      .selectAll()
+      .where('workspace_id', '=', input.workspaceId)
+      .executeTakeFirst();
+
+    if (!subscription || !subscription.stripe_subscription_id) {
+      throw new Error('No active subscription found');
     }
 
     const now = Date.now();
 
     if (input.cancelAtPeriodEnd) {
-      // Cancel at end of billing period
+      // Schedule cancellation at end of billing period
+      const updatedSubscription = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
+        cancel_at_period_end: true,
+      });
+
+      // Update local database
       await db
         .updateTable('subscriptions')
         .set({
           cancel_at_period_end: 1,
+          status: updatedSubscription.status,
           updated_at: now,
         })
         .where('workspace_id', '=', input.workspaceId)
         .execute();
+
+      this.env.logger.info(
+        `Stripe subscription ${subscription.stripe_subscription_id} scheduled for cancellation at period end for workspace ${input.workspaceId}`
+      );
     } else {
       // Cancel immediately
+      const canceledSubscription = await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
+
+      // Update local database
       await db
         .updateTable('subscriptions')
         .set({
           status: 'canceled',
+          canceled_at: canceledSubscription.canceled_at ? canceledSubscription.canceled_at * 1000 : now,
+          cancel_at_period_end: 0,
           updated_at: now,
         })
         .where('workspace_id', '=', input.workspaceId)
         .execute();
-    }
 
-    this.env.logger.info(`Subscription canceled for workspace ${input.workspaceId}`);
+      this.env.logger.info(
+        `Stripe subscription ${subscription.stripe_subscription_id} canceled immediately for workspace ${input.workspaceId}`
+      );
+    }
 
     return {
       success: true,
@@ -334,12 +513,6 @@ export default class extends Service<Env> {
         .executeTakeFirst();
       current = count?.count || 0;
     } else {
-      const resourceTypeMap = {
-        compliance_checks: 'compliance_check',
-        api_calls: 'api_call',
-        assistant_messages: 'assistant_message',
-      };
-
       const summary = await db
         .selectFrom('usage_summaries')
         .selectAll()
@@ -361,5 +534,207 @@ export default class extends Service<Env> {
     const allowed = current < limit;
 
     return { allowed, current, limit, percentage };
+  }
+
+  async listPaymentMethods(workspaceId: string, userId: string): Promise<{
+    paymentMethods: Array<{
+      id: string;
+      type: string;
+      last4: string | null;
+      brand: string | null;
+      expMonth: number | null;
+      expYear: number | null;
+      isDefault: boolean;
+    }>;
+  }> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied');
+    }
+
+    const methods = await (db as any)
+      .selectFrom('stripe_payment_methods')
+      .selectAll()
+      .where('workspace_id', '=', workspaceId)
+      .execute();
+
+    return {
+      paymentMethods: methods.map((method: any) => ({
+        id: method.stripe_payment_method_id,
+        type: method.type,
+        last4: method.last4,
+        brand: method.brand,
+        expMonth: method.exp_month,
+        expYear: method.exp_year,
+        isDefault: method.is_default === 1,
+      })),
+    };
+  }
+
+  async setDefaultPaymentMethod(
+    workspaceId: string,
+    userId: string,
+    paymentMethodId: string
+  ): Promise<{
+    success: boolean;
+  }> {
+    const db = this.getDb();
+    const stripe = this.getStripeClient();
+
+    // Verify workspace ownership
+    const workspace = await db
+      .selectFrom('workspaces')
+      .select(['id', 'owner_id'])
+      .where('id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!workspace || workspace.owner_id !== userId) {
+      throw new Error('Access denied: Only workspace owner can manage payment methods');
+    }
+
+    // Get Stripe customer
+    const customer = await (db as any)
+      .selectFrom('stripe_customers')
+      .select('stripe_customer_id')
+      .where('workspace_id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!customer) {
+      throw new Error('No Stripe customer found for workspace');
+    }
+
+    // Update in Stripe
+    await stripe.customers.update(customer.stripe_customer_id, {
+      invoice_settings: {
+        default_payment_method: paymentMethodId,
+      },
+    });
+
+    // Update in database - unset all defaults first
+    await (db as any)
+      .updateTable('stripe_payment_methods')
+      .set({ is_default: 0 })
+      .where('workspace_id', '=', workspaceId)
+      .execute();
+
+    // Set new default
+    await (db as any)
+      .updateTable('stripe_payment_methods')
+      .set({ is_default: 1 })
+      .where('workspace_id', '=', workspaceId)
+      .where('stripe_payment_method_id', '=', paymentMethodId)
+      .execute();
+
+    this.env.logger.info(`Payment method ${paymentMethodId} set as default for workspace ${workspaceId}`);
+
+    return { success: true };
+  }
+
+  async removePaymentMethod(
+    workspaceId: string,
+    userId: string,
+    paymentMethodId: string
+  ): Promise<{
+    success: boolean;
+  }> {
+    const db = this.getDb();
+    const stripe = this.getStripeClient();
+
+    // Verify workspace ownership
+    const workspace = await db
+      .selectFrom('workspaces')
+      .select(['id', 'owner_id'])
+      .where('id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!workspace || workspace.owner_id !== userId) {
+      throw new Error('Access denied: Only workspace owner can manage payment methods');
+    }
+
+    // Check if this is the only payment method
+    const methods = await (db as any)
+      .selectFrom('stripe_payment_methods')
+      .select('id')
+      .where('workspace_id', '=', workspaceId)
+      .execute();
+
+    if (methods.length === 1) {
+      throw new Error('Cannot remove the only payment method. Add another payment method first.');
+    }
+
+    // Detach from Stripe
+    await stripe.paymentMethods.detach(paymentMethodId);
+
+    // Remove from database (webhook will also handle this, but we do it here for immediate effect)
+    await (db as any)
+      .deleteFrom('stripe_payment_methods')
+      .where('workspace_id', '=', workspaceId)
+      .where('stripe_payment_method_id', '=', paymentMethodId)
+      .execute();
+
+    this.env.logger.info(`Payment method ${paymentMethodId} removed for workspace ${workspaceId}`);
+
+    return { success: true };
+  }
+
+  async getBillingHistory(workspaceId: string, userId: string): Promise<{
+    history: Array<{
+      id: string;
+      invoiceId: string | null;
+      amount: number;
+      currency: string;
+      status: string;
+      description: string | null;
+      invoicePdf: string | null;
+      periodStart: number | null;
+      periodEnd: number | null;
+      createdAt: number;
+    }>;
+  }> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied');
+    }
+
+    const history = await (db as any)
+      .selectFrom('billing_history')
+      .selectAll()
+      .where('workspace_id', '=', workspaceId)
+      .orderBy('created_at', 'desc')
+      .limit(50)
+      .execute();
+
+    return {
+      history: history.map((item: any) => ({
+        id: item.id,
+        invoiceId: item.stripe_invoice_id,
+        amount: item.amount,
+        currency: item.currency,
+        status: item.status,
+        description: item.description,
+        invoicePdf: item.invoice_pdf,
+        periodStart: item.period_start,
+        periodEnd: item.period_end,
+        createdAt: item.created_at,
+      })),
+    };
   }
 }
