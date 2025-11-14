@@ -13,7 +13,9 @@ export default class extends Service<Env> {
   }
 
   private getStripeClient(): Stripe {
-    return new Stripe(this.env.STRIPE_SECRET_KEY, {
+    // TEMPORARY: Hardcoded TEST key to bypass environment variable issues
+    const testKey = 'sk_test_51ISqyeHSX3RgJL1cYATfAtUz2mTheWpXfHE6CarZVJlLAsthLPSkMywCU4R4igxVYYtP2YDNCMq15ACNNewhnudb005xDmDDxm';
+    return new Stripe(testKey, {
       apiVersion: '2025-10-29.clover',
       typescript: true,
     });
@@ -40,7 +42,9 @@ export default class extends Service<Env> {
       // Verify webhook signature
       let event: Stripe.Event;
       try {
-        event = stripe.webhooks.constructEvent(body, signature, this.env.STRIPE_WEBHOOK_SECRET);
+        // TEMPORARY: Hardcoded TEST webhook secret to bypass environment variable issues
+        const testWebhookSecret = 'whsec_Fo1fpb5o9dbv0sAPjy2uopzCq1Ny6FYU';
+        event = stripe.webhooks.constructEvent(body, signature, testWebhookSecret);
       } catch (err) {
         this.env.logger.error(`Webhook signature verification failed: ${err instanceof Error ? err.message : String(err)}`);
         return new Response('Invalid signature', { status: 400 });

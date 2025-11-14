@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStripe, useElements, CardElement } from '@stripe/react-stripe-js';
 import { api } from '@/lib/api';
 
@@ -43,6 +43,22 @@ export function CheckoutForm({
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cardComplete, setCardComplete] = useState(false);
+  const [hasExistingSubscription, setHasExistingSubscription] = useState(false);
+  const [checkingSubscription, setCheckingSubscription] = useState(true);
+
+  useEffect(() => {
+    const checkSubscription = async () => {
+      try {
+        const result = await api.get(`/api/workspaces/${workspaceId}/subscription`);
+        setHasExistingSubscription(result.subscription !== null);
+      } catch (err) {
+        console.error('Failed to check subscription:', err);
+      } finally {
+        setCheckingSubscription(false);
+      }
+    };
+    checkSubscription();
+  }, [workspaceId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +71,40 @@ export function CheckoutForm({
     setError(null);
 
     try {
-      // Get the CardElement
+      // Check if subscription already exists
+      const existingSubscription = await api.get(`/api/workspaces/${workspaceId}/subscription`);
+      const hasSubscription = existingSubscription.subscription !== null;
+
+      let response;
+
+      if (hasSubscription) {
+        // Update existing subscription (upgrade/downgrade)
+        response = await api.put(`/api/workspaces/${workspaceId}/subscription`, {
+          planId,
+        });
+
+        // Check if payment confirmation is needed for upgrade
+        if (response.status === 'incomplete' && response.clientSecret && stripe) {
+          const { error: confirmError } = await stripe.confirmCardPayment(
+            response.clientSecret
+          );
+
+          if (confirmError) {
+            throw new Error(confirmError.message);
+          }
+
+          // After payment confirmation, poll for subscription status update
+          await pollSubscriptionStatus(response.subscriptionId, 10, 1000);
+        }
+
+        // Success - upgrade completed
+        if (onSuccess) {
+          onSuccess();
+        }
+        return;
+      }
+
+      // New subscription - need to collect payment method
       const cardElement = elements.getElement(CardElement);
       if (!cardElement) {
         throw new Error('Card element not found');
@@ -72,12 +121,12 @@ export function CheckoutForm({
       }
 
       // Create subscription with payment method
-      const response = await api.post(`/api/workspaces/${workspaceId}/subscription`, {
+      response = await api.post(`/api/workspaces/${workspaceId}/subscription`, {
         planId,
         paymentMethodId: paymentMethod!.id,
       });
 
-      // Handle 3D Secure if required
+      // Handle payment confirmation if subscription requires it
       if (response.status === 'incomplete' && response.clientSecret) {
         const { error: confirmError } = await stripe.confirmCardPayment(
           response.clientSecret
@@ -86,6 +135,10 @@ export function CheckoutForm({
         if (confirmError) {
           throw new Error(confirmError.message);
         }
+
+        // After payment confirmation, poll for subscription status update
+        // This ensures the webhook has processed and status is 'active'
+        await pollSubscriptionStatus(response.subscriptionId, 10, 1000);
       }
 
       // Success!
@@ -97,6 +150,51 @@ export function CheckoutForm({
     } finally {
       setProcessing(false);
     }
+  };
+
+  // Poll subscription status until it becomes 'active' or max attempts reached
+  const pollSubscriptionStatus = async (
+    subscriptionId: string,
+    maxAttempts: number,
+    delayMs: number
+  ): Promise<void> => {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        // Sync subscription status from Stripe
+        await api.post(`/api/workspaces/${workspaceId}/subscription/sync`, {});
+
+        // Fetch the updated subscription
+        const result = await api.get(`/api/workspaces/${workspaceId}/subscription`);
+
+        if (result.subscription?.status === 'active') {
+          // Subscription is now active!
+          return;
+        }
+
+        if (result.subscription?.status === 'incomplete' || result.subscription?.status === 'trialing') {
+          // Still processing, wait and try again
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          continue;
+        }
+
+        // Unexpected status or no subscription
+        if (!result.subscription) {
+          throw new Error('Subscription not found');
+        }
+        throw new Error(`Subscription status is ${result.subscription.status}`);
+      } catch (err) {
+        // On last attempt, throw the error
+        if (attempt === maxAttempts - 1) {
+          throw err;
+        }
+        // Otherwise wait and retry
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+
+    // If we get here, polling timed out but payment was successful
+    // The webhook will eventually update the status, so we can proceed
+    console.warn('Subscription status polling timed out, but payment was confirmed');
   };
 
   return (
@@ -115,18 +213,29 @@ export function CheckoutForm({
         </p>
       </div>
 
-      {/* Card Input */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Card Information
-        </label>
-        <div className="border border-gray-300 rounded-md p-3 bg-white">
-          <CardElement
-            options={CARD_ELEMENT_OPTIONS}
-            onChange={(e) => setCardComplete(e.complete)}
-          />
+      {/* Card Input - Only show for new subscriptions */}
+      {!hasExistingSubscription && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Card Information
+          </label>
+          <div className="border border-gray-300 rounded-md p-3 bg-white">
+            <CardElement
+              options={CARD_ELEMENT_OPTIONS}
+              onChange={(e) => setCardComplete(e.complete)}
+            />
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Upgrade Notice */}
+      {hasExistingSubscription && (
+        <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+          <p className="text-sm text-blue-800">
+            You will be upgraded to the {planName} plan. Your existing payment method will be used, and you'll be charged the prorated amount immediately.
+          </p>
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (
@@ -148,32 +257,34 @@ export function CheckoutForm({
         </div>
       )}
 
-      {/* Security Notice */}
-      <div className="flex items-start space-x-2 text-xs text-gray-600">
-        <svg
-          className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-          />
-        </svg>
-        <p>
-          Your payment information is encrypted and secure. We use Stripe for
-          payment processing and never store your card details.
-        </p>
-      </div>
+      {/* Security Notice - Only show for new subscriptions */}
+      {!hasExistingSubscription && (
+        <div className="flex items-start space-x-2 text-xs text-gray-600">
+          <svg
+            className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+            />
+          </svg>
+          <p>
+            Your payment information is encrypted and secure. We use Stripe for
+            payment processing and never store your card details.
+          </p>
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div className="flex gap-3">
         <button
           type="submit"
-          disabled={!stripe || processing || !cardComplete}
+          disabled={!stripe || processing || (!hasExistingSubscription && !cardComplete) || checkingSubscription}
           className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
         >
           {processing ? (
@@ -200,6 +311,10 @@ export function CheckoutForm({
               </svg>
               Processing...
             </span>
+          ) : checkingSubscription ? (
+            'Loading...'
+          ) : hasExistingSubscription ? (
+            `Upgrade to ${planName}`
           ) : (
             `Subscribe for $${(price / 100).toFixed(2)}/mo`
           )}

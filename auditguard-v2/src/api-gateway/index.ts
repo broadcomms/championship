@@ -2739,6 +2739,20 @@ export default class extends Service<Env> {
         }
       }
 
+      // Match /api/workspaces/:id/subscription/sync
+      const subscriptionSyncMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/subscription\/sync$/);
+      if (subscriptionSyncMatch && subscriptionSyncMatch[1]) {
+        const workspaceId = subscriptionSyncMatch[1];
+        const user = await this.validateSession(request);
+
+        if (request.method === 'POST') {
+          const result = await this.env.BILLING_SERVICE.syncSubscriptionStatus(workspaceId, user.userId);
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
       // Match /api/workspaces/:id/payment-methods
       const paymentMethodsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/payment-methods$/);
       if (paymentMethodsMatch && paymentMethodsMatch[1]) {

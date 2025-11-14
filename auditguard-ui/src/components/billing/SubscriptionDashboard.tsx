@@ -58,6 +58,8 @@ export function SubscriptionDashboard({ workspaceId }: SubscriptionDashboardProp
     const badges: Record<string, { color: string; text: string }> = {
       active: { color: 'bg-green-100 text-green-800', text: 'Active' },
       trialing: { color: 'bg-blue-100 text-blue-800', text: 'Trial' },
+      incomplete: { color: 'bg-yellow-100 text-yellow-800', text: 'Payment Pending' },
+      incomplete_expired: { color: 'bg-red-100 text-red-800', text: 'Payment Expired' },
       past_due: { color: 'bg-yellow-100 text-yellow-800', text: 'Past Due' },
       canceled: { color: 'bg-red-100 text-red-800', text: 'Canceled' },
       paused: { color: 'bg-gray-100 text-gray-800', text: 'Paused' },
