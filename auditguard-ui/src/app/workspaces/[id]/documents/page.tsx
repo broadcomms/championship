@@ -7,6 +7,9 @@ import { Button } from '@/components/common/Button';
 import { CategoryBadge } from '@/components/documents/CategoryBadge';
 import { ProcessingIndicator } from '@/components/documents/ProcessingIndicator';
 import { useDocuments } from '@/hooks/useDocuments';
+import { useLimitCheck } from '@/hooks/useLimitCheck';
+import { LimitReachedModal } from '@/components/billing/LimitReachedModal';
+import { UpgradePrompt } from '@/components/billing/UpgradePrompt';
 import { DocumentCategory } from '@/types';
 import { FileText } from 'lucide-react';
 import { preloadOnHover } from '@/utils/preload';
@@ -110,8 +113,13 @@ export default function DocumentsPage() {
 
   const { documents, isLoading, error, refetch } = useDocuments(workspaceId);
 
+  // Phase 7: Usage limit enforcement
+  const { checkLimit, canPerformAction } = useLimitCheck(workspaceId);
+  const documentLimit = checkLimit('documents');
+
   const [showUpload, setShowUpload] = useState(false);
   const [showReportGenerator, setShowReportGenerator] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [categoryFilter, setCategoryFilter] = useState<DocumentCategory | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('uploadedAt');
@@ -213,6 +221,15 @@ export default function DocumentsPage() {
     router.push(path);
   };
 
+  const handleUploadClick = () => {
+    // Phase 7: Check if user can upload documents
+    if (!canPerformAction('documents')) {
+      setShowLimitModal(true);
+      return;
+    }
+    setShowUpload(!showUpload);
+  };
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -267,15 +284,31 @@ export default function DocumentsPage() {
               <FileText className="h-4 w-4" />
               Generate Report
             </button>
-            <Button 
-              variant="primary" 
-              onClick={() => setShowUpload(!showUpload)}
+            <Button
+              variant="primary"
+              onClick={handleUploadClick}
               onMouseEnter={preloadOnHover(DocumentUploadFactory)}
+              disabled={documentLimit?.isAtLimit}
             >
               {showUpload ? '✕ Cancel' : '+ Upload Document'}
             </Button>
           </div>
         </div>
+
+        {/* Phase 7: Upgrade Prompt - Show when approaching limit */}
+        {documentLimit?.isNearLimit && !documentLimit?.isAtLimit && (
+          <div className="mb-6">
+            <UpgradePrompt
+              workspaceId={workspaceId}
+              title="Approaching Document Limit"
+              message={`You've uploaded ${documentLimit.current} of ${documentLimit.limit} documents. Consider upgrading to continue uploading more documents.`}
+              feature="documents"
+              currentUsage={documentLimit.current}
+              limit={documentLimit.limit}
+              type="warning"
+            />
+          </div>
+        )}
 
         {/* Upload Section */}
         {showUpload && (
@@ -460,6 +493,16 @@ export default function DocumentsPage() {
             />
           </Suspense>
         )}
+
+        {/* Phase 7: Limit Reached Modal */}
+        <LimitReachedModal
+          isOpen={showLimitModal}
+          onClose={() => setShowLimitModal(false)}
+          limitType="documents"
+          currentUsage={documentLimit?.current || 0}
+          limit={documentLimit?.limit || 0}
+          workspaceId={workspaceId}
+        />
       </div>
     </AppLayout>
   );

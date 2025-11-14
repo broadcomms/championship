@@ -1,19 +1,21 @@
 'use client';
 
-import React, { useState, useEffect, lazy, Suspense, memo } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ComplianceScoreGauge } from '@/components/compliance/ComplianceScoreGauge';
 import { ConnectionStatus } from '@/components/realtime';
 import { ErrorDisplay, SectionErrorBoundary } from '@/components/errors';
 import { useWebSocket, WebSocketMessage } from '@/hooks/useWebSocket';
+import { useLimitCheck } from '@/hooks/useLimitCheck';
+import { LimitReachedModal } from '@/components/billing/LimitReachedModal';
+import { UpgradePrompt } from '@/components/billing/UpgradePrompt';
 import { retryFetch } from '@/utils/retry';
 import { NetworkError, toAppError } from '@/utils/errors';
 import type {
   ComplianceCheckListItem,
   MaturityLevel,
   RiskLevel,
-  FrameworkScore,
   ComplianceFramework,
 } from '@/types';
 import { IssueStatus } from '@/types/compliance';
@@ -77,6 +79,11 @@ export default function CompliancePage(props: PageProps) {
   const [error, setError] = useState<string | null>(null);
   const [showNewCheck, setShowNewCheck] = useState(false);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+
+  // Phase 7: Usage limit enforcement
+  const { checkLimit, canPerformAction } = useLimitCheck(workspaceId);
+  const complianceLimit = checkLimit('compliance_checks');
+  const [showLimitModal, setShowLimitModal] = useState(false);
 
   // WebSocket for real-time updates
   const { status: wsStatus, subscribe, reconnect } = useWebSocket({
@@ -253,6 +260,15 @@ export default function CompliancePage(props: PageProps) {
     );
   }
 
+  const handleNewCheckClick = () => {
+    // Phase 7: Check if user can run compliance checks
+    if (!canPerformAction('compliance_checks')) {
+      setShowLimitModal(true);
+      return;
+    }
+    setShowNewCheck(!showNewCheck);
+  };
+
   return (
     <AppLayout>
       <div className="p-6">
@@ -267,12 +283,26 @@ export default function CompliancePage(props: PageProps) {
             </div>
           </div>
           <button
-            onClick={() => setShowNewCheck(!showNewCheck)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            onClick={handleNewCheckClick}
+            disabled={complianceLimit?.isAtLimit}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {showNewCheck ? 'Cancel' : 'New Check'}
           </button>
         </div>
+
+        {/* Phase 7: Upgrade Prompt - Show when approaching limit */}
+        {complianceLimit?.isNearLimit && !complianceLimit?.isAtLimit && (
+          <UpgradePrompt
+            workspaceId={workspaceId}
+            title="Approaching Compliance Check Limit"
+            message={`You've used ${complianceLimit.current} of ${complianceLimit.limit} compliance checks. Consider upgrading to continue analyzing documents.`}
+            feature="compliance_checks"
+            currentUsage={complianceLimit.current}
+            limit={complianceLimit.limit}
+            type="warning"
+          />
+        )}
 
         {/* New Check Form */}
         {showNewCheck && dashboard && (
@@ -556,6 +586,16 @@ export default function CompliancePage(props: PageProps) {
             />
           </Suspense>
         )}
+
+        {/* Phase 7: Limit Reached Modal */}
+        <LimitReachedModal
+          isOpen={showLimitModal}
+          onClose={() => setShowLimitModal(false)}
+          limitType="compliance_checks"
+          currentUsage={complianceLimit?.current || 0}
+          limit={complianceLimit?.limit || 0}
+          workspaceId={workspaceId}
+        />
       </div>
       </div>
     </AppLayout>

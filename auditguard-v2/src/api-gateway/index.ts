@@ -643,6 +643,25 @@ export default class extends Service<Env> {
         }
 
         if (request.method === 'POST') {
+          // Phase 7: Check document limit before upload
+          const limitCheck = await this.env.BILLING_SERVICE.checkLimit(workspaceId, 'documents');
+          if (!limitCheck.allowed) {
+            return new Response(
+              JSON.stringify({
+                error: 'Document limit exceeded',
+                message: `You've reached your plan limit of ${limitCheck.limit} documents. Please upgrade to continue uploading.`,
+                current: limitCheck.current,
+                limit: limitCheck.limit,
+                percentage: limitCheck.percentage,
+                upgrade_required: true,
+              }),
+              {
+                status: 402, // Payment Required
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+
           // Handle multipart/form-data file upload
           const contentType = request.headers.get('Content-Type') || '';
 
@@ -1399,6 +1418,25 @@ export default class extends Service<Env> {
         const documentId = complianceMatch[2];
         const user = await this.validateSession(request);
 
+        // Phase 7: Check compliance checks limit before running check
+        const limitCheck = await this.env.BILLING_SERVICE.checkLimit(workspaceId, 'compliance_checks');
+        if (!limitCheck.allowed) {
+          return new Response(
+            JSON.stringify({
+              error: 'Compliance check limit exceeded',
+              message: `You've reached your plan limit of ${limitCheck.limit} compliance checks. Please upgrade to continue.`,
+              current: limitCheck.current,
+              limit: limitCheck.limit,
+              percentage: limitCheck.percentage,
+              upgrade_required: true,
+            }),
+            {
+              status: 402, // Payment Required
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
+
         // CRITICAL FIX: Safe JSON parsing with field validation
         const parseResult = await this.safeParseJSON<{
           framework: 'GDPR' | 'SOC2' | 'HIPAA' | 'PCI_DSS' | 'ISO_27001' | 'NIST_CSF' | 'CCPA' | 'FERPA' | 'GLBA' | 'FISMA' | 'PIPEDA' | 'COPPA' | 'SOX';
@@ -1442,6 +1480,25 @@ export default class extends Service<Env> {
       if (batchCreateMatch && batchCreateMatch[1] && request.method === 'POST') {
         const workspaceId = batchCreateMatch[1];
         const user = await this.validateSession(request);
+
+        // Phase 7: Check compliance checks limit before batch check
+        const limitCheck = await this.env.BILLING_SERVICE.checkLimit(workspaceId, 'compliance_checks');
+        if (!limitCheck.allowed) {
+          return new Response(
+            JSON.stringify({
+              error: 'Compliance check limit exceeded',
+              message: `You've reached your plan limit of ${limitCheck.limit} compliance checks. Please upgrade to continue.`,
+              current: limitCheck.current,
+              limit: limitCheck.limit,
+              percentage: limitCheck.percentage,
+              upgrade_required: true,
+            }),
+            {
+              status: 402, // Payment Required
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
 
         // CRITICAL FIX: Safe JSON parsing with field validation
         const parseResult = await this.safeParseJSON<{
