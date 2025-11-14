@@ -72,7 +72,7 @@ export function CheckoutForm({
       }
 
       // Create subscription with payment method
-      const response = await api.post(`/workspaces/${workspaceId}/subscription`, {
+      const response = await api.post(`/api/workspaces/${workspaceId}/subscription`, {
         planId,
         paymentMethodId: paymentMethod!.id,
       });

@@ -22,7 +22,7 @@ export function PricingTable({ workspaceId, currentPlanId, onSelectPlan }: Prici
 
   const loadPlans = async () => {
     try {
-      const data = await api.get('/billing/plans');
+      const data = await api.get('/api/billing/plans');
       setPlans(data.plans || []);
     } catch (error) {
       console.error('Failed to load plans:', error);

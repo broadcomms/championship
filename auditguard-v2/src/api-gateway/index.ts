@@ -2756,7 +2756,7 @@ export default class extends Service<Env> {
         const workspaceId = limitsMatch[1];
         const user = await this.validateSession(request);
 
-        const result = await this.env.USAGE_SERVICE.checkLimits(workspaceId);
+        const result = await this.env.BILLING_SERVICE.getWorkspaceLimits(workspaceId, user.userId);
         return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });

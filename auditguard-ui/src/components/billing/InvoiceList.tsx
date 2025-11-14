@@ -33,7 +33,7 @@ export function InvoiceList({ workspaceId }: InvoiceListProps) {
   const loadInvoices = async () => {
     try {
       setLoading(true);
-      const data = await api.get(`/workspaces/${workspaceId}/billing-history`);
+      const data = await api.get(`/api/workspaces/${workspaceId}/billing-history`);
       setInvoices(data.invoices || []);
       setError(null);
     } catch (err) {

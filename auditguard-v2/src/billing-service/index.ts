@@ -536,6 +536,128 @@ export default class extends Service<Env> {
     return { allowed, current, limit, percentage };
   }
 
+  async getWorkspaceLimits(workspaceId: string, userId: string): Promise<{
+    workspaceId: string;
+    planName: string;
+    documentsLimit: number;
+    documentsUsed: number;
+    documentsPercentage: number;
+    documentsAllowed: boolean;
+    complianceChecksLimit: number;
+    complianceChecksUsed: number;
+    complianceChecksPercentage: number;
+    complianceChecksAllowed: boolean;
+    assistantMessagesLimit: number;
+    assistantMessagesUsed: number;
+    assistantMessagesPercentage: number;
+    assistantMessagesAllowed: boolean;
+    apiCallsLimit: number;
+    apiCallsUsed: number;
+    apiCallsPercentage: number;
+    apiCallsAllowed: boolean;
+  }> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied');
+    }
+
+    // Get subscription
+    const subscription = await db
+      .selectFrom('subscriptions')
+      .innerJoin('subscription_plans', 'subscriptions.plan_id', 'subscription_plans.id')
+      .select(['subscription_plans.limits', 'subscription_plans.display_name'])
+      .where('subscriptions.workspace_id', '=', workspaceId)
+      .where('subscriptions.status', '=', 'active')
+      .executeTakeFirst();
+
+    let limits: Record<string, number>;
+    let planName: string;
+
+    if (!subscription) {
+      // Free plan limits
+      planName = 'Free';
+      limits = {
+        documents: 10,
+        compliance_checks: 20,
+        api_calls: 1000,
+        assistant_messages: 50,
+      };
+    } else {
+      planName = subscription.display_name;
+      limits = JSON.parse(subscription.limits);
+    }
+
+    // Get current usage
+    const today = new Date().toISOString().split('T')[0]!;
+
+    // Documents count
+    const docsCount = await db
+      .selectFrom('documents')
+      .select(({ fn }) => fn.count<number>('id').as('count'))
+      .where('workspace_id', '=', workspaceId)
+      .executeTakeFirst();
+    const documentsUsed = docsCount?.count || 0;
+
+    // Other usage from summary table
+    const summary = await db
+      .selectFrom('usage_summaries')
+      .selectAll()
+      .where('workspace_id', '=', workspaceId)
+      .where('date', '=', today)
+      .executeTakeFirst();
+
+    const complianceChecksUsed = summary?.compliance_checks || 0;
+    const apiCallsUsed = summary?.api_calls || 0;
+    const assistantMessagesUsed = summary?.assistant_messages || 0;
+
+    // Calculate percentages and allowed status for each limit
+    const documentsLimit = limits.documents;
+    const documentsPercentage = documentsLimit > 0 ? (documentsUsed / documentsLimit) * 100 : 0;
+    const documentsAllowed = documentsLimit === -1 || documentsUsed < documentsLimit;
+
+    const complianceChecksLimit = limits.compliance_checks;
+    const complianceChecksPercentage = complianceChecksLimit > 0 ? (complianceChecksUsed / complianceChecksLimit) * 100 : 0;
+    const complianceChecksAllowed = complianceChecksLimit === -1 || complianceChecksUsed < complianceChecksLimit;
+
+    const apiCallsLimit = limits.api_calls;
+    const apiCallsPercentage = apiCallsLimit > 0 ? (apiCallsUsed / apiCallsLimit) * 100 : 0;
+    const apiCallsAllowed = apiCallsLimit === -1 || apiCallsUsed < apiCallsLimit;
+
+    const assistantMessagesLimit = limits.assistant_messages;
+    const assistantMessagesPercentage = assistantMessagesLimit > 0 ? (assistantMessagesUsed / assistantMessagesLimit) * 100 : 0;
+    const assistantMessagesAllowed = assistantMessagesLimit === -1 || assistantMessagesUsed < assistantMessagesLimit;
+
+    return {
+      workspaceId,
+      planName,
+      documentsLimit,
+      documentsUsed,
+      documentsPercentage,
+      documentsAllowed,
+      complianceChecksLimit,
+      complianceChecksUsed,
+      complianceChecksPercentage,
+      complianceChecksAllowed,
+      assistantMessagesLimit,
+      assistantMessagesUsed,
+      assistantMessagesPercentage,
+      assistantMessagesAllowed,
+      apiCallsLimit,
+      apiCallsUsed,
+      apiCallsPercentage,
+      apiCallsAllowed,
+    };
+  }
+
   async listPaymentMethods(workspaceId: string, userId: string): Promise<{
     paymentMethods: Array<{
       id: string;

@@ -372,7 +372,7 @@ CREATE TABLE performance_metrics (
 
 -- -------------------- New Table: document_compliance_cache --------------------
 -- Cache computed compliance scores and summaries for performance
-CREATE TABLE IF NOT EXISTS document_compliance_cache (
+CREATE TABLE document_compliance_cache (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
   document_id TEXT NOT NULL,
@@ -395,7 +395,7 @@ CREATE TABLE IF NOT EXISTS document_compliance_cache (
 
 -- -------------------- New Table: issue_status_history --------------------
 -- Track all status changes for complete audit trail
-CREATE TABLE IF NOT EXISTS issue_status_history (
+CREATE TABLE issue_status_history (
   id TEXT PRIMARY KEY,
   issue_id TEXT NOT NULL,
   workspace_id TEXT NOT NULL,
@@ -409,7 +409,7 @@ CREATE TABLE IF NOT EXISTS issue_status_history (
 
 
 -- Track assignment history for audit trail and notifications
-CREATE TABLE IF NOT EXISTS issue_assignments (
+CREATE TABLE issue_assignments (
   id TEXT PRIMARY KEY,
   issue_id TEXT NOT NULL,
   workspace_id TEXT NOT NULL,
@@ -424,7 +424,7 @@ CREATE TABLE IF NOT EXISTS issue_assignments (
 
 
 -- Enable saving and retrieving generated compliance reports
-CREATE TABLE IF NOT EXISTS compliance_reports (
+CREATE TABLE compliance_reports (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
   name TEXT NOT NULL,
@@ -489,7 +489,7 @@ CREATE TABLE stripe_payment_methods (
     created_at INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS knowledge_base (
+CREATE TABLE knowledge_base (
   id TEXT PRIMARY KEY DEFAULT ('kb_' || lower(hex(randomblob(6)))),
   title TEXT NOT NULL,
   content TEXT NOT NULL,
@@ -692,22 +692,6 @@ VALUES (
   unixepoch() * 1000
 );
 
--- Add workspace memberships for existing users
--- This migration fixes the 403 error by ensuring users are members of their workspaces
-
--- First, ensure all workspace owners are members of their own workspaces
-INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, role, added_at, added_by)
-SELECT 
-    w.id,
-    w.owner_id,
-    'owner',
-    w.created_at,
-    w.owner_id
-FROM workspaces w
-WHERE NOT EXISTS (
-    SELECT 1 FROM workspace_members wm 
-    WHERE wm.workspace_id = w.id AND wm.user_id = w.owner_id
-);
 
 -- Add admin user to ALL workspaces as admin (for testing/support purposes)
 INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, role, added_at, added_by)
@@ -723,20 +707,6 @@ WHERE NOT EXISTS (
     WHERE wm.workspace_id = w.id AND wm.user_id = 'usr_bootstrap_admin'
 );
 
--- Add john@doe.com user to ALL their workspaces (for testing)
-INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, role, added_at, added_by)
-SELECT 
-    w.id,
-    'usr_1762918170161_6ot43',
-    'admin',
-    unixepoch() * 1000,
-    'usr_bootstrap_admin'
-FROM workspaces w
-WHERE w.owner_id = 'usr_1762918170161_6ot43'
-AND NOT EXISTS (
-    SELECT 1 FROM workspace_members wm 
-    WHERE wm.workspace_id = w.id AND wm.user_id = 'usr_1762918170161_6ot43'
-);
 
 -- Log the fix
 INSERT INTO admin_audit_log (id, admin_user_id, action, resource_type, resource_id, changes, ip_address, created_at)
@@ -750,10 +720,6 @@ VALUES (
   '127.0.0.1',
   unixepoch() * 1000
 );
-
-
--- Migration: Add knowledge_base table for AI assistant
--- SQLite (D1) compatible schema
 
 
 
@@ -1502,12 +1468,13 @@ CREATE INDEX idx_webhooks_event_id ON stripe_webhooks(stripe_event_id);
 CREATE INDEX idx_webhooks_type ON stripe_webhooks(type);
 CREATE INDEX idx_webhooks_processed ON stripe_webhooks(processed, created_at);
 
+
 -- ============================================
--- SUBSCRIPTION PLANS UPDATE AND ADDITIONS
+-- SUBSCRIPTION PLANS
 -- ============================================
 
--- Insert default subscription plans
-INSERT INTO subscription_plans (id, name, display_name, description, price_monthly, price_yearly, features, limits, created_at) VALUES
+-- Insert defaults subscription plan
+INSERT INTO subscription_plans (id, name, display_name, description, price_monthly, price_yearly, features, limits, stripe_price_id_monthly, stripe_price_id_yearly, is_active, created_at) VALUES
 (
     'plan_free',
     'free',
@@ -1517,75 +1484,45 @@ INSERT INTO subscription_plans (id, name, display_name, description, price_month
     0,
     '["Basic compliance checks","Up to 10 documents","Community support","GDPR & SOC2 frameworks"]',
     '{"documents":10,"compliance_checks":20,"api_calls":1000,"assistant_messages":50,"storage_mb":100}',
-    (SELECT unixepoch() * 1000)
-),
-(
-    'plan_pro',
-    'pro',
-    'Professional',
-    'For growing teams that need more power',
-    4900,
-    49000,
-    '["All compliance frameworks","Up to 1000 documents","Email support","AI assistant","Advanced analytics","Team collaboration"]',
-    '{"documents":1000,"compliance_checks":500,"api_calls":50000,"assistant_messages":1000,"storage_mb":10000}',
-    (SELECT unixepoch() * 1000)
-),
-(
-    'plan_enterprise',
-    'enterprise',
-    'Enterprise',
-    'For large organizations with advanced needs',
-    19900,
-    199000,
-    '["All Pro features","Unlimited documents","Priority support","Custom frameworks","SSO integration","Dedicated account manager","SLA guarantee"]',
-    '{"documents":-1,"compliance_checks":-1,"api_calls":-1,"assistant_messages":-1,"storage_mb":-1}',
+    NULL,
+    NULL,
+    1,
     (SELECT unixepoch() * 1000)
 );
 
--- Migration: Update Subscription Pricing and Add Business Tier
--- Created: 2025-11-13
--- Description: Update pricing to match Stripe configuration and add Business tier
 
--- ============================================
--- UPDATE EXISTING PLANS WITH STRIPE PRICE IDS AND NEW PRICING
--- ============================================
+INSERT INTO subscription_plans (id, name, display_name, description, price_monthly, price_yearly, features, limits, stripe_price_id_monthly, stripe_price_id_yearly, is_active, created_at) VALUES
+(
+    'plan_starter',
+    'starter',
+    'Starter',
+    'Perfect for small teams getting started',
+    2900,  -- $29.00
+    27840, -- $278.40 (20% annual discount)
+    '["All compliance frameworks","Up to 10 documents","AI assistant (50 messages)","Email support","Basic analytics"]',
+    '{"documents":10,"compliance_checks":20,"api_calls":1000,"assistant_messages":50,"storage_mb":100}',
+    'price_1ST8AAHSX3RgJL1cuCnSfkbF',
+    'price_1ST8gaHSX3RgJL1cxzsQdeiL',
+    1,
+    (SELECT unixepoch() * 1000)
+);
 
--- Update Free plan (add Stripe price metadata - remains free)
-UPDATE subscription_plans
-SET
-    stripe_price_id_monthly = NULL,  -- Free plan has no Stripe price
-    stripe_price_id_yearly = NULL
-WHERE id = 'plan_free';
+INSERT INTO subscription_plans (id, name, display_name, description, price_monthly, price_yearly, features, limits, stripe_price_id_monthly, stripe_price_id_yearly, is_active, created_at) VALUES
+(
+    'plan_professional',
+    'professional',
+    'Professional',
+    'For growing teams that need more power',
+    9900,  -- $99.00
+    95040, -- $950.40 (20% annual discount)
+    '["All compliance frameworks","Up to 1,000 documents","AI assistant (1,000 messages)","Priority support","Advanced analytics","Team collaboration"]',
+    '{"documents":1000,"compliance_checks":500,"api_calls":50000,"assistant_messages":1000,"storage_mb":10000}',
+    'price_1ST8FPHSX3RgJL1cf3mqP3bG',
+    'price_1ST8hcHSX3RgJL1cUdsm1u98',
+    1,
+    (SELECT unixepoch() * 1000)
+);
 
--- Update Pro plan to "Starter" tier pricing ($29/mo, $278.40/yr with 20% discount)
-UPDATE subscription_plans
-SET
-    display_name = 'Starter',
-    description = 'Perfect for small teams getting started',
-    price_monthly = 2900,  -- $29.00
-    price_yearly = 27840,  -- $278.40 (20% annual discount)
-    features = '["All compliance frameworks","Up to 10 documents","AI assistant (50 messages)","Email support","Basic analytics"]',
-    limits = '{"documents":10,"compliance_checks":20,"api_calls":1000,"assistant_messages":50,"storage_mb":100}',
-    stripe_price_id_monthly = 'price_1ST8AAHSX3RgJL1cuCnSfkbF',
-    stripe_price_id_yearly = 'price_1ST8gaHSX3RgJL1cxzsQdeiL'
-WHERE id = 'plan_pro';
-
--- Update Enterprise plan to "Professional" tier pricing ($99/mo, $950.40/yr with 20% discount)
-UPDATE subscription_plans
-SET
-    display_name = 'Professional',
-    description = 'For growing teams that need more power',
-    price_monthly = 9900,  -- $99.00
-    price_yearly = 95040,  -- $950.40 (20% annual discount)
-    features = '["All compliance frameworks","Up to 1,000 documents","AI assistant (1,000 messages)","Priority support","Advanced analytics","Team collaboration"]',
-    limits = '{"documents":1000,"compliance_checks":500,"api_calls":50000,"assistant_messages":1000,"storage_mb":10000}',
-    stripe_price_id_monthly = 'price_1ST8FPHSX3RgJL1cf3mqP3bG',
-    stripe_price_id_yearly = 'price_1ST8hcHSX3RgJL1cUdsm1u98'
-WHERE id = 'plan_enterprise';
-
--- ============================================
--- ADD NEW BUSINESS TIER (Between Pro and Enterprise)
--- ============================================
 
 INSERT INTO subscription_plans (id, name, display_name, description, price_monthly, price_yearly, features, limits, stripe_price_id_monthly, stripe_price_id_yearly, is_active, created_at) VALUES
 (
@@ -1603,15 +1540,12 @@ INSERT INTO subscription_plans (id, name, display_name, description, price_month
     (SELECT unixepoch() * 1000)
 );
 
--- ============================================
--- ADD NEW ENTERPRISE PLUS TIER (Top Tier)
--- ============================================
 
 INSERT INTO subscription_plans (id, name, display_name, description, price_monthly, price_yearly, features, limits, stripe_price_id_monthly, stripe_price_id_yearly, is_active, created_at) VALUES
 (
-    'plan_enterprise_plus',
-    'enterprise_plus',
-    'Enterprise Plus',
+    'plan_enterprise',
+    'enterprise',
+    'Enterprise',
     'For large organizations with mission-critical compliance requirements',
     199900,  -- $1,999.00 per month
     199900,  -- Same as monthly (no yearly plan available yet)

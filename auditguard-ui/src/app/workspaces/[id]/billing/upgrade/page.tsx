@@ -24,7 +24,7 @@ export default function UpgradePage({ params }: UpgradePageProps) {
 
   const loadCurrentPlan = async () => {
     try {
-      const data = await api.get(`/workspaces/${params.id}/subscription`);
+      const data = await api.get(`/api/workspaces/${params.id}/subscription`);
       setCurrentPlanId(data.subscription?.stripePlanId);
     } catch (error) {
       console.error('Failed to load current plan:', error);

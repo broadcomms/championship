@@ -14,7 +14,11 @@ interface UsageMeterProps {
 }
 
 function UsageMeter({ label, current, limit, unit = '' }: UsageMeterProps) {
-  const percentage = limit > 0 ? Math.min((current / limit) * 100, 100) : 0;
+  // Add safety checks for undefined values
+  const safeCurrent = current ?? 0;
+  const safeLimit = limit ?? 0;
+
+  const percentage = safeLimit > 0 ? Math.min((safeCurrent / safeLimit) * 100, 100) : 0;
   const isNearLimit = percentage > 80;
   const isAtLimit = percentage >= 100;
 
@@ -23,17 +27,17 @@ function UsageMeter({ label, current, limit, unit = '' }: UsageMeterProps) {
       <div className="flex justify-between items-center">
         <span className="text-sm font-medium text-gray-700">{label}</span>
         <span className="text-sm text-gray-600">
-          {limit === -1 ? (
+          {safeLimit === -1 ? (
             <span className="text-green-600 font-semibold">Unlimited</span>
           ) : (
             <>
-              {current.toLocaleString()} / {limit.toLocaleString()} {unit}
+              {safeCurrent.toLocaleString()} / {safeLimit.toLocaleString()} {unit}
             </>
           )}
         </span>
       </div>
 
-      {limit !== -1 && (
+      {safeLimit !== -1 && (
         <>
           <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
             <div
@@ -69,23 +73,23 @@ export function UsageMetrics({ limits }: UsageMetricsProps) {
   const metrics = [
     {
       label: 'Documents',
-      current: limits.documentsUsed,
-      limit: limits.documentsLimit,
+      current: limits?.documentsUsed ?? 0,
+      limit: limits?.documentsLimit ?? 0,
     },
     {
       label: 'Compliance Checks',
-      current: limits.complianceChecksUsed,
-      limit: limits.complianceChecksLimit,
+      current: limits?.complianceChecksUsed ?? 0,
+      limit: limits?.complianceChecksLimit ?? 0,
     },
     {
       label: 'AI Assistant Messages',
-      current: limits.assistantMessagesUsed,
-      limit: limits.assistantMessagesLimit,
+      current: limits?.assistantMessagesUsed ?? 0,
+      limit: limits?.assistantMessagesLimit ?? 0,
     },
     {
       label: 'API Calls',
-      current: limits.apiCallsUsed,
-      limit: limits.apiCallsLimit,
+      current: limits?.apiCallsUsed ?? 0,
+      limit: limits?.apiCallsLimit ?? 0,
     },
   ];
 

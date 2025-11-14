@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-// import { api } from '@/lib/api'; // TODO: Uncomment when backend is ready
+import { api } from '@/lib/api';
 import { Subscription, WorkspaceLimits } from '@/types';
 import { UsageMetrics } from './UsageMetrics';
 import Link from 'next/link';
@@ -23,58 +23,12 @@ export function SubscriptionDashboard({ workspaceId }: SubscriptionDashboardProp
   const loadData = async () => {
     try {
       setLoading(true);
-
-      // TEMPORARY: Mock data until backend is ready
-      // TODO: Replace with actual API calls when backend endpoints are deployed
-      const mockSubscription: Subscription = {
-        id: 'sub_mock_123',
-        workspaceId: workspaceId,
-        stripePlanId: 'plan_free',
-        planName: 'Free',
-        status: 'active',
-        currentPeriodStart: Date.now() - 30 * 24 * 60 * 60 * 1000, // 30 days ago
-        currentPeriodEnd: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days from now
-        stripeSubscriptionId: 'sub_mock_stripe_123',
-        stripeCustomerId: 'cus_mock_123',
-        cancel_at_period_end: false,
-        createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
-        updatedAt: Date.now(),
-      };
-
-      const mockLimits: WorkspaceLimits = {
-        workspaceId: workspaceId,
-        planName: 'Free',
-        documentsLimit: 10,
-        documentsUsed: 2,
-        documentsPercentage: 20,
-        documentsAllowed: true,
-        complianceChecksLimit: 20,
-        complianceChecksUsed: 5,
-        complianceChecksPercentage: 25,
-        complianceChecksAllowed: true,
-        assistantMessagesLimit: 50,
-        assistantMessagesUsed: 12,
-        assistantMessagesPercentage: 24,
-        assistantMessagesAllowed: true,
-        apiCallsLimit: 100,
-        apiCallsUsed: 30,
-        apiCallsPercentage: 30,
-        apiCallsAllowed: true,
-        periodStart: Date.now() - 30 * 24 * 60 * 60 * 1000,
-        periodEnd: Date.now() + 30 * 24 * 60 * 60 * 1000,
-        checkedAt: Date.now(),
-      };
-
-      // Uncomment when backend is ready:
-      // const [subData, limitsData] = await Promise.all([
-      //   api.get(`/workspaces/${workspaceId}/subscription`),
-      //   api.get(`/workspaces/${workspaceId}/limits`),
-      // ]);
-      // setSubscription(subData.subscription);
-      // setLimits(limitsData);
-
-      setSubscription(mockSubscription);
-      setLimits(mockLimits);
+      const [subData, limitsData] = await Promise.all([
+        api.get(`/api/workspaces/${workspaceId}/subscription`),
+        api.get(`/api/workspaces/${workspaceId}/limits`),
+      ]);
+      setSubscription(subData.subscription);
+      setLimits(limitsData);
       setError(null);
     } catch (err) {
       setError('Failed to load subscription data');

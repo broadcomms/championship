@@ -46,7 +46,7 @@ export default function CheckoutPage({ params }: CheckoutPageProps) {
   const loadPlan = async () => {
     try {
       setLoading(true);
-      const data = await api.get('/billing/plans');
+      const data = await api.get('/api/billing/plans');
       const selectedPlan = data.plans?.find((p: PlanDetails) => p.id === planId);
 
       if (!selectedPlan) {

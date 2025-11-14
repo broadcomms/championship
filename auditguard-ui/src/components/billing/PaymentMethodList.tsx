@@ -30,7 +30,7 @@ export function PaymentMethodList({ workspaceId }: PaymentMethodListProps) {
   const loadPaymentMethods = async () => {
     try {
       setLoading(true);
-      const data = await api.get(`/workspaces/${workspaceId}/payment-methods`);
+      const data = await api.get(`/api/workspaces/${workspaceId}/payment-methods`);
       setPaymentMethods(data.paymentMethods || []);
       setError(null);
     } catch (err) {
@@ -45,7 +45,7 @@ export function PaymentMethodList({ workspaceId }: PaymentMethodListProps) {
     try {
       setActionLoading(paymentMethodId);
       await api.post(
-        `/workspaces/${workspaceId}/payment-methods/${paymentMethodId}/set-default`
+        `/api/workspaces/${workspaceId}/payment-methods/${paymentMethodId}/set-default`
       );
       await loadPaymentMethods();
     } catch (err) {
@@ -63,7 +63,7 @@ export function PaymentMethodList({ workspaceId }: PaymentMethodListProps) {
 
     try {
       setActionLoading(paymentMethodId);
-      await api.delete(`/workspaces/${workspaceId}/payment-methods/${paymentMethodId}`);
+      await api.delete(`/api/workspaces/${workspaceId}/payment-methods/${paymentMethodId}`);
       await loadPaymentMethods();
     } catch (err) {
       alert('Failed to remove payment method');
