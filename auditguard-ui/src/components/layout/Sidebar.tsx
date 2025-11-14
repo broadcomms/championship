@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   BarChart3,
   Settings,
+  CreditCard,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -26,6 +27,7 @@ const navigationItems: NavItem[] = [
   { name: 'Documents', path: '/documents', icon: FileText },
   { name: 'Compliance', path: '/compliance', icon: CheckCircle2 },
   { name: 'Analytics', path: '/analytics', icon: BarChart3 },
+  { name: 'Billing', path: '/billing', icon: CreditCard },
   { name: 'Settings', path: '/settings', icon: Settings },
 ];
 

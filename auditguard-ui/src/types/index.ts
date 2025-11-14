@@ -296,53 +296,73 @@ export interface ChatResponse {
 }
 
 // ==================
-// Billing Types
+// Billing Types (Stripe Integration)
 // ==================
 
 export interface SubscriptionPlan {
   id: string;
   name: string;
+  displayName: string;
   description: string;
-  price: number;
-  interval: 'month' | 'year';
-  features: {
-    users: number;
-    workspaces: number;
-    documents: number;
-    storage_gb: number;
+  priceMonthly: number; // cents
+  priceYearly: number; // cents
+  features: string[];
+  limits: {
+    documents: number; // -1 for unlimited
     compliance_checks: number;
-    ai_messages: number;
+    assistant_messages: number;
+    api_calls: number;
+    storage_gb: number;
+    users: number;
   };
-  active: boolean;
+  stripePriceIdMonthly: string | null;
+  stripePriceIdYearly: string | null;
+  sortOrder: number;
+  isActive: boolean;
 }
 
 export interface Subscription {
   id: string;
   workspaceId: string;
-  planId: string;
-  status: 'active' | 'past_due' | 'canceled' | 'trialing';
+  stripePlanId: string;
+  planName: string;
+  status: 'active' | 'past_due' | 'canceled' | 'trialing' | 'paused' | 'incomplete';
   currentPeriodStart: number;
   currentPeriodEnd: number;
-  stripeSubscriptionId: string | null;
-}
-
-export interface UsageLimit {
-  limit: number;
-  current: number;
-  percentage: number;
-  allowed: boolean;
+  stripeSubscriptionId: string;
+  stripeCustomerId: string;
+  cancel_at_period_end: boolean;
+  canceledAt?: number | null;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface WorkspaceLimits {
   workspaceId: string;
-  planId: string;
-  limits: {
-    users: UsageLimit;
-    documents: UsageLimit;
-    storage_gb: UsageLimit;
-    compliance_checks: UsageLimit;
-    ai_messages: UsageLimit;
-  };
+  planName: string;
+  // Documents
+  documentsLimit: number; // -1 for unlimited
+  documentsUsed: number;
+  documentsPercentage: number;
+  documentsAllowed: boolean;
+  // Compliance Checks
+  complianceChecksLimit: number;
+  complianceChecksUsed: number;
+  complianceChecksPercentage: number;
+  complianceChecksAllowed: boolean;
+  // Assistant Messages
+  assistantMessagesLimit: number;
+  assistantMessagesUsed: number;
+  assistantMessagesPercentage: number;
+  assistantMessagesAllowed: boolean;
+  // API Calls
+  apiCallsLimit: number;
+  apiCallsUsed: number;
+  apiCallsPercentage: number;
+  apiCallsAllowed: boolean;
+  // Timestamps
+  periodStart: number;
+  periodEnd: number;
   checkedAt: number;
 }
 

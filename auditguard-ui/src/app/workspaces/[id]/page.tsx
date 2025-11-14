@@ -181,22 +181,28 @@ export default function WorkspaceDashboardPage() {
               <p className="mt-1 text-xs text-gray-600">View and manage compliance documents</p>
             </button>
             <button
-              onClick={() => router.push(`/workspaces/${workspaceId}/members`)}
+              onClick={() => router.push(`/workspaces/${workspaceId}/billing`)}
+              className="rounded-lg border border-gray-200 bg-white p-4 text-left transition-colors hover:border-green-300 hover:bg-green-50"
+            >
+              <div className="mb-2 text-2xl">💳</div>
+              <h3 className="font-medium text-gray-900">Billing & Plans</h3>
+              <p className="mt-1 text-xs text-gray-600">Manage subscription and usage</p>
+            </button>
+            <button
+              onClick={() => router.push(`/workspaces/${workspaceId}/compliance`)}
               className="rounded-lg border border-gray-200 bg-white p-4 text-left transition-colors hover:border-blue-300 hover:bg-blue-50"
             >
-              <div className="mb-2 text-2xl">👥</div>
-              <h3 className="font-medium text-gray-900">Invite Member</h3>
-              <p className="mt-1 text-xs text-gray-600">Add team members to workspace</p>
-            </button>
-            <button className="rounded-lg border border-gray-200 bg-white p-4 text-left transition-colors hover:border-blue-300 hover:bg-blue-50">
               <div className="mb-2 text-2xl">✓</div>
-              <h3 className="font-medium text-gray-900">Run Compliance Check</h3>
+              <h3 className="font-medium text-gray-900">Compliance Checks</h3>
               <p className="mt-1 text-xs text-gray-600">Analyze documents for compliance</p>
             </button>
-            <button className="rounded-lg border border-gray-200 bg-white p-4 text-left transition-colors hover:border-blue-300 hover:bg-blue-50">
+            <button
+              onClick={() => router.push(`/workspaces/${workspaceId}/analytics`)}
+              className="rounded-lg border border-gray-200 bg-white p-4 text-left transition-colors hover:border-blue-300 hover:bg-blue-50"
+            >
               <div className="mb-2 text-2xl">📊</div>
-              <h3 className="font-medium text-gray-900">View Reports</h3>
-              <p className="mt-1 text-xs text-gray-600">See compliance analytics</p>
+              <h3 className="font-medium text-gray-900">Analytics</h3>
+              <p className="mt-1 text-xs text-gray-600">View compliance reports</p>
             </button>
           </div>
         </div>
