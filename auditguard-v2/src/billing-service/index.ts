@@ -96,6 +96,17 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
+    // Get workspace's organization_id
+    const workspace = await db
+      .selectFrom('workspaces')
+      .select(['organization_id'])
+      .where('id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!workspace || !workspace.organization_id) {
+      return { subscription: null };
+    }
+
     const subscription = await db
       .selectFrom('subscriptions')
       .innerJoin('subscription_plans', 'subscriptions.plan_id', 'subscription_plans.id')
@@ -108,7 +119,7 @@ export default class extends Service<Env> {
         'subscriptions.current_period_end',
         'subscriptions.cancel_at_period_end',
       ])
-      .where('subscriptions.workspace_id', '=', workspaceId)
+      .where('subscriptions.organization_id', '=', workspace.organization_id)
       .executeTakeFirst();
 
     if (!subscription) {
@@ -145,11 +156,22 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
+    // Get workspace's organization_id
+    const workspace = await db
+      .selectFrom('workspaces')
+      .select(['organization_id'])
+      .where('id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!workspace || !workspace.organization_id) {
+      throw new Error('Workspace organization not found');
+    }
+
     // Get subscription from database
     const subscription = await db
       .selectFrom('subscriptions')
       .select(['id', 'stripe_subscription_id'])
-      .where('workspace_id', '=', workspaceId)
+      .where('organization_id', '=', workspace.organization_id)
       .executeTakeFirst();
 
     if (!subscription || !subscription.stripe_subscription_id) {
@@ -259,11 +281,22 @@ export default class extends Service<Env> {
       throw new Error('Invalid plan or Stripe price not configured');
     }
 
+    // Get workspace's organization_id
+    const wsOrg = await db
+      .selectFrom('workspaces')
+      .select(['organization_id'])
+      .where('id', '=', input.workspaceId)
+      .executeTakeFirst();
+
+    if (!wsOrg || !wsOrg.organization_id) {
+      throw new Error('Workspace organization not found');
+    }
+
     // Check if subscription already exists
     const existing = await db
       .selectFrom('subscriptions')
       .select('id')
-      .where('workspace_id', '=', input.workspaceId)
+      .where('organization_id', '=', wsOrg.organization_id)
       .executeTakeFirst();
 
     if (existing) {
@@ -312,7 +345,7 @@ export default class extends Service<Env> {
       payment_behavior: 'default_incomplete',
       payment_settings: { save_default_payment_method: 'on_subscription' },
       expand: ['latest_invoice.payment_intent'],
-      metadata: { workspace_id: input.workspaceId },
+      metadata: { organization_id: wsOrg.organization_id, workspace_id: input.workspaceId },
     });
 
     this.env.logger.info(`Stripe subscription status: ${stripeSubscription.status}`);
@@ -331,7 +364,7 @@ export default class extends Service<Env> {
       .insertInto('subscriptions')
       .values({
         id: stripeSubscription.id,
-        workspace_id: input.workspaceId,
+        organization_id: wsOrg.organization_id,
         plan_id: input.planId,
         stripe_customer_id: customerId,
         stripe_subscription_id: stripeSubscription.id,
@@ -370,10 +403,10 @@ export default class extends Service<Env> {
     const db = this.getDb();
     const stripe = this.getStripeClient();
 
-    // Verify workspace ownership
+    // Verify workspace ownership and get organization_id
     const workspace = await db
       .selectFrom('workspaces')
-      .select(['id', 'owner_id'])
+      .select(['id', 'owner_id', 'organization_id'])
       .where('id', '=', input.workspaceId)
       .executeTakeFirst();
 
@@ -381,11 +414,15 @@ export default class extends Service<Env> {
       throw new Error('Access denied: Only workspace owner can manage subscriptions');
     }
 
+    if (!workspace.organization_id) {
+      throw new Error('Workspace organization not found');
+    }
+
     // Get current subscription
     const subscription = await db
       .selectFrom('subscriptions')
       .selectAll()
-      .where('workspace_id', '=', input.workspaceId)
+      .where('organization_id', '=', workspace.organization_id)
       .executeTakeFirst();
 
     if (!subscription || !subscription.stripe_subscription_id) {
@@ -449,7 +486,7 @@ export default class extends Service<Env> {
         current_period_end: updatePeriodEnd,
         updated_at: Date.now(),
       })
-      .where('workspace_id', '=', input.workspaceId)
+      .where('organization_id', '=', workspace.organization_id)
       .execute();
 
     this.env.logger.info(`Stripe subscription ${subscription.stripe_subscription_id} updated to plan ${input.planId} for workspace ${input.workspaceId}, status: ${updatedSubscription.status}`);
@@ -474,10 +511,10 @@ export default class extends Service<Env> {
     const db = this.getDb();
     const stripe = this.getStripeClient();
 
-    // Verify workspace ownership
+    // Verify workspace ownership and get organization_id
     const workspace = await db
       .selectFrom('workspaces')
-      .select(['id', 'owner_id'])
+      .select(['id', 'owner_id', 'organization_id'])
       .where('id', '=', input.workspaceId)
       .executeTakeFirst();
 
@@ -485,11 +522,15 @@ export default class extends Service<Env> {
       throw new Error('Access denied: Only workspace owner can manage subscriptions');
     }
 
+    if (!workspace.organization_id) {
+      throw new Error('Workspace organization not found');
+    }
+
     // Get current subscription
     const subscription = await db
       .selectFrom('subscriptions')
       .selectAll()
-      .where('workspace_id', '=', input.workspaceId)
+      .where('organization_id', '=', workspace.organization_id)
       .executeTakeFirst();
 
     if (!subscription || !subscription.stripe_subscription_id) {
@@ -512,7 +553,7 @@ export default class extends Service<Env> {
           status: updatedSubscription.status,
           updated_at: now,
         })
-        .where('workspace_id', '=', input.workspaceId)
+        .where('organization_id', '=', workspace.organization_id)
         .execute();
 
       this.env.logger.info(
@@ -531,7 +572,7 @@ export default class extends Service<Env> {
           cancel_at_period_end: 0,
           updated_at: now,
         })
-        .where('workspace_id', '=', input.workspaceId)
+        .where('organization_id', '=', workspace.organization_id)
         .execute();
 
       this.env.logger.info(
@@ -556,12 +597,23 @@ export default class extends Service<Env> {
   }> {
     const db = this.getDb();
 
+    // Get workspace's organization_id
+    const workspace = await db
+      .selectFrom('workspaces')
+      .select(['organization_id'])
+      .where('id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!workspace || !workspace.organization_id) {
+      throw new Error('Workspace organization not found');
+    }
+
     // Get subscription
     const subscription = await db
       .selectFrom('subscriptions')
       .innerJoin('subscription_plans', 'subscriptions.plan_id', 'subscription_plans.id')
       .select(['subscription_plans.limits'])
-      .where('subscriptions.workspace_id', '=', workspaceId)
+      .where('subscriptions.organization_id', '=', workspace.organization_id)
       .where('subscriptions.status', '=', 'active')
       .executeTakeFirst();
 
@@ -656,12 +708,23 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
+    // Get workspace's organization_id
+    const workspace = await db
+      .selectFrom('workspaces')
+      .select(['organization_id'])
+      .where('id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!workspace || !workspace.organization_id) {
+      throw new Error('Workspace organization not found');
+    }
+
     // Get subscription - include active, trialing, and incomplete (with periods) subscriptions
     const subscription = await db
       .selectFrom('subscriptions')
       .innerJoin('subscription_plans', 'subscriptions.plan_id', 'subscription_plans.id')
       .select(['subscription_plans.limits', 'subscription_plans.display_name', 'subscriptions.status', 'subscriptions.current_period_start'])
-      .where('subscriptions.workspace_id', '=', workspaceId)
+      .where('subscriptions.organization_id', '=', workspace.organization_id)
       .where('subscriptions.status', 'in', ['active', 'trialing', 'incomplete', 'past_due'])
       .executeTakeFirst();
 

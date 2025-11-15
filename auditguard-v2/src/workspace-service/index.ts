@@ -50,52 +50,63 @@ export default class extends Service<Env> {
       throw new Error('Description must not exceed 1000 characters');
     }
 
-    // PHASE 1: Check workspace limits to prevent revenue leakage
-    // Get user's current workspace count and their plan limits
-    const currentWorkspaceCount = await db
-      .selectFrom('workspace_members')
-      .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
-      .select(db.fn.count('workspaces.id').as('count'))
-      .where('workspace_members.user_id', '=', input.userId)
-      .where('workspace_members.role', '=', 'owner')
+    // PHASE 2: Get user's personal organization (auto-created during signup)
+    const userOrg = await db
+      .selectFrom('organization_members')
+      .innerJoin('organizations', 'organizations.id', 'organization_members.organization_id')
+      .select(['organizations.id', 'organizations.name'])
+      .where('organization_members.user_id', '=', input.userId)
+      .where('organization_members.role', '=', 'owner')
       .executeTakeFirst();
 
-    const workspaceCount = Number(currentWorkspaceCount?.count || 0);
+    if (!userOrg) {
+      throw new Error('User has no organization. This should not happen. Please contact support.');
+    }
 
-    // Get user's highest plan's workspace limit
-    const userPlanLimit = await db
+    // Check workspace limits at ORGANIZATION level (sum across all workspaces in org)
+    const orgWorkspaceCount = await db
+      .selectFrom('workspaces')
+      .select(db.fn.count('id').as('count'))
+      .where('organization_id', '=', userOrg.id)
+      .executeTakeFirst();
+
+    const workspaceCount = Number(orgWorkspaceCount?.count || 0);
+
+    // Get organization's subscription plan limits
+    const orgSubscription = await db
       .selectFrom('subscriptions')
       .innerJoin('subscription_plans', 'subscription_plans.id', 'subscriptions.plan_id')
-      .innerJoin('workspaces', 'workspaces.id', 'subscriptions.workspace_id')
-      .innerJoin('workspace_members', 'workspace_members.workspace_id', 'workspaces.id')
       .select(['subscription_plans.max_workspaces', 'subscription_plans.name'])
-      .where('workspace_members.user_id', '=', input.userId)
-      .where('workspace_members.role', '=', 'owner')
+      .where('subscriptions.organization_id', '=', userOrg.id)
       .where('subscriptions.status', '=', 'active')
       .orderBy('subscription_plans.max_workspaces', 'desc')
       .executeTakeFirst();
 
     // Default to free plan limits if no active subscription
-    const maxWorkspaces = userPlanLimit?.max_workspaces ?? 3;
-    const planName = userPlanLimit?.name ?? 'free';
+    const maxWorkspaces = orgSubscription?.max_workspaces ?? 3;
+    const planName = orgSubscription?.name ?? 'free';
 
     // Enforce workspace limit (-1 means unlimited)
     if (maxWorkspaces !== -1 && workspaceCount >= maxWorkspaces) {
-      this.env.logger.warn('Workspace creation blocked - limit reached', {
+      this.env.logger.warn('Workspace creation blocked - organization limit reached', {
         userId: input.userId,
+        organizationId: userOrg.id,
+        organizationName: userOrg.name,
         currentCount: workspaceCount,
         maxAllowed: maxWorkspaces,
         plan: planName,
       });
 
       throw new Error(
-        `Workspace limit reached. Your ${planName} plan allows ${maxWorkspaces} workspace${maxWorkspaces !== 1 ? 's' : ''}. ` +
-        `You currently have ${workspaceCount}. Please upgrade your plan to create more workspaces.`
+        `Organization workspace limit reached. Your ${planName} plan allows ${maxWorkspaces} workspace${maxWorkspaces !== 1 ? 's' : ''}. ` +
+        `Your organization "${userOrg.name}" currently has ${workspaceCount}. Please upgrade your plan to create more workspaces.`
       );
     }
 
-    this.env.logger.info('Creating workspace within limits', {
+    this.env.logger.info('Creating workspace within organization limits', {
       userId: input.userId,
+      organizationId: userOrg.id,
+      organizationName: userOrg.name,
       currentCount: workspaceCount,
       maxAllowed: maxWorkspaces,
       plan: planName,
@@ -105,7 +116,7 @@ export default class extends Service<Env> {
     const workspaceId = `wks_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const now = Date.now();
 
-    // Create workspace
+    // Create workspace - AUTO-ASSIGN to user's organization
     await db
       .insertInto('workspaces')
       .values({
@@ -113,6 +124,7 @@ export default class extends Service<Env> {
         name: input.name,
         description: input.description || null,
         owner_id: input.userId,
+        organization_id: userOrg.id, // AUTO-ASSIGNED to personal org
         created_at: now,
         updated_at: now,
       })
@@ -627,34 +639,47 @@ export default class extends Service<Env> {
   }> {
     const db = this.getDb();
 
-    // Count user's current workspaces where they are owner
-    const workspaceCountResult = await db
-      .selectFrom('workspace_members')
-      .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
-      .select(db.fn.count('workspaces.id').as('count'))
-      .where('workspace_members.user_id', '=', userId)
-      .where('workspace_members.role', '=', 'owner')
+    // PHASE 2: Get user's personal organization
+    const userOrg = await db
+      .selectFrom('organization_members')
+      .innerJoin('organizations', 'organizations.id', 'organization_members.organization_id')
+      .select(['organizations.id', 'organizations.name'])
+      .where('organization_members.user_id', '=', userId)
+      .where('organization_members.role', '=', 'owner')
       .executeTakeFirst();
 
-    const currentCount = Number(workspaceCountResult?.count || 0);
+    if (!userOrg) {
+      // Fallback: Return free plan limits if no organization (shouldn't happen)
+      return {
+        currentCount: 0,
+        maxWorkspaces: 3,
+        planName: 'Free',
+        isAtLimit: false,
+      };
+    }
 
-    // Get user's highest active subscription plan
-    // Query through workspaces they own to find their best subscription
-    const userPlanLimit = await db
-      .selectFrom('workspace_members')
-      .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
-      .innerJoin('subscriptions', 'subscriptions.workspace_id', 'workspaces.id')
-      .innerJoin('subscription_plans', 'subscriptions.plan_id', 'subscription_plans.id')
+    // Count workspaces in user's organization
+    const orgWorkspaceCount = await db
+      .selectFrom('workspaces')
+      .select(db.fn.count('id').as('count'))
+      .where('organization_id', '=', userOrg.id)
+      .executeTakeFirst();
+
+    const currentCount = Number(orgWorkspaceCount?.count || 0);
+
+    // Get organization's active subscription plan
+    const orgSubscription = await db
+      .selectFrom('subscriptions')
+      .innerJoin('subscription_plans', 'subscription_plans.id', 'subscriptions.plan_id')
       .select(['subscription_plans.max_workspaces', 'subscription_plans.name', 'subscription_plans.display_name'])
-      .where('workspace_members.user_id', '=', userId)
-      .where('workspace_members.role', '=', 'owner')
+      .where('subscriptions.organization_id', '=', userOrg.id)
       .where('subscriptions.status', '=', 'active')
       .orderBy('subscription_plans.max_workspaces', 'desc')
       .executeTakeFirst();
 
     // Default to free plan limits if no active subscription
-    const maxWorkspaces = userPlanLimit?.max_workspaces ?? 3;
-    const planName = userPlanLimit?.display_name || userPlanLimit?.name || 'Free';
+    const maxWorkspaces = orgSubscription?.max_workspaces ?? 3;
+    const planName = orgSubscription?.display_name || orgSubscription?.name || 'Free';
 
     // Check if at limit (-1 means unlimited)
     const isAtLimit = maxWorkspaces !== -1 && currentCount >= maxWorkspaces;

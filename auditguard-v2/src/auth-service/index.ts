@@ -26,7 +26,7 @@ export default class extends Service<Env> {
     return new Response('Auth Service - Private', { status: 501 });
   }
 
-  async register(input: RegisterInput): Promise<{ userId: string; email: string; createdAt: number }> {
+  async register(input: RegisterInput): Promise<{ userId: string; email: string; organizationId: string; createdAt: number }> {
     const db = this.getDb();
 
     // Validate email format
@@ -54,8 +54,9 @@ export default class extends Service<Env> {
     // Hash password
     const passwordHash = await bcrypt.hash(input.password, 10);
 
-    // Generate user ID
+    // Generate IDs
     const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const organizationId = `org_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const now = Date.now();
 
     // Create user
@@ -70,9 +71,75 @@ export default class extends Service<Env> {
       })
       .execute();
 
+    // PHASE 2: Auto-create personal organization (transparent to user)
+    // Generate slug from email (make URL-friendly)
+    const orgSlug = input.email
+      .toLowerCase()
+      .replace('@', '-at-')
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    await db
+      .insertInto('organizations')
+      .values({
+        id: organizationId,
+        name: `${input.email}'s Organization`,
+        slug: orgSlug,
+        owner_user_id: userId,
+        stripe_customer_id: null, // Will be created on first paid subscription
+        billing_email: null,
+        created_at: now,
+        updated_at: now,
+      })
+      .execute();
+
+    // Add user as organization owner
+    await db
+      .insertInto('organization_members')
+      .values({
+        id: `om_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        organization_id: organizationId,
+        user_id: userId,
+        role: 'owner',
+        joined_at: now,
+        invited_by: null,
+      })
+      .execute();
+
+    // Create free plan subscription at ORGANIZATION level (not workspace level)
+    await db
+      .insertInto('subscriptions')
+      .values({
+        id: `sub_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        organization_id: organizationId, // ORG-LEVEL subscription
+        plan_id: 'plan_free',
+        stripe_customer_id: null,
+        stripe_subscription_id: null,
+        stripe_price_id: null,
+        status: 'active',
+        current_period_start: now,
+        current_period_end: now + (365 * 24 * 60 * 60 * 1000), // 1 year
+        cancel_at_period_end: 0,
+        trial_end: null,
+        trial_start: null,
+        canceled_at: null,
+        created_at: now,
+        updated_at: now,
+      })
+      .execute();
+
+    this.env.logger.info('User registered with personal organization', {
+      userId,
+      email: input.email,
+      organizationId,
+      organizationName: `${input.email}'s Organization`,
+    });
+
     return {
       userId,
       email: input.email,
+      organizationId,
       createdAt: now,
     };
   }

@@ -280,12 +280,26 @@ export default class extends Service<Env> {
 
       this.env.logger.info(`Updated subscription ${subscription.id} for workspace ${workspaceId}`);
     } else {
+      // Get organization_id from Stripe metadata or lookup from workspace
+      let organizationId = subscription.metadata?.organization_id;
+      if (!organizationId) {
+        const workspace = await db
+          .selectFrom('workspaces')
+          .select(['organization_id'])
+          .where('id', '=', workspaceId)
+          .executeTakeFirst();
+        if (!workspace || !workspace.organization_id) {
+          throw new Error('Workspace organization not found');
+        }
+        organizationId = workspace.organization_id;
+      }
+
       // Create new subscription
       await db
         .insertInto('subscriptions')
         .values({
           id: subscription.id,
-          workspace_id: workspaceId,
+          organization_id: organizationId,
           plan_id: plan.id,
           stripe_customer_id: subscription.customer as string,
           stripe_subscription_id: subscription.id,

@@ -56,6 +56,41 @@ export type workspaces = {
     name: string;
     description: string | null;
     owner_id: string;
+    organization_id: string | null;
+    created_at: number;
+    updated_at: number;
+};
+
+export type organizations = {
+    id: string;
+    name: string;
+    slug: string;
+    owner_user_id: string;
+    stripe_customer_id: string | null;
+    billing_email: string | null;
+    created_at: number;
+    updated_at: number;
+};
+
+export type organization_members = {
+    id: string;
+    organization_id: string;
+    user_id: string;
+    role: string;
+    joined_at: number;
+    invited_by: string | null;
+};
+
+export type organization_usage_daily = {
+    id: string;
+    organization_id: string;
+    date: string;
+    documents_created: number;
+    documents_total: number;
+    compliance_checks_count: number;
+    api_calls_count: number;
+    assistant_messages_count: number;
+    storage_bytes: number;
     created_at: number;
     updated_at: number;
 };
@@ -205,7 +240,7 @@ export type subscription_plans = {
 
 export type subscriptions = {
     id: string;
-    workspace_id: string;
+    organization_id: string;  // Organization-level subscriptions only
     plan_id: string;
     stripe_customer_id: string | null;
     stripe_subscription_id: string | null;
@@ -215,6 +250,7 @@ export type subscriptions = {
     current_period_end: number;
     cancel_at_period_end: number;
     trial_end: number | null;
+    trial_start: number | null;
     canceled_at: number | null;
     created_at: number;
     updated_at: number;
@@ -383,6 +419,9 @@ export type DB = {
     users: users;
     workspace_members: workspace_members;
     workspaces: workspaces;
+    organizations: organizations;
+    organization_members: organization_members;
+    organization_usage_daily: organization_usage_daily;
     compliance_checks: compliance_checks;
     compliance_frameworks: compliance_frameworks;
     compliance_issues: compliance_issues;
