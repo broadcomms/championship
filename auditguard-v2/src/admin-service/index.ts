@@ -471,28 +471,33 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
-    // Security: Only allow SELECT queries
+    // Security: Allow SELECT, INSERT, UPDATE, DELETE for admin operations
     const normalizedSql = sql.trim().toLowerCase();
-    if (!normalizedSql.startsWith('select')) {
-      throw new Error('Only SELECT queries are allowed. Use SmartSQL for writes.');
+    const allowedCommands = ['select', 'insert', 'update', 'delete'];
+    const startsWithAllowed = allowedCommands.some(cmd => normalizedSql.startsWith(cmd));
+    
+    if (!startsWithAllowed) {
+      throw new Error('Only SELECT, INSERT, UPDATE, DELETE queries are allowed.');
     }
 
-    // Block dangerous operations even in subqueries
-    const dangerousKeywords = ['drop', 'delete', 'update', 'insert', 'alter', 'create', 'pragma'];
+    // Block dangerous SQL commands (use word boundaries to avoid matching column names)
+    const dangerousKeywords = ['\\bdrop\\b', '\\balter\\b', '\\bcreate\\b', '\\bpragma\\b', '\\btruncate\\b', '\\bexec\\b', '\\battach\\b', '\\bdetach\\b'];
     for (const keyword of dangerousKeywords) {
-      if (normalizedSql.includes(keyword)) {
-        throw new Error(`Keyword "${keyword}" is not allowed in read-only mode`);
+      const regex = new RegExp(keyword, 'i');
+      if (regex.test(normalizedSql)) {
+        throw new Error(`SQL command "${keyword.replace(/\\b/g, '')}" is not allowed`);
       }
     }
 
-    // Enforce row limit
+    // Enforce row limit only for SELECT queries
     let finalSql = sql;
-    if (!normalizedSql.includes('limit')) {
+    if (normalizedSql.startsWith('select') && !normalizedSql.includes('limit')) {
       finalSql += ' LIMIT 1000';
     }
 
-    this.env.logger.info('Executing SQL query', {
+    this.env.logger.info('Executing SQL command', {
       adminUserId,
+      command: normalizedSql.split(' ')[0].toUpperCase(),
       sql: finalSql.substring(0, 200),
     });
 
@@ -512,14 +517,16 @@ export default class extends Service<Env> {
       const rows = result.results || [];
       const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
 
-      await this.logAdminAction(adminUserId, 'execute_sql_query', 'database', null, {
+      await this.logAdminAction(adminUserId, 'execute_sql_command', 'database', null, {
+        command: normalizedSql.split(' ')[0].toUpperCase(),
         sql: finalSql.substring(0, 200),
         rowCount: rows.length,
         executionTime,
       });
 
-      this.env.logger.info('SQL query executed successfully', {
+      this.env.logger.info('SQL command executed successfully', {
         adminUserId,
+        command: normalizedSql.split(' ')[0].toUpperCase(),
         rowCount: rows.length,
         executionTime,
       });

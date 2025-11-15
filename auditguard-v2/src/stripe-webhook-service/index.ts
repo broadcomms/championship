@@ -42,10 +42,14 @@ export default class extends Service<Env> {
       // Verify webhook signature
       let event: Stripe.Event;
       try {
-        // Webhook secret from stripe listen command
-        const testWebhookSecret = 'whsec_ec6166a03ec5f61b17017039dd78e8e94951d56a5fde2ea6964dae284e240689';
+        // Use environment webhook secret (production) or fall back to stripe listen secret (development)
+        // For production: Set STRIPE_WEBHOOK_SECRET in Stripe Dashboard after creating webhook endpoint
+        // For development: This matches the secret from `stripe listen` command
+        const webhookSecret = this.env.STRIPE_WEBHOOK_SECRET || 
+          'whsec_ec6166a03ec5f61b17017039dd78e8e94951d56a5fde2ea6964dae284e240689';
+        
         // Use constructEventAsync for Cloudflare Workers compatibility
-        event = await stripe.webhooks.constructEventAsync(body, signature, testWebhookSecret);
+        event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
       } catch (err) {
         this.env.logger.error(`Webhook signature verification failed: ${err instanceof Error ? err.message : String(err)}`);
         return new Response('Invalid signature', { status: 400 });
@@ -136,6 +140,11 @@ export default class extends Service<Env> {
     const db = this.getDb();
 
     switch (event.type) {
+      // Customer events
+      case 'customer.created':
+        await this.handleCustomerCreated(event.data.object as Stripe.Customer);
+        break;
+
       // Subscription lifecycle events
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
@@ -148,6 +157,7 @@ export default class extends Service<Env> {
 
       // Invoice events
       case 'invoice.payment_succeeded':
+      case 'invoice.paid':  // Also handle manual Dashboard payments
         await this.handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
         break;
 
@@ -172,6 +182,45 @@ export default class extends Service<Env> {
       default:
         this.env.logger.info(`Unhandled webhook event type: ${event.type}`);
     }
+  }
+
+  private async handleCustomerCreated(customer: Stripe.Customer): Promise<void> {
+    const db = this.getDb();
+    const workspaceId = customer.metadata?.workspace_id;
+
+    if (!workspaceId) {
+      this.env.logger.warn(`Customer ${customer.id} created without workspace_id in metadata`);
+      return;
+    }
+
+    // Check if customer already exists
+    const existing = await (db as any)
+      .selectFrom('stripe_customers')
+      .select('id')
+      .where('stripe_customer_id', '=', customer.id)
+      .executeTakeFirst();
+
+    if (existing) {
+      this.env.logger.info(`Customer ${customer.id} already exists in database`);
+      return;
+    }
+
+    // Insert customer into database
+    const now = Date.now();
+    await (db as any)
+      .insertInto('stripe_customers')
+      .values({
+        id: crypto.randomUUID(),
+        workspace_id: workspaceId,
+        stripe_customer_id: customer.id,
+        email: customer.email || null,
+        payment_method_id: null,
+        created_at: now,
+        updated_at: now,
+      })
+      .execute();
+
+    this.env.logger.info(`Customer ${customer.id} created for workspace ${workspaceId}`);
   }
 
   private async handleSubscriptionUpdate(subscription: Stripe.Subscription): Promise<void> {
