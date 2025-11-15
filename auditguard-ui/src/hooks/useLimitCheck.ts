@@ -30,7 +30,7 @@ export function useLimitCheck(workspaceId: string): UseLimitCheckResult {
   const loadLimits = async () => {
     try {
       setLoading(true);
-      const data = await api.get(`/workspaces/${workspaceId}/limits`);
+      const data = await api.get(`/api/workspaces/${workspaceId}/limits`);
 
       const limitStatus: Record<LimitType, LimitStatus> = {
         documents: calculateStatus(data.documentsUsed, data.documentsLimit),

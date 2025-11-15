@@ -326,7 +326,7 @@ export interface Subscription {
   workspaceId: string;
   stripePlanId: string;
   planName: string;
-  status: 'active' | 'past_due' | 'canceled' | 'trialing' | 'paused' | 'incomplete';
+  status: 'active' | 'past_due' | 'canceled' | 'trialing' | 'paused' | 'incomplete' | 'incomplete_expired';
   currentPeriodStart: number;
   currentPeriodEnd: number;
   stripeSubscriptionId: string;

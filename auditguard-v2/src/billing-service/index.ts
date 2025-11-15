@@ -160,13 +160,18 @@ export default class extends Service<Env> {
     const stripeSubscription = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
 
     // Update database with latest status
+    // Note: current_period_start and current_period_end may be null for incomplete subscriptions
     const now = Date.now();
     await db
       .updateTable('subscriptions')
       .set({
         status: stripeSubscription.status,
-        current_period_start: (stripeSubscription as any).current_period_start * 1000,
-        current_period_end: (stripeSubscription as any).current_period_end * 1000,
+        current_period_start: (stripeSubscription as any).current_period_start 
+          ? (stripeSubscription as any).current_period_start * 1000 
+          : null,
+        current_period_end: (stripeSubscription as any).current_period_end 
+          ? (stripeSubscription as any).current_period_end * 1000 
+          : null,
         cancel_at_period_end: stripeSubscription.cancel_at_period_end ? 1 : 0,
         canceled_at: stripeSubscription.canceled_at ? stripeSubscription.canceled_at * 1000 : null,
         updated_at: now,
@@ -651,13 +656,13 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
-    // Get subscription
+    // Get subscription - include active, trialing, and incomplete (with periods) subscriptions
     const subscription = await db
       .selectFrom('subscriptions')
       .innerJoin('subscription_plans', 'subscriptions.plan_id', 'subscription_plans.id')
-      .select(['subscription_plans.limits', 'subscription_plans.display_name'])
+      .select(['subscription_plans.limits', 'subscription_plans.display_name', 'subscriptions.status', 'subscriptions.current_period_start'])
       .where('subscriptions.workspace_id', '=', workspaceId)
-      .where('subscriptions.status', '=', 'active')
+      .where('subscriptions.status', 'in', ['active', 'trialing', 'incomplete', 'past_due'])
       .executeTakeFirst();
 
     let limits: Record<string, number>;

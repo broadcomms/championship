@@ -42,9 +42,10 @@ export default class extends Service<Env> {
       // Verify webhook signature
       let event: Stripe.Event;
       try {
-        // TEMPORARY: Hardcoded TEST webhook secret to bypass environment variable issues
-        const testWebhookSecret = 'whsec_Fo1fpb5o9dbv0sAPjy2uopzCq1Ny6FYU';
-        event = stripe.webhooks.constructEvent(body, signature, testWebhookSecret);
+        // Webhook secret from stripe listen command
+        const testWebhookSecret = 'whsec_ec6166a03ec5f61b17017039dd78e8e94951d56a5fde2ea6964dae284e240689';
+        // Use constructEventAsync for Cloudflare Workers compatibility
+        event = await stripe.webhooks.constructEventAsync(body, signature, testWebhookSecret);
       } catch (err) {
         this.env.logger.error(`Webhook signature verification failed: ${err instanceof Error ? err.message : String(err)}`);
         return new Response('Invalid signature', { status: 400 });
