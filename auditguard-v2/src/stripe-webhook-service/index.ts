@@ -158,6 +158,7 @@ export default class extends Service<Env> {
       // Invoice events
       case 'invoice.payment_succeeded':
       case 'invoice.paid':  // Also handle manual Dashboard payments
+      case 'invoice.finalized':  // Also handle finalized invoices (creates record immediately)
         await this.handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
         break;
 
