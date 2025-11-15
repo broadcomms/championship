@@ -775,8 +775,16 @@ export default class extends Service<Env> {
       .where('workspace_id', '=', workspaceId)
       .execute();
 
+    // Deduplicate by stripe_payment_method_id (in case of duplicate entries)
+    const uniqueMethods = new Map();
+    for (const method of methods) {
+      if (!uniqueMethods.has(method.stripe_payment_method_id)) {
+        uniqueMethods.set(method.stripe_payment_method_id, method);
+      }
+    }
+
     return {
-      paymentMethods: methods.map((method: any) => ({
+      paymentMethods: Array.from(uniqueMethods.values()).map((method: any) => ({
         id: method.stripe_payment_method_id,
         type: method.type,
         last4: method.last4,
