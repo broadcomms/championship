@@ -3,6 +3,9 @@ CREATE TABLE users (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    workspace_count INTEGER DEFAULT 0,
+    last_login INTEGER,
+    is_active INTEGER DEFAULT 1,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -22,6 +25,7 @@ CREATE TABLE workspaces (
     name TEXT NOT NULL,
     description TEXT,
     owner_id TEXT NOT NULL,
+    organization_id TEXT REFERENCES organizations(id) ON DELETE CASCADE,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
@@ -140,18 +144,21 @@ CREATE TABLE compliance_frameworks (
 -- User subscriptions
 CREATE TABLE subscriptions (
     id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     plan_id TEXT NOT NULL REFERENCES subscription_plans(id),
     stripe_customer_id TEXT,
     stripe_subscription_id TEXT,
+    stripe_price_id TEXT,
     status TEXT NOT NULL CHECK(status IN ('active', 'canceled', 'incomplete', 'incomplete_expired', 'past_due', 'trialing', 'paused')),
     current_period_start INTEGER,
     current_period_end INTEGER,
     cancel_at_period_end INTEGER DEFAULT 0,
     trial_end INTEGER,
-    stripe_price_id TEXT,
-    canceled_at INTEGER,
     trial_start INTEGER,
+    trial_period_days INTEGER,
+    billing_cycle TEXT CHECK(billing_cycle IN ('monthly', 'yearly')),
+    billing_email TEXT,
+    canceled_at INTEGER,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -322,6 +329,7 @@ CREATE TABLE subscription_plans (
     stripe_price_id_monthly TEXT,
     stripe_price_id_yearly TEXT,
     features TEXT NOT NULL, -- JSON array
+    max_workspaces INTEGER DEFAULT 3,
     limits TEXT NOT NULL, -- JSON object with limits
     is_active INTEGER DEFAULT 1,
     created_at INTEGER NOT NULL
@@ -500,9 +508,51 @@ CREATE TABLE knowledge_base (
   created_at INTEGER DEFAULT (unixepoch()),
   updated_at INTEGER DEFAULT (unixepoch()),
   created_by TEXT REFERENCES users(id),
+  updated_by TEXT REFERENCES users(id),
   is_active INTEGER DEFAULT 1,
   sort_order INTEGER DEFAULT 0
 );
+
+CREATE TABLE organizations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL CHECK(length(name) >= 1 AND length(name) <= 100),
+    slug TEXT UNIQUE NOT NULL CHECK(length(slug) >= 2 AND length(slug) <= 50),
+    owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    stripe_customer_id TEXT UNIQUE,
+    billing_email TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE organization_members (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK(role IN ('owner', 'admin', 'member', 'billing')),
+    joined_at INTEGER NOT NULL,
+    invited_by TEXT REFERENCES users(id),
+    UNIQUE(organization_id, user_id)
+);
+
+
+CREATE TABLE IF NOT EXISTS organization_usage_daily (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    date TEXT NOT NULL CHECK(date LIKE '____-__-__'),  -- YYYY-MM-DD format
+    documents_created INTEGER DEFAULT 0,
+    documents_total INTEGER DEFAULT 0,
+    compliance_checks_count INTEGER DEFAULT 0,
+    api_calls_count INTEGER DEFAULT 0,
+    assistant_messages_count INTEGER DEFAULT 0,
+    storage_bytes INTEGER DEFAULT 0,
+    workspaces_count INTEGER DEFAULT 0,
+    members_count INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE(organization_id, date)
+);
+
+
 
 -- Indexes for performance 00
 CREATE INDEX sessions_user_id_idx ON sessions(user_id);
@@ -519,6 +569,10 @@ CREATE INDEX idx_compliance_frameworks_active ON compliance_frameworks(is_active
 -- Indexes for performance 02
 CREATE INDEX idx_workspace_scores_workspace_id ON workspace_scores(workspace_id);
 CREATE INDEX idx_workspace_scores_calculated_at ON workspace_scores(calculated_at);
+
+-- 3. Create index for performance
+CREATE INDEX idx_workspace_members_user_role ON workspace_members(user_id, role);
+
 
 -- Indexes for performance 03
 CREATE INDEX idx_conversation_sessions_workspace ON conversation_sessions(workspace_id);
@@ -625,6 +679,30 @@ CREATE INDEX IF NOT EXISTS idx_compliance_reports_created_at ON compliance_repor
 
 -- Index for filtering by creator
 CREATE INDEX IF NOT EXISTS idx_compliance_reports_created_by ON compliance_reports(created_by);
+
+
+-- Index for workspace-organization queries
+CREATE INDEX IF NOT EXISTS idx_workspaces_organization ON workspaces(organization_id);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_organizations_owner ON organizations(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_organizations_slug ON organizations(slug);
+CREATE INDEX IF NOT EXISTS idx_organizations_stripe ON organizations(stripe_customer_id);
+
+-- Indexes for membership queries
+CREATE INDEX IF NOT EXISTS idx_org_members_org ON organization_members(organization_id);
+CREATE INDEX IF NOT EXISTS idx_org_members_user ON organization_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_org_members_role ON organization_members(organization_id, role);
+
+
+-- Indexes for subscription queries
+CREATE INDEX IF NOT EXISTS idx_subscriptions_new_org ON subscriptions_new(organization_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_new_status ON subscriptions_new(organization_id, status);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_new_stripe ON subscriptions_new(stripe_subscription_id);
+
+-- Indexes for usage queries
+CREATE INDEX IF NOT EXISTS idx_org_usage_org_date ON organization_usage_daily(organization_id, date);
+CREATE INDEX IF NOT EXISTS idx_org_usage_date ON organization_usage_daily(date);
 
 
 -- Seed default frameworks
@@ -1596,3 +1674,10 @@ SET
   price_monthly = 199900, -- $1999.00 in cents
   price_yearly = 1999000  -- Estimated yearly (no discount in CSV)
 WHERE name = 'enterprise';
+
+-- 5. Update existing plans with workspace limits
+UPDATE subscription_plans SET max_workspaces = 3 WHERE id = 'plan_free';
+UPDATE subscription_plans SET max_workspaces = 5 WHERE id = 'plan_starter';
+UPDATE subscription_plans SET max_workspaces = 20 WHERE id = 'plan_professional';
+UPDATE subscription_plans SET max_workspaces = 50 WHERE id = 'plan_business';
+UPDATE subscription_plans SET max_workspaces = -1 WHERE id = 'plan_enterprise';  -- -1 = unlimited

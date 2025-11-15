@@ -1,6 +1,6 @@
 import { Service } from '@liquidmetal-ai/raindrop-framework';
 import { Env } from './raindrop.gen';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 
@@ -336,7 +336,7 @@ export default class extends Service<Env> {
     await db
       .updateTable('users')
       .set({
-        workspace_count: db.raw('GREATEST(workspace_count - 1, 0)'), // Prevent negative counts
+        workspace_count: sql.raw('GREATEST(workspace_count - 1, 0)'), // Prevent negative counts
         updated_at: Date.now(),
       })
       .where('id', '=', userId)
@@ -617,5 +617,53 @@ export default class extends Service<Env> {
     const requiredRoleLevel = roleHierarchy[requiredRole];
 
     return userRoleLevel >= requiredRoleLevel;
+  }
+
+  async getWorkspaceLimits(userId: string): Promise<{
+    currentCount: number;
+    maxWorkspaces: number;
+    planName: string;
+    isAtLimit: boolean;
+  }> {
+    const db = this.getDb();
+
+    // Count user's current workspaces where they are owner
+    const workspaceCountResult = await db
+      .selectFrom('workspace_members')
+      .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
+      .select(db.fn.count('workspaces.id').as('count'))
+      .where('workspace_members.user_id', '=', userId)
+      .where('workspace_members.role', '=', 'owner')
+      .executeTakeFirst();
+
+    const currentCount = Number(workspaceCountResult?.count || 0);
+
+    // Get user's highest active subscription plan
+    // Query through workspaces they own to find their best subscription
+    const userPlanLimit = await db
+      .selectFrom('workspace_members')
+      .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
+      .innerJoin('subscriptions', 'subscriptions.workspace_id', 'workspaces.id')
+      .innerJoin('subscription_plans', 'subscriptions.plan_id', 'subscription_plans.id')
+      .select(['subscription_plans.max_workspaces', 'subscription_plans.name', 'subscription_plans.display_name'])
+      .where('workspace_members.user_id', '=', userId)
+      .where('workspace_members.role', '=', 'owner')
+      .where('subscriptions.status', '=', 'active')
+      .orderBy('subscription_plans.max_workspaces', 'desc')
+      .executeTakeFirst();
+
+    // Default to free plan limits if no active subscription
+    const maxWorkspaces = userPlanLimit?.max_workspaces ?? 3;
+    const planName = userPlanLimit?.display_name || userPlanLimit?.name || 'Free';
+
+    // Check if at limit (-1 means unlimited)
+    const isAtLimit = maxWorkspaces !== -1 && currentCount >= maxWorkspaces;
+
+    return {
+      currentCount,
+      maxWorkspaces,
+      planName,
+      isAtLimit,
+    };
   }
 }

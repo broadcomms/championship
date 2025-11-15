@@ -516,6 +516,14 @@ export default class extends Service<Env> {
         });
       }
 
+      if (path === '/api/workspaces/limits' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+        const result = await this.env.WORKSPACE_SERVICE.getWorkspaceLimits(user.userId);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/workspaces/:id
       const workspaceMatch = path.match(/^\/api\/workspaces\/([^\/]+)$/);
       if (workspaceMatch && workspaceMatch[1]) {

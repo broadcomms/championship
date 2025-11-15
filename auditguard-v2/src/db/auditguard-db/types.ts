@@ -40,6 +40,7 @@ export type users = {
     password_hash: string;
     created_at: number;
     updated_at: number;
+    workspace_count: number | null;
 };
 
 export type workspace_members = {
@@ -199,6 +200,7 @@ export type subscription_plans = {
     limits: string;
     is_active: number;
     created_at: number;
+    max_workspaces: number | null;
 };
 
 export type subscriptions = {

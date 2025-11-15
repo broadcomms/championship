@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { api } from '@/lib/api';
+import { AlertTriangle, Info } from 'lucide-react';
 
 const createWorkspaceSchema = z.object({
   name: z.string().min(1, 'Workspace name is required').max(100, 'Name is too long'),
@@ -21,9 +22,18 @@ interface CreateWorkspaceDialogProps {
   onSuccess: () => void;
 }
 
+interface WorkspaceLimits {
+  currentCount: number;
+  maxWorkspaces: number;
+  planName: string;
+  isAtLimit: boolean;
+}
+
 export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWorkspaceDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [limits, setLimits] = useState<WorkspaceLimits | null>(null);
+  const [isLoadingLimits, setIsLoadingLimits] = useState(false);
 
   const {
     register,
@@ -33,6 +43,26 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWork
   } = useForm<CreateWorkspaceForm>({
     resolver: zodResolver(createWorkspaceSchema),
   });
+
+  // Fetch workspace limits when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchWorkspaceLimits();
+    }
+  }, [isOpen]);
+
+  const fetchWorkspaceLimits = async () => {
+    setIsLoadingLimits(true);
+    try {
+      const data = await api.get<WorkspaceLimits>('/api/workspaces/limits');
+      setLimits(data);
+    } catch (err: any) {
+      console.error('Failed to fetch workspace limits:', err);
+      // Don't show error to user, just log it
+    } finally {
+      setIsLoadingLimits(false);
+    }
+  };
 
   const onSubmit = async (data: CreateWorkspaceForm) => {
     setIsSubmitting(true);
@@ -53,10 +83,15 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWork
   const handleClose = () => {
     reset();
     setError('');
+    setLimits(null);
     onClose();
   };
 
   if (!isOpen) return null;
+
+  const showLimitWarning = limits && !limits.isAtLimit && limits.currentCount > 0;
+  const showLimitError = limits && limits.isAtLimit;
+  const usagePercentage = limits ? (limits.currentCount / (limits.maxWorkspaces === -1 ? 100 : limits.maxWorkspaces)) * 100 : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -71,6 +106,82 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWork
             Create a workspace to organize your compliance documents and team.
           </p>
         </div>
+
+        {/* Workspace Usage Warning */}
+        {isLoadingLimits && (
+          <div className="mb-4 animate-pulse rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <div className="h-4 w-3/4 rounded bg-gray-300"></div>
+          </div>
+        )}
+
+        {showLimitWarning && !isLoadingLimits && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start gap-3">
+              <Info className="h-5 w-5 flex-shrink-0 text-amber-600 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-amber-900">
+                  Workspace Usage
+                </h3>
+                <p className="mt-1 text-sm text-amber-800">
+                  You have <span className="font-bold">{limits.currentCount}</span> workspace{limits.currentCount !== 1 ? 's' : ''}.
+                  Your <span className="font-semibold">{limits.planName}</span> plan allows{' '}
+                  <span className="font-bold">
+                    {limits.maxWorkspaces === -1 ? 'unlimited' : limits.maxWorkspaces}
+                  </span>{' '}
+                  workspace{limits.maxWorkspaces !== 1 ? 's' : ''} total.
+                </p>
+                {limits.maxWorkspaces !== -1 && (
+                  <div className="mt-3">
+                    <div className="mb-1 flex items-center justify-between text-xs text-amber-700">
+                      <span>Usage</span>
+                      <span className="font-medium">
+                        {limits.currentCount} / {limits.maxWorkspaces}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-amber-200">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          usagePercentage >= 80 ? 'bg-amber-600' : 'bg-amber-500'
+                        }`}
+                        style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showLimitError && !isLoadingLimits && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 flex-shrink-0 text-red-600 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-red-900">
+                  Workspace Limit Reached
+                </h3>
+                <p className="mt-1 text-sm text-red-800">
+                  You've reached your limit of <span className="font-bold">{limits.maxWorkspaces}</span> workspace
+                  {limits.maxWorkspaces !== 1 ? 's' : ''} on the <span className="font-semibold">{limits.planName}</span> plan.
+                  Please upgrade your plan to create more workspaces.
+                </p>
+                <div className="mt-3">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      window.location.href = '/pricing';
+                    }}
+                  >
+                    Upgrade Plan
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Workspace Name */}
@@ -111,7 +222,12 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWork
             <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" loading={isSubmitting}>
+            <Button 
+              type="submit" 
+              variant="primary" 
+              loading={isSubmitting}
+              disabled={showLimitError || isSubmitting}
+            >
               Create Workspace
             </Button>
           </div>
