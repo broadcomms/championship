@@ -50,6 +50,57 @@ export default class extends Service<Env> {
       throw new Error('Description must not exceed 1000 characters');
     }
 
+    // PHASE 1: Check workspace limits to prevent revenue leakage
+    // Get user's current workspace count and their plan limits
+    const currentWorkspaceCount = await db
+      .selectFrom('workspace_members')
+      .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
+      .select(db.fn.count('workspaces.id').as('count'))
+      .where('workspace_members.user_id', '=', input.userId)
+      .where('workspace_members.role', '=', 'owner')
+      .executeTakeFirst();
+
+    const workspaceCount = Number(currentWorkspaceCount?.count || 0);
+
+    // Get user's highest plan's workspace limit
+    const userPlanLimit = await db
+      .selectFrom('subscriptions')
+      .innerJoin('subscription_plans', 'subscription_plans.id', 'subscriptions.plan_id')
+      .innerJoin('workspaces', 'workspaces.id', 'subscriptions.workspace_id')
+      .innerJoin('workspace_members', 'workspace_members.workspace_id', 'workspaces.id')
+      .select(['subscription_plans.max_workspaces', 'subscription_plans.name'])
+      .where('workspace_members.user_id', '=', input.userId)
+      .where('workspace_members.role', '=', 'owner')
+      .where('subscriptions.status', '=', 'active')
+      .orderBy('subscription_plans.max_workspaces', 'desc')
+      .executeTakeFirst();
+
+    // Default to free plan limits if no active subscription
+    const maxWorkspaces = userPlanLimit?.max_workspaces ?? 3;
+    const planName = userPlanLimit?.name ?? 'free';
+
+    // Enforce workspace limit (-1 means unlimited)
+    if (maxWorkspaces !== -1 && workspaceCount >= maxWorkspaces) {
+      this.env.logger.warn('Workspace creation blocked - limit reached', {
+        userId: input.userId,
+        currentCount: workspaceCount,
+        maxAllowed: maxWorkspaces,
+        plan: planName,
+      });
+
+      throw new Error(
+        `Workspace limit reached. Your ${planName} plan allows ${maxWorkspaces} workspace${maxWorkspaces !== 1 ? 's' : ''}. ` +
+        `You currently have ${workspaceCount}. Please upgrade your plan to create more workspaces.`
+      );
+    }
+
+    this.env.logger.info('Creating workspace within limits', {
+      userId: input.userId,
+      currentCount: workspaceCount,
+      maxAllowed: maxWorkspaces,
+      plan: planName,
+    });
+
     // Generate workspace ID
     const workspaceId = `wks_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const now = Date.now();
@@ -78,6 +129,22 @@ export default class extends Service<Env> {
         added_by: input.userId,
       })
       .execute();
+
+    // Update user's workspace_count
+    await db
+      .updateTable('users')
+      .set({
+        workspace_count: workspaceCount + 1,
+        updated_at: now,
+      })
+      .where('id', '=', input.userId)
+      .execute();
+
+    this.env.logger.info('Workspace created successfully', {
+      workspaceId,
+      userId: input.userId,
+      newWorkspaceCount: workspaceCount + 1,
+    });
 
     return {
       id: workspaceId,
@@ -264,6 +331,21 @@ export default class extends Service<Env> {
 
     // Delete workspace (cascade will handle members and documents)
     await db.deleteFrom('workspaces').where('id', '=', workspaceId).execute();
+
+    // Decrement user's workspace_count
+    await db
+      .updateTable('users')
+      .set({
+        workspace_count: db.raw('GREATEST(workspace_count - 1, 0)'), // Prevent negative counts
+        updated_at: Date.now(),
+      })
+      .where('id', '=', userId)
+      .execute();
+
+    this.env.logger.info('Workspace deleted and count updated', {
+      workspaceId,
+      userId,
+    });
 
     return { success: true };
   }

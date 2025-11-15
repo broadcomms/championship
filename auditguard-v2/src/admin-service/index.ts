@@ -452,7 +452,7 @@ export default class extends Service<Env> {
   }
 
   /**
-   * Phase 1: Execute SQL query (READ-ONLY for safety)
+   * Phase 1: Execute SQL query (supports DML and DDL for admin migrations)
    */
   async executeQuery(
     adminUserId: string,
@@ -471,22 +471,43 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
-    // Security: Allow SELECT, INSERT, UPDATE, DELETE for admin operations
+    // Security: Allow DML (SELECT, INSERT, UPDATE, DELETE) and DDL (CREATE, ALTER, DROP) for admin operations
     const normalizedSql = sql.trim().toLowerCase();
-    const allowedCommands = ['select', 'insert', 'update', 'delete'];
+    const allowedCommands = [
+      'select', 'insert', 'update', 'delete',  // DML commands
+      'create', 'alter', 'drop',                // DDL commands for migrations
+    ];
     const startsWithAllowed = allowedCommands.some(cmd => normalizedSql.startsWith(cmd));
     
     if (!startsWithAllowed) {
-      throw new Error('Only SELECT, INSERT, UPDATE, DELETE queries are allowed.');
+      throw new Error('Only SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP queries are allowed for admin.');
     }
 
-    // Block dangerous SQL commands (use word boundaries to avoid matching column names)
-    const dangerousKeywords = ['\\bdrop\\b', '\\balter\\b', '\\bcreate\\b', '\\bpragma\\b', '\\btruncate\\b', '\\bexec\\b', '\\battach\\b', '\\bdetach\\b'];
+    // Block only extremely dangerous SQL commands that could compromise the database
+    const dangerousKeywords = [
+      '\\bpragma\\b',      // Can change database settings
+      '\\bexec\\b',        // Can execute arbitrary code
+      '\\battach\\b',      // Can attach other databases
+      '\\bdetach\\b',      // Can detach databases
+      '\\btruncate\\b',    // Too destructive without WHERE clause
+    ];
     for (const keyword of dangerousKeywords) {
       const regex = new RegExp(keyword, 'i');
       if (regex.test(normalizedSql)) {
-        throw new Error(`SQL command "${keyword.replace(/\\b/g, '')}" is not allowed`);
+        throw new Error(`SQL command "${keyword.replace(/\\b/g, '')}" is not allowed for security reasons`);
       }
+    }
+
+    // Special validation for DROP commands - require explicit table name (no wildcards)
+    if (normalizedSql.startsWith('drop')) {
+      if (normalizedSql.includes('*') || normalizedSql.includes('%')) {
+        throw new Error('DROP commands with wildcards are not allowed');
+      }
+      // Log warning for DROP operations
+      this.env.logger.warn('DROP command executed by admin', {
+        adminUserId,
+        sql: sql.substring(0, 200),
+      });
     }
 
     // Enforce row limit only for SELECT queries
