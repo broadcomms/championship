@@ -34,7 +34,23 @@ export function InvoiceList({ workspaceId }: InvoiceListProps) {
     try {
       setLoading(true);
       const data = await api.get(`/api/workspaces/${workspaceId}/billing-history`);
-      setInvoices(data.invoices || []);
+      
+      // Map backend billing history to frontend invoice format
+      const mappedInvoices = (data.history || []).map((item: any) => ({
+        id: item.id,
+        number: item.invoiceId || item.id,
+        status: item.status || 'paid',
+        amountDue: item.amount,
+        amountPaid: item.amount,
+        currency: item.currency,
+        created: Math.floor(item.createdAt / 1000), // Convert to seconds
+        dueDate: null,
+        hostedInvoiceUrl: null,
+        invoicePdf: item.invoicePdf,
+        description: item.description,
+      }));
+      
+      setInvoices(mappedInvoices);
       setError(null);
     } catch (err) {
       setError('Failed to load billing history');

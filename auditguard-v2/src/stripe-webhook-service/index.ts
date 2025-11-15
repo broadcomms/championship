@@ -345,7 +345,7 @@ export default class extends Service<Env> {
         workspace_id: customer.workspace_id,
         stripe_invoice_id: invoice.id,
         stripe_charge_id: (invoice as any).charge as string | null,
-        amount: invoice.amount_paid,
+        amount: invoice.total, // Use total instead of amount_paid (handles paid_out_of_band invoices)
         currency: invoice.currency,
         status: 'paid',
         description: invoice.description || 'Subscription payment',
