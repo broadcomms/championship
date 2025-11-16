@@ -197,6 +197,146 @@ export default class extends Service<Env> {
     return { limits, overLimit };
   }
 
+  /**
+   * Phase 4.2: Get workspace limits with formatted data for LimitWarningBanner
+   */
+  async getWorkspaceLimits(workspaceId: string, userId: string): Promise<{
+    limits: {
+      documents: { used: number; limit: number };
+      compliance_checks: { used: number; limit: number };
+      ai_messages: { used: number; limit: number };
+      storage_bytes: { used: number; limit: number };
+      team_members: { used: number; limit: number };
+    };
+  }> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied');
+    }
+
+    // Get limit checks from billing service
+    const [docLimit, checkLimit, messageLimit] = await Promise.all([
+      this.env.BILLING_SERVICE.checkLimit(workspaceId, 'documents'),
+      this.env.BILLING_SERVICE.checkLimit(workspaceId, 'compliance_checks'),
+      this.env.BILLING_SERVICE.checkLimit(workspaceId, 'assistant_messages'),
+    ]);
+
+    // Get team member count
+    const teamCount = await db
+      .selectFrom('workspace_members')
+      .select(({ fn }) => fn.countAll().as('count'))
+      .where('workspace_id', '=', workspaceId)
+      .executeTakeFirst();
+
+    // Get storage usage (sum of document sizes)
+    const storageResult = await db
+      .selectFrom('documents')
+      .select(({ fn }) => fn.sum<number>('file_size').as('total'))
+      .where('workspace_id', '=', workspaceId)
+      .executeTakeFirst();
+
+    // Get workspace subscription to determine limits
+    const workspace = await db
+      .selectFrom('workspaces')
+      .select(['id', 'organization_id'])
+      .where('id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!workspace) {
+      throw new Error('Workspace not found');
+    }
+
+    if (!workspace.organization_id) {
+      // No organization, use free plan defaults
+      const defaults = {
+        documents: 10,
+        compliance_checks: 20,
+        api_calls: 1000,
+        assistant_messages: 50,
+        storage_mb: 100,
+        team_members: 3,
+      };
+
+      return {
+        limits: {
+          documents: {
+            used: docLimit.current,
+            limit: defaults.documents,
+          },
+          compliance_checks: {
+            used: checkLimit.current,
+            limit: defaults.compliance_checks,
+          },
+          ai_messages: {
+            used: messageLimit.current,
+            limit: defaults.assistant_messages,
+          },
+          storage_bytes: {
+            used: Number(storageResult?.total || 0),
+            limit: defaults.storage_mb * 1024 * 1024,
+          },
+          team_members: {
+            used: Number(teamCount?.count || 0),
+            limit: defaults.team_members,
+          },
+        },
+      };
+    }
+
+    // Get subscription limits
+    const subscriptionData = await db
+      .selectFrom('subscriptions')
+      .innerJoin('subscription_plans', 'subscriptions.plan_id', 'subscription_plans.id')
+      .select(['subscription_plans.limits'])
+      .where('subscriptions.organization_id', '=', workspace.organization_id)
+      .executeTakeFirst();
+
+    const defaults = {
+      documents: 10,
+      compliance_checks: 20,
+      api_calls: 1000,
+      assistant_messages: 50,
+      storage_mb: 100,
+      team_members: 3,
+    };
+
+    const limits = subscriptionData ? JSON.parse(subscriptionData.limits) : defaults;
+
+    return {
+      limits: {
+        documents: {
+          used: docLimit.current,
+          limit: limits.documents,
+        },
+        compliance_checks: {
+          used: checkLimit.current,
+          limit: limits.compliance_checks,
+        },
+        ai_messages: {
+          used: messageLimit.current,
+          limit: limits.assistant_messages,
+        },
+        storage_bytes: {
+          used: Number(storageResult?.total || 0),
+          limit: limits.storage_mb * 1024 * 1024,
+        },
+        team_members: {
+          used: Number(teamCount?.count || 0),
+          limit: limits.team_members,
+        },
+      },
+    };
+  }
+
   async getWorkspaceStats(workspaceId: string, userId: string): Promise<{
     totalDocuments: number;
     totalChecks: number;

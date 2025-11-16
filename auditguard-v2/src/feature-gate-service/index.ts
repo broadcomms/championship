@@ -3,6 +3,7 @@
  * Provides feature access validation for workspace subscriptions
  */
 
+import { Service } from '@liquidmetal-ai/raindrop-framework';
 import type { Env } from './raindrop.gen';
 import { hasFeature, getRequiredPlan, getPlanFeatures, FEATURE_METADATA, type FeatureId, type PlanId } from '../common/feature-gates';
 
@@ -32,8 +33,8 @@ interface PlanFeaturesResponse {
   is_trial: boolean;
 }
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+export default class extends Service<Env> {
+  async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -53,14 +54,14 @@ export default {
       // Check if workspace has access to a specific feature
       if (path === '/check-feature' && request.method === 'POST') {
         const body = await request.json() as FeatureCheckRequest;
-        const result = await checkFeatureAccess(env, body.workspace_id, body.feature_id);
+        const result = await this.checkFeatureAccess(body.workspace_id, body.feature_id);
         return new Response(JSON.stringify(result), { headers: corsHeaders });
       }
 
       // Get all features available to a workspace
       if (path === '/plan-features' && request.method === 'POST') {
         const body = await request.json() as PlanFeaturesRequest;
-        const result = await getPlanFeaturesForWorkspace(env, body.workspace_id);
+        const result = await this.getPlanFeaturesForWorkspace(body.workspace_id);
         return new Response(JSON.stringify(result), { headers: corsHeaders });
       }
 
@@ -75,95 +76,93 @@ export default {
         { status: 500, headers: corsHeaders }
       );
     }
-  },
-};
+  }
 
-/**
- * Check if workspace has access to a specific feature
- */
-async function checkFeatureAccess(
-  env: Env,
-  workspaceId: string,
-  featureId: FeatureId
-): Promise<FeatureCheckResponse> {
-  // Get workspace subscription
-  const subscription = await env.AUDITGUARD_DB.prepare(
-    `SELECT plan_id, status, trial_end 
-     FROM subscriptions 
-     WHERE workspace_id = ? 
-     ORDER BY created_at DESC 
-     LIMIT 1`
-  )
-    .bind(workspaceId)
-    .first<{ plan_id: PlanId; status: string; trial_end: number | null }>();
+  /**
+   * Check if workspace has access to a specific feature
+   */
+  private async checkFeatureAccess(
+    workspaceId: string,
+    featureId: FeatureId
+  ): Promise<FeatureCheckResponse> {
+    // Get workspace subscription
+    const subscription = await this.env.AUDITGUARD_DB.prepare(
+      `SELECT plan_id, status, trial_end 
+       FROM subscriptions 
+       WHERE workspace_id = ? 
+       ORDER BY created_at DESC 
+       LIMIT 1`
+    )
+      .bind(workspaceId)
+      .first<{ plan_id: PlanId; status: string; trial_end: number | null }>();
 
-  if (!subscription) {
-    return {
-      has_access: false,
-      plan_id: 'plan_free',
-      status: 'none',
-      message: 'No subscription found',
+    if (!subscription) {
+      return {
+        has_access: false,
+        plan_id: 'plan_free',
+        status: 'none',
+        message: 'No subscription found',
+      };
+    }
+
+    const hasAccess = hasFeature(subscription.plan_id, featureId);
+    const requiredPlan = getRequiredPlan(featureId);
+
+    const response: FeatureCheckResponse = {
+      has_access: hasAccess,
+      plan_id: subscription.plan_id,
+      status: subscription.status,
     };
+
+    if (!hasAccess) {
+      response.required_plan = requiredPlan;
+      response.message = `Feature requires ${requiredPlan} or higher`;
+    }
+
+    if (subscription.trial_end) {
+      response.trial_end = subscription.trial_end;
+    }
+
+    return response;
   }
 
-  const hasAccess = hasFeature(subscription.plan_id, featureId);
-  const requiredPlan = getRequiredPlan(featureId);
+  /**
+   * Get all features available to a workspace
+   */
+  private async getPlanFeaturesForWorkspace(
+    workspaceId: string
+  ): Promise<PlanFeaturesResponse> {
+    // Get workspace subscription
+    const subscription = await this.env.AUDITGUARD_DB.prepare(
+      `SELECT plan_id, status, trial_end 
+       FROM subscriptions 
+       WHERE workspace_id = ? 
+       ORDER BY created_at DESC 
+       LIMIT 1`
+    )
+      .bind(workspaceId)
+      .first<{ plan_id: PlanId; status: string; trial_end: number | null }>();
 
-  const response: FeatureCheckResponse = {
-    has_access: hasAccess,
-    plan_id: subscription.plan_id,
-    status: subscription.status,
-  };
+    if (!subscription) {
+      return {
+        plan_id: 'plan_free',
+        status: 'none',
+        features: getPlanFeatures('plan_free'),
+        is_trial: false,
+      };
+    }
 
-  if (!hasAccess) {
-    response.required_plan = requiredPlan;
-    response.message = `Feature requires ${requiredPlan} or higher`;
-  }
-
-  if (subscription.trial_end) {
-    response.trial_end = subscription.trial_end;
-  }
-
-  return response;
-}
-
-/**
- * Get all features available to a workspace
- */
-async function getPlanFeaturesForWorkspace(
-  env: Env,
-  workspaceId: string
-): Promise<PlanFeaturesResponse> {
-  // Get workspace subscription
-  const subscription = await env.AUDITGUARD_DB.prepare(
-    `SELECT plan_id, status, trial_end 
-     FROM subscriptions 
-     WHERE workspace_id = ? 
-     ORDER BY created_at DESC 
-     LIMIT 1`
-  )
-    .bind(workspaceId)
-    .first<{ plan_id: PlanId; status: string; trial_end: number | null }>();
-
-  if (!subscription) {
-    return {
-      plan_id: 'plan_free',
-      status: 'none',
-      features: getPlanFeatures('plan_free'),
-      is_trial: false,
+    const response: PlanFeaturesResponse = {
+      plan_id: subscription.plan_id,
+      status: subscription.status,
+      features: getPlanFeatures(subscription.plan_id),
+      is_trial: subscription.status === 'trialing',
     };
+
+    if (subscription.trial_end) {
+      response.trial_end = subscription.trial_end;
+    }
+
+    return response;
   }
-
-  const response: PlanFeaturesResponse = {
-    plan_id: subscription.plan_id,
-    status: subscription.status,
-    features: getPlanFeatures(subscription.plan_id),
-    is_trial: subscription.status === 'trialing',
-  };
-
-  if (subscription.trial_end) {
-    response.trial_end = subscription.trial_end;
-  }
-
-  return response;
 }
