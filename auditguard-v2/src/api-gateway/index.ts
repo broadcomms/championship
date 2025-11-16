@@ -2896,6 +2896,27 @@ export default class extends Service<Env> {
         });
       }
 
+      // GET /api/workspaces/:id/value-metrics
+      // Phase 4.3: Get ROI metrics and time savings for workspace
+      const valueMetricsMatch = path.match(/^\/api\/workspaces\/([^/]+)\/value-metrics$/);
+      if (valueMetricsMatch && request.method === 'GET') {
+        const workspaceId = valueMetricsMatch[1];
+        const user = await this.validateSession(request);
+
+        // TODO: Uncomment after raindrop.gen is generated
+        const result = await (this.env as any).VALUE_METRICS_SERVICE.fetch(
+          new Request(`http://internal/workspaces/${workspaceId}/value-metrics`, {
+            headers: request.headers,
+          }),
+          this.env
+        );
+        
+        const data = await result.json();
+        return new Response(JSON.stringify(data), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // ====== ADMIN ENDPOINTS ======
       // GET /api/admin/stats
       if (path === '/api/admin/stats' && request.method === 'GET') {
