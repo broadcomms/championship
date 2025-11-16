@@ -398,6 +398,68 @@ export default class extends Service<Env> {
         }
       }
 
+      // ====== EMAIL CONFIG DEBUG ENDPOINT (PUBLIC) ======
+      if (path === '/api/test/email-config' && request.method === 'GET') {
+        return new Response(JSON.stringify({
+          gateway_env: {
+            hasResendKey: !!this.env.RESEND_API_KEY,
+            resendKeyPrefix: this.env.RESEND_API_KEY?.substring(0, 10) + '...',
+            emailFrom: this.env.EMAIL_FROM
+          }
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // ====== EMAIL TEST ENDPOINT (PUBLIC) ======
+      if (path === '/api/test/email' && request.method === 'POST') {
+        try {
+          const body = await request.json() as { email: string };
+
+          if (!body.email) {
+            return new Response(JSON.stringify({ error: 'Email address required' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+
+          // Call email service directly - send test email
+          const result = await this.env.EMAIL_SERVICE.sendEmail({
+            to: body.email,
+            subject: 'AuditGuardX - Test Email',
+            html: `
+              <h1>Test Email</h1>
+              <p>This is a test email from AuditGuardX to verify the Resend API integration.</p>
+              <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+            `,
+            text: 'Test email from AuditGuardX - Resend API integration is working!'
+          });
+
+          return new Response(JSON.stringify({
+            success: result.success,
+            emailId: result.id,
+            error: result.error,
+            message: result.success ? 'Test email sent successfully! Check your inbox.' : 'Failed to send email',
+            debug: {
+              gatewayHasKey: !!this.env.RESEND_API_KEY,
+              gatewayKeyPrefix: this.env.RESEND_API_KEY?.substring(0, 10) + '...'
+            }
+          }), {
+            status: result.success ? 200 : 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        } catch (error) {
+          return new Response(JSON.stringify({
+            error: 'Failed to send test email',
+            details: error instanceof Error ? error.message : String(error)
+          }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
       // ====== AUTH ENDPOINTS ======
       if (path === '/api/auth/register' && request.method === 'POST') {
         // CRITICAL FIX: Safe JSON parsing with field validation

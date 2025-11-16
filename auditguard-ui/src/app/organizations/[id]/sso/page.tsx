@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { OrganizationNav } from '@/components/organizations/OrganizationNav';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { api } from '@/lib/api';
@@ -161,6 +162,7 @@ export default function OrganizationSSOPage() {
   if (isLoading) {
     return (
       <AppLayout>
+        <OrganizationNav />
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
@@ -173,18 +175,11 @@ export default function OrganizationSSOPage() {
 
   return (
     <AppLayout>
+      <OrganizationNav />
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.back()}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ←
-            </button>
-            <h1 className="text-3xl font-bold text-gray-900">SSO Configuration</h1>
-          </div>
+          <h1 className="text-3xl font-bold text-gray-900">SSO Configuration</h1>
           <p className="mt-2 text-sm text-gray-600">
             Configure Single Sign-On (SSO) for your organization using WorkOS
           </p>

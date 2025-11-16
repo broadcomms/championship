@@ -25,7 +25,72 @@ export interface SendEmailRequest {
 }
 
 export default class extends Service<Env> {
-  async fetch(_request: Request): Promise<Response> {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    // Config debug endpoint
+    if (url.pathname === '/config' && request.method === 'GET') {
+      return new Response(JSON.stringify({
+        hasApiKey: !!this.env.RESEND_API_KEY,
+        apiKeyPrefix: this.env.RESEND_API_KEY?.substring(0, 10) + '...',
+        apiKeyLength: this.env.RESEND_API_KEY?.length || 0,
+        emailFrom: this.env.EMAIL_FROM
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Test endpoint to verify Resend API integration
+    if (url.pathname === '/test' && request.method === 'POST') {
+      try {
+        const body = await request.json() as { email: string };
+
+        if (!body.email) {
+          return new Response(JSON.stringify({ error: 'Email address required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Send a simple test email
+        const result = await this.sendEmail({
+          to: body.email,
+          subject: 'AuditGuardX - Test Email',
+          html: `
+            <h1>Test Email</h1>
+            <p>This is a test email from AuditGuardX to verify the Resend API integration.</p>
+            <p><strong>API Key Status:</strong> ${this.env.RESEND_API_KEY ? 'Configured' : 'Missing'}</p>
+            <p><strong>Email From:</strong> ${this.env.EMAIL_FROM}</p>
+            <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+          `,
+          text: 'Test email from AuditGuardX - Resend API integration is working!'
+        });
+
+        return new Response(JSON.stringify({
+          success: result.success,
+          emailId: result.id,
+          error: result.error,
+          config: {
+            hasApiKey: !!this.env.RESEND_API_KEY,
+            apiKeyPrefix: this.env.RESEND_API_KEY?.substring(0, 8) + '...',
+            emailFrom: this.env.EMAIL_FROM
+          }
+        }), {
+          status: result.success ? 200 : 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          error: 'Failed to send test email',
+          details: String(error)
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     return new Response('Email Service - Private', { status: 501 });
   }
 
@@ -36,6 +101,16 @@ export default class extends Service<Env> {
     const { to, subject, html, text, replyTo } = params;
 
     try {
+      // Log API key status for debugging
+      this.env.logger.info('Attempting to send email', {
+        to,
+        subject,
+        hasApiKey: !!this.env.RESEND_API_KEY,
+        apiKeyPrefix: this.env.RESEND_API_KEY?.substring(0, 10) + '...',
+        apiKeyLength: this.env.RESEND_API_KEY?.length || 0,
+        emailFrom: this.env.EMAIL_FROM
+      });
+
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -54,7 +129,13 @@ export default class extends Service<Env> {
 
       if (!response.ok) {
         const error = await response.text();
-        this.env.logger.error('Failed to send email', { to, subject, error, status: response.status });
+        this.env.logger.error('Failed to send email', {
+          to,
+          subject,
+          error,
+          status: response.status,
+          apiKeyUsed: this.env.RESEND_API_KEY?.substring(0, 10) + '...'
+        });
         return { success: false, error };
       }
 

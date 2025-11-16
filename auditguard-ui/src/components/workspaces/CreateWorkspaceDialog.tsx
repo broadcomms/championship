@@ -93,7 +93,11 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWork
     setError('');
 
     try {
-      await api.post('/api/workspaces', data);
+      // Send organization_id along with workspace data
+      await api.post('/api/workspaces', {
+        ...data,
+        organization_id: selectedOrgId,
+      });
       reset();
       onSuccess();
       onClose();

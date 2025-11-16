@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { OrganizationNav } from '@/components/organizations/OrganizationNav';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
 import { OrganizationSettings } from '@/types/organization';
@@ -125,6 +126,7 @@ export default function OrganizationBillingPage() {
   if (isLoading) {
     return (
       <AppLayout>
+        <OrganizationNav />
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
@@ -138,16 +140,17 @@ export default function OrganizationBillingPage() {
   if (error && !organization) {
     return (
       <AppLayout>
+        <OrganizationNav />
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="rounded-md bg-red-50 p-4">
             <p className="text-sm text-red-800">{error}</p>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.back()}
+              onClick={() => router.push('/organizations')}
               className="mt-3"
             >
-              Go Back
+              Back to Organizations
             </Button>
           </div>
         </div>
@@ -157,18 +160,11 @@ export default function OrganizationBillingPage() {
 
   return (
     <AppLayout>
+      <OrganizationNav />
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <button
-              onClick={() => router.back()}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ←
-            </button>
-            <h1 className="text-3xl font-bold text-gray-900">Organization Billing</h1>
-          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Organization Billing</h1>
 
           {/* Plan Info Card */}
           <div className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white">

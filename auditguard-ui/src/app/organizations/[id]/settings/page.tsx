@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { OrganizationNav } from '@/components/organizations/OrganizationNav';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { api } from '@/lib/api';
@@ -99,6 +100,7 @@ export default function OrganizationSettingsPage() {
   if (isLoading) {
     return (
       <AppLayout>
+        <OrganizationNav />
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
@@ -112,16 +114,17 @@ export default function OrganizationSettingsPage() {
   if (error && !organization) {
     return (
       <AppLayout>
+        <OrganizationNav />
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="rounded-md bg-red-50 p-4">
             <p className="text-sm text-red-800">{error}</p>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push('/workspaces')}
+              onClick={() => router.push('/organizations')}
               className="mt-3"
             >
-              Back to Dashboard
+              Back to Organizations
             </Button>
           </div>
         </div>
@@ -131,18 +134,11 @@ export default function OrganizationSettingsPage() {
 
   return (
     <AppLayout>
+      <OrganizationNav />
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.back()}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ←
-            </button>
-            <h1 className="text-3xl font-bold text-gray-900">Organization Settings</h1>
-          </div>
+          <h1 className="text-3xl font-bold text-gray-900">Organization Settings</h1>
           <p className="mt-2 text-sm text-gray-600">
             Manage your organization's information and billing settings
           </p>

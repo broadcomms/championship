@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { Bell, Settings, LogOut, User, ShieldCheck, Shield } from 'lucide-react';
+import { Bell, Settings, LogOut, User, ShieldCheck, Shield, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function Navbar() {
@@ -123,6 +123,17 @@ export function Navbar() {
                       >
                         <User className="h-4 w-4" />
                         Your Workspaces
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          router.push('/organizations');
+                        }}
+                        className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <Building2 className="h-4 w-4" />
+                        Organizations
                       </button>
 
                       <button
