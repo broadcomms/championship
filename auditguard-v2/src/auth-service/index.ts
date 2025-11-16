@@ -107,33 +107,40 @@ export default class extends Service<Env> {
       })
       .execute();
 
-    // Create free plan subscription at ORGANIZATION level (not workspace level)
+    // PHASE 3: Create organization subscription with 14-day Professional trial
+    // Auto-activate Professional features for trial period
+    const TRIAL_DAYS = 14;
+    const trialEnd = now + (TRIAL_DAYS * 24 * 60 * 60 * 1000);
+    
     await db
       .insertInto('subscriptions')
       .values({
         id: `sub_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         organization_id: organizationId, // ORG-LEVEL subscription
-        plan_id: 'plan_free',
+        plan_id: 'plan_professional', // Start with Professional during trial
         stripe_customer_id: null,
         stripe_subscription_id: null,
         stripe_price_id: null,
-        status: 'active',
+        status: 'trialing', // Trialing status
         current_period_start: now,
-        current_period_end: now + (365 * 24 * 60 * 60 * 1000), // 1 year
+        current_period_end: trialEnd,
         cancel_at_period_end: 0,
-        trial_end: null,
-        trial_start: null,
+        trial_start: now, // PHASE 3: Track trial start
+        trial_end: trialEnd, // PHASE 3: 14 days from now
         canceled_at: null,
         created_at: now,
         updated_at: now,
       })
       .execute();
 
-    this.env.logger.info('User registered with personal organization', {
+    this.env.logger.info('User registered with personal organization and Professional trial', {
       userId,
       email: input.email,
       organizationId,
       organizationName: `${input.email}'s Organization`,
+      trialPlan: 'plan_professional',
+      trialDays: 14,
+      trialEnd: new Date(trialEnd).toISOString(),
     });
 
     return {

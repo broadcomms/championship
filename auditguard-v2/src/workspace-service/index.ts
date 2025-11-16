@@ -222,6 +222,7 @@ export default class extends Service<Env> {
     name: string;
     description: string | null;
     ownerId: string;
+    organization_id: string | null;
     role: string;
     createdAt: number;
     updatedAt: number;
@@ -231,7 +232,7 @@ export default class extends Service<Env> {
     // Get workspace details
     const workspace = await db
       .selectFrom('workspaces')
-      .select(['id', 'name', 'description', 'owner_id', 'created_at', 'updated_at'])
+      .select(['id', 'name', 'description', 'owner_id', 'organization_id', 'created_at', 'updated_at'])
       .where('id', '=', workspaceId)
       .executeTakeFirst();
 
@@ -256,6 +257,7 @@ export default class extends Service<Env> {
       name: workspace.name,
       description: workspace.description,
       ownerId: workspace.owner_id,
+      organization_id: workspace.organization_id,
       role: membership.role,
       createdAt: workspace.created_at,
       updatedAt: workspace.updated_at,

@@ -2813,6 +2813,48 @@ export default class extends Service<Env> {
         });
       }
 
+      // PHASE 3: GET /api/workspaces/:id/trial-status - Get trial status for organization
+      const trialStatusMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/trial-status$/);
+      if (trialStatusMatch && trialStatusMatch[1] && request.method === 'GET') {
+        const workspaceId = trialStatusMatch[1];
+        const user = await this.validateSession(request);
+
+        // Get workspace to find organization_id
+        const workspace = await this.env.WORKSPACE_SERVICE.getWorkspace(workspaceId, user.userId);
+        
+        if (!workspace || !workspace.organization_id) {
+          return new Response(JSON.stringify({ error: 'Workspace not found or not linked to organization' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.TRIAL_EXPIRY_SERVICE.getTrialStatus(workspace.organization_id);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // PHASE 4: POST /api/feature-gate/check - Check feature access for workspace
+      if (path === '/api/feature-gate/check' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+        const result = await this.env.FEATURE_GATE_SERVICE.fetch(request.clone());
+        return result;
+      }
+
+      // PHASE 4: POST /api/feature-gate/features - Get all features for workspace
+      if (path === '/api/feature-gate/features' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+        const body = await request.json();
+        const modifiedRequest = new Request(request.url.replace('/api/feature-gate/features', '/plan-features'), {
+          method: 'POST',
+          headers: request.headers,
+          body: JSON.stringify(body),
+        });
+        const result = await this.env.FEATURE_GATE_SERVICE.fetch(modifiedRequest);
+        return result;
+      }
+
       // ====== USAGE & LIMITS ENDPOINTS ======
       // Match /api/workspaces/:id/usage
       const usageMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/usage$/);
