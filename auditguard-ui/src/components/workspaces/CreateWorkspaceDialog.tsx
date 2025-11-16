@@ -7,7 +7,8 @@ import { z } from 'zod';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { api } from '@/lib/api';
-import { AlertTriangle, Info } from 'lucide-react';
+import { AlertTriangle, Info, Building2 } from 'lucide-react';
+import { OrganizationWithRole } from '@/types/organization';
 
 const createWorkspaceSchema = z.object({
   name: z.string().min(1, 'Workspace name is required').max(100, 'Name is too long'),
@@ -34,6 +35,9 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWork
   const [error, setError] = useState('');
   const [limits, setLimits] = useState<WorkspaceLimits | null>(null);
   const [isLoadingLimits, setIsLoadingLimits] = useState(false);
+  const [organizations, setOrganizations] = useState<OrganizationWithRole[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('');
+  const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
 
   const {
     register,
@@ -44,12 +48,32 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWork
     resolver: zodResolver(createWorkspaceSchema),
   });
 
-  // Fetch workspace limits when dialog opens
+  // Fetch organizations and workspace limits when dialog opens
   useEffect(() => {
     if (isOpen) {
+      fetchOrganizations();
       fetchWorkspaceLimits();
     }
   }, [isOpen]);
+
+  const fetchOrganizations = async () => {
+    setIsLoadingOrgs(true);
+    try {
+      const data = await api.get<OrganizationWithRole[]>('/api/organizations');
+      setOrganizations(data);
+
+      // Auto-select the first organization (or the owner organization if exists)
+      if (data.length > 0) {
+        const ownerOrg = data.find(org => org.role === 'owner');
+        setSelectedOrgId(ownerOrg?.id || data[0].id);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch organizations:', err);
+      setError('Failed to load organizations. Please try again.');
+    } finally {
+      setIsLoadingOrgs(false);
+    }
+  };
 
   const fetchWorkspaceLimits = async () => {
     setIsLoadingLimits(true);
@@ -184,6 +208,44 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWork
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Organization Selector */}
+          {isLoadingOrgs ? (
+            <div className="animate-pulse">
+              <div className="h-4 w-24 rounded bg-gray-300 mb-2"></div>
+              <div className="h-10 w-full rounded-md bg-gray-300"></div>
+            </div>
+          ) : organizations.length > 0 ? (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Organization
+              </label>
+              {organizations.length === 1 ? (
+                <div className="flex items-center gap-2 rounded-md border border-gray-300 bg-gray-50 px-3 py-2">
+                  <Building2 className="h-4 w-4 text-gray-500" />
+                  <span className="text-sm text-gray-900">{organizations[0].name}</span>
+                  <span className="ml-auto text-xs text-gray-500">
+                    {organizations[0].workspace_count} workspace{organizations[0].workspace_count !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              ) : (
+                <select
+                  value={selectedOrgId}
+                  onChange={(e) => setSelectedOrgId(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name} ({org.workspace_count} workspace{org.workspace_count !== 1 ? 's' : ''})
+                    </option>
+                  ))}
+                </select>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                This workspace will be created under the selected organization
+              </p>
+            </div>
+          ) : null}
+
           {/* Workspace Name */}
           <div>
             <Input

@@ -51,6 +51,20 @@ export type workspace_members = {
     added_by: string;
 };
 
+export type workspace_invitations = {
+    id: string;
+    workspace_id: string;
+    email: string;
+    role: string;
+    invited_by: string;
+    invitation_token: string;
+    status: string;
+    expires_at: number;
+    accepted_at: number | null;
+    accepted_by: string | null;
+    created_at: number;
+};
+
 export type workspaces = {
     id: string;
     name: string;
@@ -79,6 +93,17 @@ export type organization_members = {
     role: string;
     joined_at: number;
     invited_by: string | null;
+};
+
+export type sso_connections = {
+    id: string;
+    organization_id: string;
+    provider: string;
+    workos_organization_id: string;
+    workos_connection_id: string | null;
+    enabled: number;
+    created_at: number;
+    updated_at: number;
 };
 
 export type organization_usage_daily = {
@@ -418,9 +443,11 @@ export type DB = {
     sessions: sessions;
     users: users;
     workspace_members: workspace_members;
+    workspace_invitations: workspace_invitations;
     workspaces: workspaces;
     organizations: organizations;
     organization_members: organization_members;
+    sso_connections: sso_connections;
     organization_usage_daily: organization_usage_daily;
     compliance_checks: compliance_checks;
     compliance_frameworks: compliance_frameworks;

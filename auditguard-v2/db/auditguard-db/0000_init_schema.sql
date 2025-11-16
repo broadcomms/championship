@@ -50,6 +50,22 @@ CREATE INDEX idx_org_members_org ON organization_members(organization_id);
 CREATE INDEX idx_org_members_user ON organization_members(user_id);
 CREATE INDEX idx_org_members_role ON organization_members(organization_id, role);
 
+-- SSO connections table (WorkOS integration)
+CREATE TABLE sso_connections (
+    id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL UNIQUE,
+    provider TEXT NOT NULL CHECK(provider IN ('google', 'okta', 'azure', 'saml', 'generic-saml')),
+    workos_organization_id TEXT NOT NULL,
+    workos_connection_id TEXT,
+    enabled INTEGER DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_sso_connections_org ON sso_connections(organization_id);
+CREATE INDEX idx_sso_connections_workos_org ON sso_connections(workos_organization_id);
+
 -- Organization usage tracking (daily aggregation)
 CREATE TABLE organization_usage_daily (
     id TEXT PRIMARY KEY,
@@ -94,6 +110,29 @@ CREATE TABLE workspace_members (
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+-- Workspace invitations table
+CREATE TABLE workspace_invitations (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    email TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('admin', 'member', 'viewer')),
+    invited_by TEXT NOT NULL,
+    invitation_token TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'expired', 'cancelled')),
+    expires_at INTEGER NOT NULL,
+    accepted_at INTEGER,
+    accepted_by TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    FOREIGN KEY (invited_by) REFERENCES users(id),
+    FOREIGN KEY (accepted_by) REFERENCES users(id)
+);
+
+CREATE INDEX idx_workspace_invitations_workspace ON workspace_invitations(workspace_id);
+CREATE INDEX idx_workspace_invitations_email ON workspace_invitations(email);
+CREATE INDEX idx_workspace_invitations_token ON workspace_invitations(invitation_token);
+CREATE INDEX idx_workspace_invitations_status ON workspace_invitations(status);
 
 -- Documents table
 CREATE TABLE documents (

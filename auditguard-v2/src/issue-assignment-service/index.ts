@@ -110,6 +110,78 @@ export default class extends Service<Env> {
         notification_sent: 0,
       })
       .execute();
+
+    // Send email notification to assignee
+    try {
+      // Fetch assignee email
+      const assignee = await db
+        .selectFrom('users')
+        .select('email')
+        .where('id', '=', input.assignedTo)
+        .executeTakeFirst();
+
+      // Fetch assigner email for display name
+      const assigner = await db
+        .selectFrom('users')
+        .select('email')
+        .where('id', '=', input.assignedBy)
+        .executeTakeFirst();
+
+      // Fetch complete issue details
+      const issueDetails = await db
+        .selectFrom('compliance_issues')
+        .select(['title', 'severity', 'framework'])
+        .where('id', '=', input.issueId)
+        .executeTakeFirst();
+
+      // Fetch workspace name
+      const workspace = await db
+        .selectFrom('workspaces')
+        .select('name')
+        .where('id', '=', input.workspaceId)
+        .executeTakeFirst();
+
+      if (assignee && issueDetails && workspace) {
+        // Extract user names from emails
+        const assigneeName = assignee.email.split('@')[0];
+        const assignerName = assigner ? assigner.email.split('@')[0] : 'Team Member';
+
+        // Send email via queue
+        await this.env.EMAIL_NOTIFICATIONS_QUEUE.send({
+          type: 'issue_assignment',
+          to: assignee.email,
+          data: {
+            assigneeName,
+            assignerName,
+            issueTitle: issueDetails.title,
+            workspaceName: workspace.name,
+            severity: issueDetails.severity,
+            framework: issueDetails.framework || 'General',
+            issueUrl: `https://app.auditguardx.com/workspaces/${input.workspaceId}/issues/${input.issueId}`,
+            notes: input.notes || '',
+          },
+        });
+
+        // Update notification_sent flag
+        await db
+          .updateTable('issue_assignments')
+          .set({ notification_sent: 1 })
+          .where('id', '=', assignmentId)
+          .execute();
+
+        this.env.logger.info('Issue assignment email sent', {
+          assignmentId,
+          issueId: input.issueId,
+          assignedTo: assignee.email,
+        });
+      }
+    } catch (emailError) {
+      // Log error but don't fail the assignment
+      this.env.logger.error('Failed to send issue assignment email', {
+        error: emailError,
+        assignmentId,
+      });
+    }
   }
 
   /**

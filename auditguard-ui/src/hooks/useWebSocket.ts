@@ -15,7 +15,7 @@ export interface UseWebSocketOptions {
   onConnect?: () => void;
   onDisconnect?: () => void;
   reconnectAttempts?: number;
-  reconnectInterval?: number;
+  reconnectDelays?: number[]; // Exponential backoff delays in ms
 }
 
 export interface UseWebSocketReturn {
@@ -33,8 +33,8 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     onError,
     onConnect,
     onDisconnect,
-    reconnectAttempts = 5,
-    reconnectInterval = 3000,
+    reconnectAttempts = 3, // Match the number of backoff delays
+    reconnectDelays = [1000, 2000, 4000], // Exponential backoff: 1s, 2s, 4s
   } = options;
 
   const [status, setStatus] = useState<WebSocketStatus>('connecting');
@@ -117,14 +117,21 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         wsRef.current = null;
         onDisconnect?.();
 
-        // Attempt reconnection
+        // Attempt reconnection with exponential backoff
         if (reconnectCountRef.current < reconnectAttempts) {
+          const attemptIndex = reconnectCountRef.current;
+          const delay = reconnectDelays[attemptIndex] || reconnectDelays[reconnectDelays.length - 1];
           reconnectCountRef.current++;
-          console.log(`Reconnecting... (attempt ${reconnectCountRef.current}/${reconnectAttempts})`);
-          
+
+          console.log(
+            `Reconnecting in ${delay}ms... (attempt ${reconnectCountRef.current}/${reconnectAttempts})`
+          );
+
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();
-          }, reconnectInterval);
+          }, delay);
+        } else {
+          console.warn('Max reconnection attempts reached');
         }
       };
 
@@ -146,7 +153,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
       console.error('Failed to connect WebSocket:', error);
       setStatus('error');
     }
-  }, [getWebSocketUrl, onConnect, onMessage, onError, onDisconnect, reconnectAttempts, reconnectInterval]);
+  }, [getWebSocketUrl, onConnect, onMessage, onError, onDisconnect, reconnectAttempts, reconnectDelays]);
 
   // Manual reconnect
   const reconnect = useCallback(() => {

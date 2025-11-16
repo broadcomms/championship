@@ -71,6 +71,204 @@ export default class extends Service<Env> {
     };
   }
 
+  /**
+   * Get feature comparison matrix for all active plans
+   * Public endpoint - no authentication required
+   */
+  async getPlansComparison(): Promise<{
+    plans: Array<{
+      id: string;
+      name: string;
+      displayName: string;
+      priceMonthly: number;
+      priceYearly: number;
+      recommended: boolean;
+    }>;
+    features: Array<{
+      category: string;
+      features: Array<{
+        name: string;
+        description: string;
+        values: Record<string, string | boolean | number>;
+      }>;
+    }>;
+  }> {
+    const db = this.getDb();
+
+    const plans = await db
+      .selectFrom('subscription_plans')
+      .selectAll()
+      .where('is_active', '=', 1)
+      .orderBy('price_monthly', 'asc')
+      .execute();
+
+    // Parse plan data
+    const parsedPlans = plans.map((plan) => ({
+      id: plan.id,
+      name: plan.name,
+      displayName: plan.display_name,
+      priceMonthly: plan.price_monthly,
+      priceYearly: plan.price_yearly,
+      features: JSON.parse(plan.features) as string[],
+      limits: JSON.parse(plan.limits) as Record<string, number>,
+      recommended: plan.name === 'professional', // Professional is recommended
+    }));
+
+    // Build feature comparison matrix
+    const featureCategories = [
+      {
+        category: 'Workspaces & Collaboration',
+        features: [
+          {
+            name: 'Workspaces',
+            description: 'Number of workspaces you can create',
+            getValue: (limits: Record<string, number>) => {
+              const max = limits.max_workspaces || 0;
+              return max === -1 ? 'Unlimited' : max;
+            },
+          },
+          {
+            name: 'Team Members',
+            description: 'Team members per workspace',
+            getValue: (limits: Record<string, number>) => {
+              const max = limits.max_members_per_workspace || 0;
+              return max === -1 ? 'Unlimited' : max;
+            },
+          },
+        ],
+      },
+      {
+        category: 'Documents & Compliance',
+        features: [
+          {
+            name: 'Documents',
+            description: 'Total documents you can upload',
+            getValue: (limits: Record<string, number>) => {
+              const max = limits.max_documents || 0;
+              return max === -1 ? 'Unlimited' : max;
+            },
+          },
+          {
+            name: 'Compliance Checks',
+            description: 'Compliance checks per month',
+            getValue: (limits: Record<string, number>) => {
+              const max = limits.max_checks || 0;
+              return max === -1 ? 'Unlimited' : max;
+            },
+          },
+          {
+            name: 'Compliance Frameworks',
+            description: 'Number of frameworks available',
+            getValue: (limits: Record<string, number>) => {
+              const max = limits.max_frameworks || 0;
+              return max === -1 ? 'All' : max;
+            },
+          },
+          {
+            name: 'Storage',
+            description: 'Document storage capacity',
+            getValue: (limits: Record<string, number>) => {
+              const max = limits.max_storage_gb || 0;
+              return max === -1 ? 'Unlimited' : `${max} GB`;
+            },
+          },
+        ],
+      },
+      {
+        category: 'AI & Analysis',
+        features: [
+          {
+            name: 'AI Assistant Messages',
+            description: 'AI chat messages per month',
+            getValue: (limits: Record<string, number>) => {
+              const max = limits.max_ai_messages || 0;
+              return max === -1 ? 'Unlimited' : max;
+            },
+          },
+          {
+            name: 'AI-Powered Analysis',
+            description: 'AI-powered compliance analysis',
+            getValue: (features: string[]) => {
+              return features.includes('ai_analysis');
+            },
+          },
+          {
+            name: 'Advanced Analytics',
+            description: 'Detailed analytics and reporting',
+            getValue: (features: string[]) => {
+              return features.includes('advanced_analytics');
+            },
+          },
+        ],
+      },
+      {
+        category: 'Enterprise Features',
+        features: [
+          {
+            name: 'API Access',
+            description: 'Programmatic API access',
+            getValue: (features: string[]) => {
+              return features.includes('api_access');
+            },
+          },
+          {
+            name: 'SSO Integration',
+            description: 'Single Sign-On (SAML/OIDC)',
+            getValue: (features: string[]) => {
+              return features.includes('sso');
+            },
+          },
+          {
+            name: 'Priority Support',
+            description: 'Dedicated support channel',
+            getValue: (features: string[]) => {
+              return features.includes('priority_support');
+            },
+          },
+          {
+            name: 'Custom Integrations',
+            description: 'Custom integration development',
+            getValue: (features: string[]) => {
+              return features.includes('custom_integrations');
+            },
+          },
+        ],
+      },
+    ];
+
+    // Build the comparison matrix
+    const comparisonFeatures = featureCategories.map((category) => ({
+      category: category.category,
+      features: category.features.map((feature) => {
+        const values: Record<string, string | boolean | number> = {};
+
+        parsedPlans.forEach((plan) => {
+          // @ts-ignore - getValue can take either limits or features
+          const value = feature.getValue(feature.name.includes('AI') || feature.name.includes('API') || feature.name.includes('SSO') || feature.name.includes('Priority') || feature.name.includes('Custom') || feature.name.includes('Advanced') ? plan.features : plan.limits);
+          values[plan.id] = value;
+        });
+
+        return {
+          name: feature.name,
+          description: feature.description,
+          values,
+        };
+      }),
+    }));
+
+    return {
+      plans: parsedPlans.map((p) => ({
+        id: p.id,
+        name: p.name,
+        displayName: p.displayName,
+        priceMonthly: p.priceMonthly,
+        priceYearly: p.priceYearly,
+        recommended: p.recommended,
+      })),
+      features: comparisonFeatures,
+    };
+  }
+
   async getWorkspaceSubscription(workspaceId: string, userId: string): Promise<{
     subscription: {
       id: string;

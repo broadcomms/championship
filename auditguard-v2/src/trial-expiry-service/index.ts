@@ -26,9 +26,18 @@ export default class extends Service<Env> {
     // Find all subscriptions with expired trials that are still in trialing status
     const expiredTrials = await db
       .selectFrom('subscriptions')
-      .select(['id', 'organization_id', 'trial_end'])
-      .where('status', '=', 'trialing')
-      .where('trial_end', '<', now)
+      .innerJoin('organizations', 'organizations.id', 'subscriptions.organization_id')
+      .innerJoin('users', 'users.id', 'organizations.owner_user_id')
+      .select([
+        'subscriptions.id as subscription_id',
+        'subscriptions.organization_id',
+        'subscriptions.trial_end',
+        'organizations.name as organization_name',
+        'users.email as owner_email',
+        'users.id as user_id',
+      ])
+      .where('subscriptions.status', '=', 'trialing')
+      .where('subscriptions.trial_end', '<', now)
       .execute();
 
     if (expiredTrials.length === 0) {
@@ -48,19 +57,33 @@ export default class extends Service<Env> {
             status: 'active', // Change from trialing to active
             updated_at: now,
           })
-          .where('id', '=', trial.id)
+          .where('id', '=', trial.subscription_id)
           .execute();
 
         downgradedOrgs.push(trial.organization_id);
 
-        this.env.logger.info('Trial expired - downgraded to free plan', {
-          subscriptionId: trial.id,
+        // Get user's name from email (use first part before @)
+        const userName = trial.owner_email.split('@')[0];
+
+        // Send trial expired notification email (async via queue)
+        await this.env.EMAIL_NOTIFICATIONS_QUEUE.send({
+          type: 'trial_expired',
+          to: trial.owner_email,
+          data: {
+            userName,
+            organizationName: trial.organization_name,
+          },
+        });
+
+        this.env.logger.info('Trial expired - downgraded to free plan and sent email', {
+          subscriptionId: trial.subscription_id,
           organizationId: trial.organization_id,
+          ownerEmail: trial.owner_email,
           trialEnd: new Date(trial.trial_end || 0).toISOString(),
         });
       } catch (error) {
         this.env.logger.error('Failed to downgrade expired trial', {
-          subscriptionId: trial.id,
+          subscriptionId: trial.subscription_id,
           organizationId: trial.organization_id,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -76,6 +99,99 @@ export default class extends Service<Env> {
       expiredCount: expiredTrials.length,
       downgradedOrgs,
     };
+  }
+
+  /**
+   * Check for trials expiring soon and send warning emails
+   * Sends warnings at 7 days, 3 days, and 1 day before expiration
+   */
+  async checkTrialWarnings(): Promise<{ warningsCount: number }> {
+    const db = this.getDb();
+    const now = Date.now();
+
+    // Calculate time thresholds
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    const threeDays = 3 * 24 * 60 * 60 * 1000;
+    const oneDay = 1 * 24 * 60 * 60 * 1000;
+    const twoHours = 2 * 60 * 60 * 1000; // Buffer to avoid duplicate sends
+
+    // Find trials expiring in the next 7 days
+    const expiringTrials = await db
+      .selectFrom('subscriptions')
+      .innerJoin('organizations', 'organizations.id', 'subscriptions.organization_id')
+      .innerJoin('users', 'users.id', 'organizations.owner_user_id')
+      .select([
+        'subscriptions.id as subscription_id',
+        'subscriptions.organization_id',
+        'subscriptions.trial_end',
+        'organizations.name as organization_name',
+        'users.email as owner_email',
+      ])
+      .where('subscriptions.status', '=', 'trialing')
+      .where('subscriptions.trial_end', '>', now)
+      .where('subscriptions.trial_end', '<', now + sevenDays)
+      .execute();
+
+    let warningsCount = 0;
+
+    for (const trial of expiringTrials) {
+      if (!trial.trial_end) continue;
+
+      const timeUntilExpiry = trial.trial_end - now;
+      const daysRemaining = Math.ceil(timeUntilExpiry / (24 * 60 * 60 * 1000));
+
+      // Determine if we should send a warning
+      let shouldSend = false;
+      if (timeUntilExpiry <= oneDay + twoHours && timeUntilExpiry > oneDay - twoHours) {
+        // 1 day remaining (with 2-hour buffer)
+        shouldSend = true;
+      } else if (timeUntilExpiry <= threeDays + twoHours && timeUntilExpiry > threeDays - twoHours) {
+        // 3 days remaining
+        shouldSend = true;
+      } else if (timeUntilExpiry <= sevenDays + twoHours && timeUntilExpiry > sevenDays - twoHours) {
+        // 7 days remaining
+        shouldSend = true;
+      }
+
+      if (shouldSend) {
+        try {
+          const userName = trial.owner_email.split('@')[0];
+          const trialEndDate = new Date(trial.trial_end).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          });
+
+          // Send trial expiration warning email (async via queue)
+          await this.env.EMAIL_NOTIFICATIONS_QUEUE.send({
+            type: 'trial_expiration_warning',
+            to: trial.owner_email,
+            data: {
+              userName,
+              organizationName: trial.organization_name,
+              daysRemaining,
+              trialEndDate,
+            },
+          });
+
+          warningsCount++;
+
+          this.env.logger.info('Trial expiration warning sent', {
+            organizationId: trial.organization_id,
+            ownerEmail: trial.owner_email,
+            daysRemaining,
+            trialEnd: trialEndDate,
+          });
+        } catch (error) {
+          this.env.logger.error('Failed to send trial warning', {
+            organizationId: trial.organization_id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+
+    return { warningsCount };
   }
 
   /**
@@ -130,11 +246,16 @@ export default class extends Service<Env> {
     });
 
     try {
-      const result = await this.checkExpiredTrials();
-      
+      // Check for expired trials and downgrade them
+      const expiredResult = await this.checkExpiredTrials();
+
+      // Check for trials expiring soon and send warnings
+      const warningsResult = await this.checkTrialWarnings();
+
       this.env.logger.info('Trial expiry check completed', {
-        expiredCount: result.expiredCount,
-        downgradedCount: result.downgradedOrgs.length,
+        expiredCount: expiredResult.expiredCount,
+        downgradedCount: expiredResult.downgradedOrgs.length,
+        warningsCount: warningsResult.warningsCount,
       });
     } catch (error) {
       this.env.logger.error('Trial expiry check failed', {

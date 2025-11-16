@@ -693,4 +693,357 @@ export default class extends Service<Env> {
       isAtLimit,
     };
   }
+
+  /**
+   * Create a workspace invitation
+   */
+  async createInvitation(params: {
+    workspaceId: string;
+    email: string;
+    role: 'admin' | 'member' | 'viewer';
+    invitedBy: string;
+  }): Promise<{
+    id: string;
+    invitationToken: string;
+    expiresAt: number;
+  }> {
+    const db = this.getDb();
+    const { workspaceId, email, role, invitedBy } = params;
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new Error('Invalid email address');
+    }
+
+    // Check if workspace exists and get workspace details
+    const workspace = await db
+      .selectFrom('workspaces')
+      .select(['id', 'name', 'owner_id'])
+      .where('id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!workspace) {
+      throw new Error('Workspace not found');
+    }
+
+    // Check if inviter has permission (must be admin or owner)
+    const inviterMember = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', invitedBy)
+      .executeTakeFirst();
+
+    const isOwner = workspace.owner_id === invitedBy;
+    const isAdmin = inviterMember?.role === 'admin';
+
+    if (!isOwner && !isAdmin) {
+      throw new Error('Only workspace owners and admins can invite members');
+    }
+
+    // Check if user is already a member
+    const existingMember = await db
+      .selectFrom('workspace_members')
+      .innerJoin('users', 'users.id', 'workspace_members.user_id')
+      .select('workspace_members.user_id')
+      .where('workspace_members.workspace_id', '=', workspaceId)
+      .where('users.email', '=', email.toLowerCase())
+      .executeTakeFirst();
+
+    if (existingMember) {
+      throw new Error('User is already a member of this workspace');
+    }
+
+    // Check if there's a pending invitation for this email
+    const existingInvitation = await db
+      .selectFrom('workspace_invitations')
+      .select(['id', 'status'])
+      .where('workspace_id', '=', workspaceId)
+      .where('email', '=', email.toLowerCase())
+      .where('status', '=', 'pending')
+      .executeTakeFirst();
+
+    if (existingInvitation) {
+      throw new Error('An invitation has already been sent to this email');
+    }
+
+    // Generate invitation token (crypto-random)
+    const tokenBytes = new Uint8Array(32);
+    crypto.getRandomValues(tokenBytes);
+    const invitationToken = Array.from(tokenBytes, byte => byte.toString(16).padStart(2, '0')).join('');
+
+    // Create invitation (expires in 7 days)
+    const id = crypto.randomUUID();
+    const now = Date.now();
+    const expiresAt = now + (7 * 24 * 60 * 60 * 1000);
+
+    await db
+      .insertInto('workspace_invitations')
+      .values({
+        id,
+        workspace_id: workspaceId,
+        email: email.toLowerCase(),
+        role,
+        invited_by: invitedBy,
+        invitation_token: invitationToken,
+        status: 'pending',
+        expires_at: expiresAt,
+        accepted_at: null,
+        accepted_by: null,
+        created_at: now,
+      })
+      .execute();
+
+    this.env.logger.info('Workspace invitation created', {
+      invitationId: id,
+      workspaceId,
+      email,
+      role,
+      invitedBy,
+    });
+
+    return {
+      id,
+      invitationToken,
+      expiresAt,
+    };
+  }
+
+  /**
+   * Accept a workspace invitation
+   */
+  async acceptInvitation(params: {
+    invitationToken: string;
+    userId: string;
+  }): Promise<{
+    success: boolean;
+    workspaceId: string;
+    workspaceName: string;
+  }> {
+    const db = this.getDb();
+    const { invitationToken, userId } = params;
+    const now = Date.now();
+
+    // Find invitation by token
+    const invitation = await db
+      .selectFrom('workspace_invitations')
+      .innerJoin('workspaces', 'workspaces.id', 'workspace_invitations.workspace_id')
+      .select([
+        'workspace_invitations.id',
+        'workspace_invitations.workspace_id',
+        'workspace_invitations.email',
+        'workspace_invitations.role',
+        'workspace_invitations.status',
+        'workspace_invitations.expires_at',
+        'workspaces.name as workspace_name',
+      ])
+      .where('workspace_invitations.invitation_token', '=', invitationToken)
+      .executeTakeFirst();
+
+    if (!invitation) {
+      throw new Error('Invalid invitation token');
+    }
+
+    // Check if invitation is expired
+    if (invitation.expires_at < now) {
+      // Mark as expired
+      await db
+        .updateTable('workspace_invitations')
+        .set({ status: 'expired' })
+        .where('id', '=', invitation.id)
+        .execute();
+
+      throw new Error('This invitation has expired');
+    }
+
+    // Check if invitation is already used or cancelled
+    if (invitation.status !== 'pending') {
+      throw new Error(`This invitation has already been ${invitation.status}`);
+    }
+
+    // Verify user email matches invitation
+    const user = await db
+      .selectFrom('users')
+      .select('email')
+      .where('id', '=', userId)
+      .executeTakeFirst();
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+      throw new Error('This invitation was sent to a different email address');
+    }
+
+    // Check if user is already a member
+    const existingMember = await db
+      .selectFrom('workspace_members')
+      .select('user_id')
+      .where('workspace_id', '=', invitation.workspace_id)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (existingMember) {
+      // Mark invitation as accepted even though user is already a member
+      await db
+        .updateTable('workspace_invitations')
+        .set({
+          status: 'accepted',
+          accepted_at: now,
+          accepted_by: userId,
+        })
+        .where('id', '=', invitation.id)
+        .execute();
+
+      return {
+        success: true,
+        workspaceId: invitation.workspace_id,
+        workspaceName: invitation.workspace_name,
+      };
+    }
+
+    // Add user as workspace member
+    await db
+      .insertInto('workspace_members')
+      .values({
+        workspace_id: invitation.workspace_id,
+        user_id: userId,
+        role: invitation.role,
+        added_at: now,
+        added_by: invitation.id, // Use invitation ID as added_by to track invitation source
+      })
+      .execute();
+
+    // Mark invitation as accepted
+    await db
+      .updateTable('workspace_invitations')
+      .set({
+        status: 'accepted',
+        accepted_at: now,
+        accepted_by: userId,
+      })
+      .where('id', '=', invitation.id)
+      .execute();
+
+    this.env.logger.info('Workspace invitation accepted', {
+      invitationId: invitation.id,
+      workspaceId: invitation.workspace_id,
+      userId,
+      email: invitation.email,
+      role: invitation.role,
+    });
+
+    return {
+      success: true,
+      workspaceId: invitation.workspace_id,
+      workspaceName: invitation.workspace_name,
+    };
+  }
+
+  /**
+   * Cancel a workspace invitation
+   */
+  async cancelInvitation(params: {
+    invitationId: string;
+    cancelledBy: string;
+  }): Promise<{ success: boolean }> {
+    const db = this.getDb();
+    const { invitationId, cancelledBy } = params;
+
+    // Get invitation details
+    const invitation = await db
+      .selectFrom('workspace_invitations')
+      .innerJoin('workspaces', 'workspaces.id', 'workspace_invitations.workspace_id')
+      .select([
+        'workspace_invitations.workspace_id',
+        'workspace_invitations.status',
+        'workspaces.owner_id',
+      ])
+      .where('workspace_invitations.id', '=', invitationId)
+      .executeTakeFirst();
+
+    if (!invitation) {
+      throw new Error('Invitation not found');
+    }
+
+    // Check permission (must be admin, owner, or the person who sent the invitation)
+    const member = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', invitation.workspace_id)
+      .where('user_id', '=', cancelledBy)
+      .executeTakeFirst();
+
+    const isOwner = invitation.owner_id === cancelledBy;
+    const isAdmin = member?.role === 'admin';
+
+    if (!isOwner && !isAdmin) {
+      throw new Error('Only workspace owners and admins can cancel invitations');
+    }
+
+    // Can only cancel pending invitations
+    if (invitation.status !== 'pending') {
+      throw new Error(`Cannot cancel invitation with status: ${invitation.status}`);
+    }
+
+    // Cancel invitation
+    await db
+      .updateTable('workspace_invitations')
+      .set({ status: 'cancelled' })
+      .where('id', '=', invitationId)
+      .execute();
+
+    this.env.logger.info('Workspace invitation cancelled', {
+      invitationId,
+      cancelledBy,
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Get workspace invitations
+   */
+  async getWorkspaceInvitations(workspaceId: string): Promise<Array<{
+    id: string;
+    email: string;
+    role: string;
+    status: string;
+    invitedBy: string;
+    inviterName: string;
+    expiresAt: number;
+    createdAt: number;
+  }>> {
+    const db = this.getDb();
+
+    const invitations = await db
+      .selectFrom('workspace_invitations')
+      .innerJoin('users', 'users.id', 'workspace_invitations.invited_by')
+      .select([
+        'workspace_invitations.id',
+        'workspace_invitations.email',
+        'workspace_invitations.role',
+        'workspace_invitations.status',
+        'workspace_invitations.invited_by',
+        'workspace_invitations.expires_at',
+        'workspace_invitations.created_at',
+        'users.email as inviter_email',
+      ])
+      .where('workspace_invitations.workspace_id', '=', workspaceId)
+      .orderBy('workspace_invitations.created_at', 'desc')
+      .execute();
+
+    return invitations.map(inv => ({
+      id: inv.id,
+      email: inv.email,
+      role: inv.role,
+      status: inv.status,
+      invitedBy: inv.invited_by,
+      inviterName: inv.inviter_email.split('@')[0],
+      expiresAt: inv.expires_at,
+      createdAt: inv.created_at,
+    }));
+  }
 }

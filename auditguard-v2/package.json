@@ -36,6 +36,7 @@
     "@huggingface/transformers": "^3.7.6",
     "@liquidmetal-ai/raindrop-framework": "^0.10.0",
     "@modelcontextprotocol/sdk": "^1",
+    "@workos-inc/node": "^7.73.0",
     "bcryptjs": "^3.0.2",
     "kysely": "^0.27.2",
     "kysely-d1": "^0.3.0",

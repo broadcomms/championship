@@ -673,6 +673,17 @@ export default class extends Each<Body, Env> {
         status: 'completed',
       });
 
+      // Send document processed email notification
+      try {
+        await this.sendDocumentProcessedEmail(documentId, workspaceId, userId);
+      } catch (emailError) {
+        this.env.logger.error('Failed to send document processed email', {
+          documentId,
+          error: emailError instanceof Error ? emailError.message : String(emailError),
+        });
+        // Don't fail the processing if email fails
+      }
+
       // Acknowledge success - SmartBucket will continue indexing in background
       message.ack();
 
@@ -683,6 +694,23 @@ export default class extends Each<Body, Env> {
       });
 
       await this.env.DOCUMENT_SERVICE.updateProcessingStatus(documentId, 'failed');
+
+      // Send document processing failed email notification
+      try {
+        await this.sendDocumentProcessingFailedEmail(
+          documentId,
+          workspaceId,
+          userId,
+          error instanceof Error ? error.message : String(error)
+        );
+      } catch (emailError) {
+        this.env.logger.error('Failed to send document processing failed email', {
+          documentId,
+          error: emailError instanceof Error ? emailError.message : String(emailError),
+        });
+        // Don't fail further if email fails
+      }
+
       throw error;
     }
   }
@@ -1318,6 +1346,130 @@ export default class extends Each<Body, Env> {
         totalPending: 0,
         chunksQueued: 0,
       };
+    }
+  }
+
+  /**
+   * Send document processed email notification
+   */
+  private async sendDocumentProcessedEmail(
+    documentId: string,
+    workspaceId: string,
+    userId: string
+  ): Promise<void> {
+    try {
+      // Get document, workspace, and user information
+      const db = new (await import('kysely')).Kysely<any>({
+        dialect: new (await import('../common/kysely-d1')).D1Dialect({ database: this.env.AUDITGUARD_DB }),
+      });
+
+      const result = await db
+        .selectFrom('documents')
+        .innerJoin('workspaces', 'workspaces.id', 'documents.workspace_id')
+        .innerJoin('users', 'users.id', 'documents.uploaded_by')
+        .leftJoin('compliance_checks', 'compliance_checks.document_id', 'documents.id')
+        .select([
+          'documents.filename',
+          'workspaces.name as workspace_name',
+          'users.email as user_email',
+          db.fn.count('compliance_checks.id').as('issues_count'),
+        ])
+        .where('documents.id', '=', documentId)
+        .where('documents.uploaded_by', '=', userId)
+        .groupBy(['documents.id', 'documents.filename', 'workspaces.name', 'users.email'])
+        .executeTakeFirst();
+
+      if (!result) {
+        this.env.logger.warn('Could not find document information for email', { documentId });
+        return;
+      }
+
+      const userName = result.user_email.split('@')[0];
+      const issuesFound = Number(result.issues_count) || 0;
+
+      // Queue email notification
+      await this.env.EMAIL_NOTIFICATIONS_QUEUE.send({
+        type: 'document_processed',
+        to: result.user_email,
+        data: {
+          userName,
+          documentName: result.filename,
+          workspaceName: result.workspace_name,
+          issuesFound,
+          documentUrl: `https://auditguard.com/workspaces/${workspaceId}/documents/${documentId}`,
+        },
+      });
+
+      this.env.logger.info('Document processed email queued', {
+        documentId,
+        userEmail: result.user_email,
+      });
+    } catch (error) {
+      this.env.logger.error('Failed to send document processed email', {
+        documentId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Send document processing failed email notification
+   */
+  private async sendDocumentProcessingFailedEmail(
+    documentId: string,
+    workspaceId: string,
+    userId: string,
+    errorMessage: string
+  ): Promise<void> {
+    try {
+      // Get document, workspace, and user information
+      const db = new (await import('kysely')).Kysely<any>({
+        dialect: new (await import('../common/kysely-d1')).D1Dialect({ database: this.env.AUDITGUARD_DB }),
+      });
+
+      const result = await db
+        .selectFrom('documents')
+        .innerJoin('workspaces', 'workspaces.id', 'documents.workspace_id')
+        .innerJoin('users', 'users.id', 'documents.uploaded_by')
+        .select([
+          'documents.filename',
+          'workspaces.name as workspace_name',
+          'users.email as user_email',
+        ])
+        .where('documents.id', '=', documentId)
+        .where('documents.uploaded_by', '=', userId)
+        .executeTakeFirst();
+
+      if (!result) {
+        this.env.logger.warn('Could not find document information for failed email', { documentId });
+        return;
+      }
+
+      const userName = result.user_email.split('@')[0];
+
+      // Queue email notification
+      await this.env.EMAIL_NOTIFICATIONS_QUEUE.send({
+        type: 'document_processing_failed',
+        to: result.user_email,
+        data: {
+          userName,
+          documentName: result.filename,
+          workspaceName: result.workspace_name,
+          errorMessage,
+        },
+      });
+
+      this.env.logger.info('Document processing failed email queued', {
+        documentId,
+        userEmail: result.user_email,
+      });
+    } catch (error) {
+      this.env.logger.error('Failed to send document processing failed email', {
+        documentId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
   }
 }

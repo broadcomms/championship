@@ -6,6 +6,8 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
 import { WorkspaceWithRole } from '@/types/workspace';
+import { LimitWarningBanner } from '@/components/billing/LimitWarningBanner';
+import { ValueMetricsWidget } from '@/components/dashboard/ValueMetricsWidget';
 
 interface WorkspaceStats {
   documents: number;
@@ -130,6 +132,16 @@ export default function WorkspaceDashboardPage() {
               </Button>
             </div>
           </div>
+        </div>
+
+        {/* Phase 4.2: Limit Warning Banner */}
+        <div className="mb-6">
+          <LimitWarningBanner workspaceId={workspaceId} />
+        </div>
+
+        {/* Phase 4.3: Value Metrics Widget */}
+        <div className="mb-8">
+          <ValueMetricsWidget workspaceId={workspaceId} />
         </div>
 
         {/* Quick Stats */}

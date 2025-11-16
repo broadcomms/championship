@@ -143,6 +143,34 @@ export default class extends Service<Env> {
       trialEnd: new Date(trialEnd).toISOString(),
     });
 
+    // Send welcome email
+    try {
+      const userName = input.email.split('@')[0]; // Extract name from email
+      const trialEndDate = new Date(trialEnd).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+
+      await this.env.EMAIL_NOTIFICATIONS_QUEUE.send({
+        type: 'welcome',
+        to: input.email,
+        data: {
+          userName,
+          organizationName: `${input.email}'s Organization`,
+          trialEndDate,
+        },
+      });
+
+      this.env.logger.info('Welcome email queued', { email: input.email });
+    } catch (emailError) {
+      // Don't fail registration if email fails
+      this.env.logger.error('Failed to queue welcome email', {
+        error: emailError,
+        email: input.email,
+      });
+    }
+
     return {
       userId,
       email: input.email,
@@ -190,6 +218,33 @@ export default class extends Service<Env> {
       userId: user.id,
       email: user.email,
       sessionId,
+    };
+  }
+
+  /**
+   * Create a session for an existing user (used for SSO)
+   */
+  async createSession(userId: string): Promise<{ sessionId: string; expiresAt: number }> {
+    const db = this.getDb();
+
+    // Create session (expires in 7 days)
+    const sessionId = `ses_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const now = Date.now();
+    const expiresAt = now + (7 * 24 * 60 * 60 * 1000); // 7 days
+
+    await db
+      .insertInto('sessions')
+      .values({
+        id: sessionId,
+        user_id: userId,
+        expires_at: expiresAt,
+        created_at: now,
+      })
+      .execute();
+
+    return {
+      sessionId,
+      expiresAt,
     };
   }
 

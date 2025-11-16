@@ -482,6 +482,418 @@ export default class extends Service<Env> {
         });
       }
 
+      // ====== SSO ENDPOINTS ======
+      // Initiate SSO login flow
+      if (path === '/api/auth/sso/authorize' && request.method === 'GET') {
+        const url = new URL(request.url);
+        const organizationId = url.searchParams.get('organizationId');
+        const provider = url.searchParams.get('provider') as 'google' | 'okta' | 'azure' | 'saml' | 'generic-saml' | null;
+
+        if (!organizationId) {
+          return new Response(JSON.stringify({ error: 'organizationId is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        try {
+          const result = await this.env.SSO_SERVICE.getAuthorizationUrl({
+            organizationId,
+            provider: provider || undefined,
+          });
+
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        } catch (error) {
+          this.env.logger.error('SSO authorization URL generation failed', {
+            organizationId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return new Response(
+            JSON.stringify({ error: error instanceof Error ? error.message : 'SSO authorization failed' }),
+            {
+              status: 500,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
+      }
+
+      // Handle SSO callback
+      if (path === '/api/auth/sso/callback' && request.method === 'POST') {
+        const parseResult = await this.safeParseJSON<{ code: string }>(request, ['code']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        try {
+          // Handle SSO callback and get user info
+          const ssoResult = await this.env.SSO_SERVICE.handleSSOCallback({
+            code: body.code,
+          });
+
+          // Create session for the authenticated user
+          const sessionResult = await this.env.AUTH_SERVICE.createSession(ssoResult.userId);
+
+          const response = new Response(
+            JSON.stringify({
+              user: {
+                userId: ssoResult.userId,
+                email: ssoResult.email,
+                organizationId: ssoResult.organizationId,
+                firstName: ssoResult.firstName,
+                lastName: ssoResult.lastName,
+                isNewUser: ssoResult.isNewUser,
+              },
+              sessionId: sessionResult.sessionId,
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+
+          // Set session cookie
+          response.headers.set('Set-Cookie', `session=${sessionResult.sessionId}; Path=/; HttpOnly; Max-Age=604800`);
+          return response;
+        } catch (error) {
+          this.env.logger.error('SSO callback failed', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return new Response(
+            JSON.stringify({ error: error instanceof Error ? error.message : 'SSO authentication failed' }),
+            {
+              status: 500,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
+      }
+
+      // ====== ORGANIZATION ENDPOINTS ======
+      // Get user's organizations
+      if (path === '/api/organizations' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+        const result = await this.env.ORGANIZATION_SERVICE.getUserOrganizations(user.userId);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/organizations/:id/settings
+      const orgSettingsMatch = path.match(/^\/api\/organizations\/([^\/]+)\/settings$/);
+      if (orgSettingsMatch && orgSettingsMatch[1]) {
+        const organizationId = orgSettingsMatch[1];
+        const user = await this.validateSession(request);
+
+        if (request.method === 'GET') {
+          const result = await this.env.ORGANIZATION_SERVICE.getOrganizationSettings(
+            organizationId,
+            user.userId
+          );
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        if (request.method === 'PATCH') {
+          const parseResult = await this.safeParseJSON<{
+            name?: string;
+            slug?: string;
+            billing_email?: string;
+          }>(request);
+
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
+
+          const result = await this.env.ORGANIZATION_SERVICE.updateOrganizationSettings(
+            organizationId,
+            user.userId,
+            body
+          );
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // Match /api/organizations/:id/members
+      const orgMembersMatch = path.match(/^\/api\/organizations\/([^\/]+)\/members$/);
+      if (orgMembersMatch && orgMembersMatch[1]) {
+        const organizationId = orgMembersMatch[1];
+        const user = await this.validateSession(request);
+
+        if (request.method === 'GET') {
+          const result = await this.env.ORGANIZATION_SERVICE.getOrganizationMembers(
+            organizationId,
+            user.userId
+          );
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        if (request.method === 'POST') {
+          const parseResult = await this.safeParseJSON<{
+            email: string;
+            role: 'admin' | 'member' | 'billing';
+          }>(request, ['email', 'role']);
+
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
+
+          const result = await this.env.ORGANIZATION_SERVICE.addOrganizationMember(
+            organizationId,
+            user.userId,
+            body
+          );
+          return new Response(JSON.stringify(result), {
+            status: 201,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // Match /api/organizations/:id/members/:memberId
+      const orgMemberMatch = path.match(/^\/api\/organizations\/([^\/]+)\/members\/([^\/]+)$/);
+      if (orgMemberMatch && orgMemberMatch[1] && orgMemberMatch[2]) {
+        const organizationId = orgMemberMatch[1];
+        const memberId = orgMemberMatch[2];
+        const user = await this.validateSession(request);
+
+        if (request.method === 'PATCH') {
+          const parseResult = await this.safeParseJSON<{
+            role: 'admin' | 'member' | 'billing';
+          }>(request, ['role']);
+
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
+
+          const result = await this.env.ORGANIZATION_SERVICE.updateOrganizationMemberRole(
+            organizationId,
+            user.userId,
+            memberId,
+            body.role
+          );
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        if (request.method === 'DELETE') {
+          const result = await this.env.ORGANIZATION_SERVICE.removeOrganizationMember(
+            organizationId,
+            user.userId,
+            memberId
+          );
+          return new Response(JSON.stringify(result), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // Match /api/organizations/:id/usage
+      const orgUsageMatch = path.match(/^\/api\/organizations\/([^\/]+)\/usage$/);
+      if (orgUsageMatch && orgUsageMatch[1] && request.method === 'GET') {
+        const organizationId = orgUsageMatch[1];
+        const user = await this.validateSession(request);
+
+        // Get query parameter for period
+        const period = url.searchParams.get('period') as 'current' | 'last30days' | 'all-time' || 'current';
+
+        const result = await this.env.ORGANIZATION_SERVICE.getOrganizationUsage(
+          organizationId,
+          user.userId,
+          period
+        );
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/organizations/:id/usage/forecast
+      const orgForecastMatch = path.match(/^\/api\/organizations\/([^\/]+)\/usage\/forecast$/);
+      if (orgForecastMatch && orgForecastMatch[1] && request.method === 'GET') {
+        const organizationId = orgForecastMatch[1];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.ORGANIZATION_SERVICE.getOrganizationUsageForecast(
+          organizationId,
+          user.userId
+        );
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/organizations/:id/sso/config - SSO configuration endpoints
+      const ssoConfigMatch = path.match(/^\/api\/organizations\/([^\/]+)\/sso\/config$/);
+      if (ssoConfigMatch && ssoConfigMatch[1]) {
+        const organizationId = ssoConfigMatch[1];
+        const user = await this.validateSession(request);
+
+        // Get SSO configuration
+        if (request.method === 'GET') {
+          try {
+            const result = await this.env.SSO_SERVICE.getSSOConnection(organizationId);
+            if (!result) {
+              return new Response(JSON.stringify({ error: 'SSO not configured' }), {
+                status: 404,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              });
+            }
+            return new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          } catch (error) {
+            this.env.logger.error('Failed to get SSO config', {
+              organizationId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return new Response(
+              JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to get SSO configuration' }),
+              {
+                status: 500,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+        }
+
+        // Update SSO configuration (enable/disable)
+        if (request.method === 'POST' || request.method === 'PATCH') {
+          const parseResult = await this.safeParseJSON<{
+            enabled?: boolean;
+            provider?: 'google' | 'okta' | 'azure' | 'saml' | 'generic-saml';
+            workosOrganizationId?: string;
+            workosConnectionId?: string;
+          }>(request);
+
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
+
+          try {
+            // If creating a new connection
+            if (body.provider && body.workosOrganizationId) {
+              const result = await this.env.SSO_SERVICE.createSSOConnection({
+                organizationId,
+                provider: body.provider,
+                workosOrganizationId: body.workosOrganizationId,
+                workosConnectionId: body.workosConnectionId,
+              });
+              return new Response(JSON.stringify(result), {
+                status: 201,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              });
+            }
+
+            // If updating enabled status
+            if (body.enabled !== undefined) {
+              const result = await this.env.SSO_SERVICE.updateSSOConnection({
+                organizationId,
+                enabled: body.enabled,
+              });
+              return new Response(JSON.stringify(result), {
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              });
+            }
+
+            return new Response(
+              JSON.stringify({ error: 'Invalid request. Provide either provider & workosOrganizationId or enabled flag' }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          } catch (error) {
+            this.env.logger.error('Failed to update SSO config', {
+              organizationId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return new Response(
+              JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to update SSO configuration' }),
+              {
+                status: 500,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+        }
+
+        // Delete SSO configuration
+        if (request.method === 'DELETE') {
+          try {
+            const result = await this.env.SSO_SERVICE.deleteSSOConnection(organizationId);
+            return new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          } catch (error) {
+            this.env.logger.error('Failed to delete SSO config', {
+              organizationId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return new Response(
+              JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to delete SSO configuration' }),
+              {
+                status: 500,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+        }
+      }
+
+      // ====== PUBLIC PRICING ENDPOINTS (No Auth Required) ======
+      // Get all active subscription plans
+      if (path === '/api/plans' && request.method === 'GET') {
+        const result = await this.env.BILLING_SERVICE.getPlans();
+        return new Response(JSON.stringify(result), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+            ...corsHeaders
+          },
+        });
+      }
+
+      // Get feature comparison matrix
+      if (path === '/api/plans/compare' && request.method === 'GET') {
+        const result = await this.env.BILLING_SERVICE.getPlansComparison();
+        return new Response(JSON.stringify(result), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+            ...corsHeaders
+          },
+        });
+      }
+
       // ====== WORKSPACE ENDPOINTS ======
       if (path === '/api/workspaces' && request.method === 'POST') {
         const user = await this.validateSession(request);
@@ -634,6 +1046,119 @@ export default class extends Service<Env> {
           await this.env.WORKSPACE_SERVICE.removeMember(workspaceId, user.userId, targetUserId);
           return new Response(null, { status: 204 });
         }
+      }
+
+      // ====== WORKSPACE INVITATION ENDPOINTS ======
+      // POST /api/workspaces/:id/invitations - Create invitation
+      // GET /api/workspaces/:id/invitations - List invitations
+      // DELETE /api/workspaces/:id/invitations/:invitationId - Cancel invitation
+      const invitationsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/invitations$/);
+      if (invitationsMatch && invitationsMatch[1]) {
+        const workspaceId = invitationsMatch[1];
+        const user = await this.validateSession(request);
+
+        if (request.method === 'POST') {
+          // Create invitation
+          const parseResult = await this.safeParseJSON<{ email: string; role: 'admin' | 'member' | 'viewer' }>(
+            request,
+            ['email', 'role']
+          );
+          if (!parseResult.success) {
+            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+              status: (parseResult as any).status,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = parseResult.data;
+
+          const result = await this.env.WORKSPACE_SERVICE.createInvitation({
+            workspaceId,
+            email: body.email,
+            role: body.role,
+            invitedBy: user.userId,
+          });
+
+          // Get workspace and inviter information for email
+          const workspace = await this.env.WORKSPACE_SERVICE.getWorkspace(workspaceId, user.userId);
+          const inviterInfo = await this.env.AUTH_SERVICE.getUserById(user.userId);
+
+          // Send invitation email (async via queue)
+          try {
+            await this.env.EMAIL_NOTIFICATIONS_QUEUE.send({
+              type: 'workspace_invitation',
+              to: body.email,
+              data: {
+                inviterName: inviterInfo.email.split('@')[0],
+                workspaceName: workspace.name,
+                role: body.role,
+                invitationLink: `https://auditguard.com/accept-invitation?token=${result.invitationToken}`,
+              },
+            });
+          } catch (emailError) {
+            this.env.logger.error('Failed to queue invitation email', {
+              workspaceId,
+              email: body.email,
+              error: emailError instanceof Error ? emailError.message : String(emailError),
+            });
+            // Don't fail the invitation creation if email fails
+          }
+
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        if (request.method === 'GET') {
+          // List invitations
+          const result = await this.env.WORKSPACE_SERVICE.getWorkspaceInvitations(workspaceId);
+          return new Response(JSON.stringify({ invitations: result }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // DELETE /api/workspaces/:id/invitations/:invitationId - Cancel invitation
+      const invitationCancelMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/invitations\/([^\/]+)$/);
+      if (invitationCancelMatch && invitationCancelMatch[1] && invitationCancelMatch[2]) {
+        const workspaceId = invitationCancelMatch[1];
+        const invitationId = invitationCancelMatch[2];
+        const user = await this.validateSession(request);
+
+        if (request.method === 'DELETE') {
+          const result = await this.env.WORKSPACE_SERVICE.cancelInvitation({
+            invitationId,
+            cancelledBy: user.userId,
+          });
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // POST /api/accept-invitation - Accept invitation (public endpoint)
+      if (path === '/api/accept-invitation' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{ invitationToken: string }>(
+          request,
+          ['invitationToken']
+        );
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        const result = await this.env.WORKSPACE_SERVICE.acceptInvitation({
+          invitationToken: body.invitationToken,
+          userId: user.userId,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
       }
 
       // ====== DOCUMENT ENDPOINTS ======
