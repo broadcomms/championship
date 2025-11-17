@@ -43,8 +43,15 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await registerUser(data.email, data.password, data.name);
-      router.push('/workspaces');
+      const userData = await registerUser(data.email, data.password, data.name);
+      // Redirect to account dashboard as per blueprint
+      const accountId = userData?.userId;
+      if (accountId) {
+        router.push(`/account/${accountId}`);
+      } else {
+        // Fallback to organizations if account ID not available
+        router.push('/organizations');
+      }
     } catch (err) {
       const error = err as ErrorResponse;
       setError(error.error || 'Registration failed. Please try again.');

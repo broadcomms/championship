@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
-export default function SSOCallbackPage() {
+function SSOCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +37,14 @@ export default function SSOCallbackPage() {
       });
 
       // Session cookie is set automatically by the backend
-      // Redirect to workspaces
-      router.push('/workspaces');
+      // Redirect to account dashboard as per blueprint
+      const accountId = response.user?.userId;
+      if (accountId) {
+        router.push(`/account/${accountId}`);
+      } else {
+        // Fallback to organizations if account ID not available
+        router.push('/organizations');
+      }
     } catch (err: any) {
       setError(err.error || 'SSO authentication failed. Please try again.');
     }
@@ -80,5 +86,24 @@ export default function SSOCallbackPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function SSOCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12">
+          <div className="text-center">
+            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+            <h2 className="mt-4 text-lg font-semibold text-gray-900">
+              Loading...
+            </h2>
+          </div>
+        </div>
+      }
+    >
+      <SSOCallbackContent />
+    </Suspense>
   );
 }

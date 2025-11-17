@@ -54,8 +54,15 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(data.email, data.password);
-      router.push('/workspaces');
+      const userData = await login(data.email, data.password);
+      // Redirect to account dashboard as per blueprint
+      const accountId = userData?.userId;
+      if (accountId) {
+        router.push(`/account/${accountId}`);
+      } else {
+        // Fallback to organizations if account ID not available
+        router.push('/organizations');
+      }
     } catch (err) {
       const error = err as ErrorResponse;
       setError(error.error || 'Login failed. Please check your credentials.');

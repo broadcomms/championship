@@ -4,15 +4,15 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { Bell, Settings, LogOut, User, ShieldCheck, Shield, Building2 } from 'lucide-react';
+import { Settings, LogOut, User, ShieldCheck, Shield, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 export function Navbar() {
   const { user, logout } = useAuth();
   const { currentWorkspace } = useWorkspace();
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [notificationCount] = useState(3); // TODO: Replace with actual notification count
 
   const handleLogout = async () => {
     await logout();
@@ -59,17 +59,7 @@ export function Navbar() {
           {/* Right side - notifications, user menu */}
           <div className="flex items-center gap-3">
             {/* Notifications */}
-            <button
-              className="relative rounded-lg p-2 text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              aria-label={`Notifications ${notificationCount > 0 ? `(${notificationCount} unread)` : ''}`}
-            >
-              <Bell className="h-5 w-5" />
-              {notificationCount > 0 && (
-                <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {notificationCount}
-                </span>
-              )}
-            </button>
+            <NotificationBell />
 
             {/* User email (hidden on small screens) */}
             <div className="hidden text-sm sm:block">

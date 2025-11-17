@@ -1,6 +1,6 @@
 import { Service } from '@liquidmetal-ai/raindrop-framework';
 import { Env } from './raindrop.gen';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 
@@ -643,6 +643,196 @@ export default class extends Service<Env> {
         const user = await this.validateSession(request);
         const result = await this.env.ORGANIZATION_SERVICE.getUserOrganizations(user.userId);
         return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/organizations/:id (get single organization)
+      const orgMatch = path.match(/^\/api\/organizations\/([^\/]+)$/);
+      if (orgMatch && orgMatch[1] && request.method === 'GET') {
+        const organizationId = orgMatch[1];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.ORGANIZATION_SERVICE.getOrganizationSettings(
+          organizationId,
+          user.userId
+        );
+        return new Response(JSON.stringify({ data: result }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/organizations/:id/workspaces (get workspaces for organization)
+      const orgWorkspacesMatch = path.match(/^\/api\/organizations\/([^\/]+)\/workspaces$/);
+      if (orgWorkspacesMatch && orgWorkspacesMatch[1] && request.method === 'GET') {
+        const organizationId = orgWorkspacesMatch[1];
+        const user = await this.validateSession(request);
+
+        // Get all workspaces for this organization
+        const db = this.getDb();
+        const workspaces = await db
+          .selectFrom('workspaces')
+          .select([
+            'workspaces.id',
+            'workspaces.name',
+            'workspaces.description',
+            'workspaces.created_at',
+            'workspaces.updated_at'
+          ])
+          .where('workspaces.organization_id', '=', organizationId)
+          .orderBy('workspaces.created_at', 'desc')
+          .execute();
+
+        // Get member count and document count for each workspace
+        const workspacesWithCounts = await Promise.all(
+          workspaces.map(async (workspace) => {
+            const memberCount = await db
+              .selectFrom('workspace_members')
+              .select(db.fn.count('id').as('count'))
+              .where('workspace_id', '=', workspace.id)
+              .executeTakeFirst();
+
+            const documentCount = await db
+              .selectFrom('documents')
+              .select(db.fn.count('id').as('count'))
+              .where('workspace_id', '=', workspace.id)
+              .executeTakeFirst();
+
+            return {
+              ...workspace,
+              member_count: Number(memberCount?.count || 0),
+              document_count: Number(documentCount?.count || 0),
+            };
+          })
+        );
+
+        return new Response(JSON.stringify({ data: workspacesWithCounts }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/organizations/:id/stats (get organization statistics)
+      const orgStatsMatch = path.match(/^\/api\/organizations\/([^\/]+)\/stats$/);
+      if (orgStatsMatch && orgStatsMatch[1] && request.method === 'GET') {
+        const organizationId = orgStatsMatch[1];
+        const user = await this.validateSession(request);
+
+        const db = this.getDb();
+
+        // Get counts
+        const workspaceCount = await db
+          .selectFrom('workspaces')
+          .select(db.fn.count('id').as('count'))
+          .where('organization_id', '=', organizationId)
+          .executeTakeFirst();
+
+        const memberCount = await db
+          .selectFrom('organization_members')
+          .select(db.fn.count('id').as('count'))
+          .where('organization_id', '=', organizationId)
+          .executeTakeFirst();
+
+        const documentCount = await db
+          .selectFrom('documents')
+          .innerJoin('workspaces', 'workspaces.id', 'documents.workspace_id')
+          .select(db.fn.count('documents.id').as('count'))
+          .where('workspaces.organization_id', '=', organizationId)
+          .executeTakeFirst();
+
+        const complianceCheckCount = await db
+          .selectFrom('compliance_checks')
+          .innerJoin('workspaces', 'workspaces.id', 'compliance_checks.workspace_id')
+          .select(db.fn.count('compliance_checks.id').as('count'))
+          .where('workspaces.organization_id', '=', organizationId)
+          .executeTakeFirst();
+
+        // Get subscription info (simplified - get subscription first, then join with plan)
+        const subscriptionRow = await db
+          .selectFrom('subscriptions')
+          .select(['plan_id', 'status'])
+          .where('organization_id', '=', organizationId)
+          .where('status', 'in', ['active', 'trialing'])
+          .executeTakeFirst();
+
+        let subscriptionPlan: {
+          name: string;
+          limits: any;
+        } | null = null;
+
+        if (subscriptionRow) {
+          const plan = await db
+            .selectFrom('subscription_plans')
+            .select(['name', 'limits'])
+            .where('id', '=', subscriptionRow.plan_id)
+            .executeTakeFirst();
+          if (plan) {
+            subscriptionPlan = {
+              name: plan.name,
+              limits: typeof plan.limits === 'string' ? JSON.parse(plan.limits) : plan.limits
+            };
+          }
+        }
+
+        // Get current month usage
+        const now = Date.now();
+        const startOfMonth = new Date(new Date().setDate(1)).setHours(0, 0, 0, 0);
+
+        // Get org's workspace IDs first
+        const orgWorkspaceIds = await db
+          .selectFrom('workspaces')
+          .select('id')
+          .where('organization_id', '=', organizationId)
+          .execute();
+
+        const workspaceIdsList = orgWorkspaceIds.map(w => w.id);
+
+        // Count uploads and checks this month using D1 prepared statements
+        let uploadsCount = 0;
+        let checksCount = 0;
+
+        if (workspaceIdsList.length > 0) {
+          // Use raw D1 queries to avoid Kysely typing issues with created_at
+          const uploadsResult = await (this.env.AUDITGUARD_DB as any)
+            .prepare(`
+              SELECT COUNT(*) as count
+              FROM documents
+              WHERE workspace_id IN (${workspaceIdsList.map(() => '?').join(',')})
+              AND created_at >= ?
+            `)
+            .bind(...workspaceIdsList, startOfMonth)
+            .first();
+          uploadsCount = uploadsResult?.count || 0;
+
+          const checksResult = await (this.env.AUDITGUARD_DB as any)
+            .prepare(`
+              SELECT COUNT(*) as count
+              FROM compliance_checks
+              WHERE workspace_id IN (${workspaceIdsList.map(() => '?').join(',')})
+              AND created_at >= ?
+            `)
+            .bind(...workspaceIdsList, startOfMonth)
+            .first();
+          checksCount = checksResult?.count || 0;
+        }
+
+        // Extract limits from subscription plan
+        const limits = subscriptionPlan?.limits || {};
+        const uploadsLimit = limits.max_uploads_per_month || 10;
+        const checksLimit = limits.max_compliance_checks_per_month || 5;
+
+        return new Response(JSON.stringify({
+          data: {
+            total_workspaces: Number(workspaceCount?.count || 0),
+            total_members: Number(memberCount?.count || 0),
+            total_documents: Number(documentCount?.count || 0),
+            total_compliance_checks: Number(complianceCheckCount?.count || 0),
+            subscription_tier: subscriptionPlan?.name || 'Free',
+            uploads_used: Number(uploadsCount),
+            uploads_limit: uploadsLimit,
+            checks_used: Number(checksCount),
+            checks_limit: checksLimit,
+          }
+        }), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }

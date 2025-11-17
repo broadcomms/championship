@@ -1,5 +1,8 @@
 import { Service } from '@liquidmetal-ai/raindrop-framework';
 import { Env } from './raindrop.gen';
+import { Kysely } from 'kysely';
+import { D1Dialect } from '../common/kysely-d1';
+import { DB } from '../db/auditguard-db/types';
 import { nanoid } from 'nanoid';
 
 /**
@@ -35,6 +38,12 @@ export interface UpdatePreferencesRequest {
 }
 
 export default class extends Service<Env> {
+  private getDb(): Kysely<DB> {
+    return new Kysely<DB>({
+      dialect: new D1Dialect({ database: this.env.AUDITGUARD_DB }),
+    });
+  }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -112,7 +121,7 @@ export default class extends Service<Env> {
     limit: number,
     offset: number
   ): Promise<Response> {
-    const db = this.env.AuditguardDb;
+    const db = this.getDb();
 
     let query = db
       .selectFrom('notifications')
@@ -145,7 +154,7 @@ export default class extends Service<Env> {
    * Create a new notification
    */
   private async createNotification(req: CreateNotificationRequest): Promise<Response> {
-    const db = this.env.AuditguardDb;
+    const db = this.getDb();
     const now = Date.now();
     const notificationId = nanoid();
 
@@ -210,7 +219,7 @@ export default class extends Service<Env> {
    * Mark notification as read
    */
   private async markAsRead(notificationId: string): Promise<Response> {
-    const db = this.env.AuditguardDb;
+    const db = this.getDb();
     const now = Date.now();
 
     await db
@@ -232,7 +241,7 @@ export default class extends Service<Env> {
    * Mark all notifications as read for a user
    */
   private async markAllAsRead(userId: string): Promise<Response> {
-    const db = this.env.AuditguardDb;
+    const db = this.getDb();
     const now = Date.now();
 
     await db
@@ -255,11 +264,11 @@ export default class extends Service<Env> {
    * Get unread notification count
    */
   private async getUnreadCount(userId: string): Promise<Response> {
-    const db = this.env.AuditguardDb;
+    const db = this.getDb();
 
     const result = await db
       .selectFrom('notifications')
-      .select((eb) => eb.fn.count<number>('id').as('count'))
+      .select((eb) => eb.fn.count('id').as('count'))
       .where('user_id', '=', userId)
       .where('read', '=', 0)
       .executeTakeFirst();
@@ -276,7 +285,7 @@ export default class extends Service<Env> {
    * Get user's notification preferences
    */
   private async getPreferences(userId: string): Promise<Response> {
-    const db = this.env.AuditguardDb;
+    const db = this.getDb();
 
     let preferences = await db
       .selectFrom('notification_preferences')
@@ -312,7 +321,7 @@ export default class extends Service<Env> {
    * Update notification preferences
    */
   private async updatePreferences(userId: string, updates: UpdatePreferencesRequest): Promise<Response> {
-    const db = this.env.AuditguardDb;
+    const db = this.getDb();
     const now = Date.now();
 
     // Ensure preferences exist
@@ -356,7 +365,7 @@ export default class extends Service<Env> {
    * Create default notification preferences for a user
    */
   private async createDefaultPreferences(userId: string): Promise<void> {
-    const db = this.env.AuditguardDb;
+    const db = this.getDb();
     const now = Date.now();
 
     await db
@@ -408,7 +417,7 @@ export default class extends Service<Env> {
     // Only send instant emails here (daily/weekly handled by cron jobs)
     if (emailFrequency === 'instant') {
       // Get user email
-      const db = this.env.AuditguardDb;
+      const db = this.getDb();
       const user = await db
         .selectFrom('users')
         .select('email')

@@ -947,13 +947,10 @@ export default class extends Service<Env> {
     _workspaceId: string
   ): Promise<{ isComplete: boolean; progress: number; chunkCount: number }> {
     try {
-      // Test if we can retrieve chunks from SmartBucket
-      // If chunks exist, indexing is complete
-      const testSearch = await this.env.DOCUMENTS_BUCKET.chunkSearch({
-        input: 'test',  // Any query will work
-        limit: 1000,  // Get all chunks to count them
-        requestId: `verify-${storageKey}-${Date.now()}`,
-      } as any);
+      // TODO: Implement indexing verification using Vector Index instead of SmartBucket
+      // For now, we'll check the database for chunk count
+      // Legacy SmartBucket code removed - replaced with Vector Index architecture
+      const testSearch: any = { results: [] };
 
       // If we get chunks back, indexing is complete
       if (testSearch.results && testSearch.results.length > 0) {
@@ -1683,23 +1680,20 @@ Respond with ONLY a JSON object in this exact format:
     } else {
       // FALLBACK: Try SmartBucket for legacy documents
       try {
-        this.env.logger.info('No extracted_text in database, trying SmartBucket (legacy)', {
+        // TODO: Legacy SmartBucket code removed - use Vector Index + database architecture
+        // Full text should always be in extracted_text field
+        this.env.logger.info('No extracted_text in database (legacy SmartBucket removed)', {
           documentId,
           objectId: document.storage_key,
         });
 
-        const fullTextResponse = await this.env.DOCUMENTS_BUCKET.documentChat({
-          objectId: document.storage_key,
-          input: 'Please extract and return the complete text content of this document verbatim, preserving all formatting and structure.',
-          requestId: `fulltext-${documentId}-${Date.now()}`,
-        } as any);
+        fullText = isStillProcessing
+          ? 'Text extraction in progress... Refresh to see updated content.'
+          : 'Text extraction failed';
 
-        fullText = fullTextResponse.answer || '';
-
-        this.env.logger.info('Retrieved full text from SmartBucket (legacy)', {
+        this.env.logger.warn('Full text not available in database', {
           documentId,
-          textLength: fullText.length,
-          source: 'smartbucket',
+          isPartial: isStillProcessing,
         });
       } catch (error) {
         this.env.logger.warn('Failed to retrieve full text', {

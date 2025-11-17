@@ -69,17 +69,19 @@ export function useFeatureAccess(
             plan_enterprise: 'Enterprise',
           };
 
+          const requiredPlan = (data.required_plan || getRequiredPlan(featureId)) as PlanId;
+
           setResult({
             hasAccess: data.has_access,
             loading: false,
             planId: data.plan_id,
             status: data.status,
-            requiredPlan: data.required_plan || getRequiredPlan(featureId),
+            requiredPlan,
             isTrial: data.status === 'trialing',
             trialEnd: data.trial_end,
             upgradeMessage: data.has_access
               ? ''
-              : `${feature.name} requires ${planNames[data.required_plan || getRequiredPlan(featureId)]} plan or higher.`,
+              : `${feature.name} requires ${planNames[requiredPlan]} plan or higher.`,
           });
         }
       } catch (error) {

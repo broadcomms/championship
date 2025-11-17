@@ -11,7 +11,14 @@ export default function Home() {
   useEffect(() => {
     if (!loading) {
       if (user) {
-        router.push('/workspaces');
+        // Redirect to account dashboard as per blueprint
+        const accountId = user.userId;
+        if (accountId) {
+          router.push(`/account/${accountId}`);
+        } else {
+          // Fallback to organizations if account ID not available
+          router.push('/organizations');
+        }
       } else {
         router.push('/login');
       }
