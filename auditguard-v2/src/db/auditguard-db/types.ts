@@ -43,6 +43,32 @@ export type users = {
     workspace_count: number | null;
 };
 
+export type notifications = {
+    id: string;
+    user_id: string;
+    type: 'issue_assigned' | 'comment' | 'mention' | 'status_change' | 'workspace_invite' | 'due_date_reminder' | 'overdue_alert';
+    title: string;
+    message: string;
+    read: number;
+    action_url: string;
+    metadata: string | null;
+    created_at: number;
+    read_at: number | null;
+};
+
+export type notification_preferences = {
+    user_id: string;
+    email_issue_assigned: 'instant' | 'daily' | 'weekly' | 'never';
+    email_comments: 'instant' | 'daily' | 'weekly' | 'never';
+    email_mentions: 'instant' | 'daily' | 'weekly' | 'never';
+    email_due_date: 'instant' | 'daily' | 'weekly' | 'never';
+    email_status_change: 'instant' | 'daily' | 'weekly' | 'never';
+    in_app_enabled: number;
+    in_app_sound: number;
+    browser_push_enabled: number;
+    updated_at: number;
+};
+
 export type workspace_members = {
     workspace_id: string;
     user_id: string;
@@ -442,6 +468,8 @@ export type DB = {
     documents: documents;
     sessions: sessions;
     users: users;
+    notifications: notifications;
+    notification_preferences: notification_preferences;
     workspace_members: workspace_members;
     workspace_invitations: workspace_invitations;
     workspaces: workspaces;

@@ -1,0 +1,468 @@
+import { Service } from '@liquidmetal-ai/raindrop-framework';
+import { Env } from './raindrop.gen';
+import { nanoid } from 'nanoid';
+
+/**
+ * Notification Service - Handles in-app, email, and real-time notifications
+ *
+ * This service provides:
+ * - Creating and managing in-app notifications
+ * - User notification preferences management
+ * - Integration with email-service for email notifications
+ * - Integration with realtime-service for WebSocket notifications
+ */
+
+export interface CreateNotificationRequest {
+  user_id: string;
+  type: 'issue_assigned' | 'comment' | 'mention' | 'status_change' | 'workspace_invite' | 'due_date_reminder' | 'overdue_alert';
+  title: string;
+  message: string;
+  action_url: string;
+  metadata?: Record<string, any>;
+  send_email?: boolean;      // Send email notification
+  send_realtime?: boolean;    // Send real-time notification via WebSocket
+}
+
+export interface UpdatePreferencesRequest {
+  email_issue_assigned?: 'instant' | 'daily' | 'weekly' | 'never';
+  email_comments?: 'instant' | 'daily' | 'weekly' | 'never';
+  email_mentions?: 'instant' | 'daily' | 'weekly' | 'never';
+  email_due_date?: 'instant' | 'daily' | 'weekly' | 'never';
+  email_status_change?: 'instant' | 'daily' | 'weekly' | 'never';
+  in_app_enabled?: boolean;
+  in_app_sound?: boolean;
+  browser_push_enabled?: boolean;
+}
+
+export default class extends Service<Env> {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    try {
+      // GET /notifications/:userId - Get user's notifications
+      if (path.match(/^\/notifications\/[^/]+$/) && request.method === 'GET') {
+        const userId = path.split('/')[2];
+        const unreadOnly = url.searchParams.get('unread') === 'true';
+        const limit = parseInt(url.searchParams.get('limit') || '50');
+        const offset = parseInt(url.searchParams.get('offset') || '0');
+
+        return await this.getUserNotifications(userId, unreadOnly, limit, offset);
+      }
+
+      // POST /notifications - Create a new notification
+      if (path === '/notifications' && request.method === 'POST') {
+        const body = await request.json() as CreateNotificationRequest;
+        return await this.createNotification(body);
+      }
+
+      // PATCH /notifications/:id/read - Mark notification as read
+      if (path.match(/^\/notifications\/[^/]+\/read$/) && request.method === 'PATCH') {
+        const notificationId = path.split('/')[2];
+        return await this.markAsRead(notificationId);
+      }
+
+      // PATCH /notifications/:userId/read-all - Mark all notifications as read
+      if (path.match(/^\/notifications\/[^/]+\/read-all$/) && request.method === 'PATCH') {
+        const userId = path.split('/')[2];
+        return await this.markAllAsRead(userId);
+      }
+
+      // GET /notifications/:userId/count - Get unread count
+      if (path.match(/^\/notifications\/[^/]+\/count$/) && request.method === 'GET') {
+        const userId = path.split('/')[2];
+        return await this.getUnreadCount(userId);
+      }
+
+      // GET /preferences/:userId - Get user's notification preferences
+      if (path.match(/^\/preferences\/[^/]+$/) && request.method === 'GET') {
+        const userId = path.split('/')[2];
+        return await this.getPreferences(userId);
+      }
+
+      // PATCH /preferences/:userId - Update notification preferences
+      if (path.match(/^\/preferences\/[^/]+$/) && request.method === 'PATCH') {
+        const userId = path.split('/')[2];
+        const body = await request.json() as UpdatePreferencesRequest;
+        return await this.updatePreferences(userId, body);
+      }
+
+      return new Response(JSON.stringify({ error: 'Not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Notification service error:', error);
+      return new Response(JSON.stringify({
+        error: 'Internal server error',
+        details: String(error)
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  /**
+   * Get user's notifications
+   */
+  private async getUserNotifications(
+    userId: string,
+    unreadOnly: boolean,
+    limit: number,
+    offset: number
+  ): Promise<Response> {
+    const db = this.env.AuditguardDb;
+
+    let query = db
+      .selectFrom('notifications')
+      .selectAll()
+      .where('user_id', '=', userId)
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+      .offset(offset);
+
+    if (unreadOnly) {
+      query = query.where('read', '=', 0);
+    }
+
+    const notifications = await query.execute();
+
+    // Parse metadata JSON strings
+    const parsedNotifications = notifications.map(n => ({
+      ...n,
+      metadata: n.metadata ? JSON.parse(n.metadata) : null,
+      read: n.read === 1
+    }));
+
+    return new Response(JSON.stringify(parsedNotifications), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Create a new notification
+   */
+  private async createNotification(req: CreateNotificationRequest): Promise<Response> {
+    const db = this.env.AuditguardDb;
+    const now = Date.now();
+    const notificationId = nanoid();
+
+    // Check if user has in-app notifications enabled
+    const preferences = await db
+      .selectFrom('notification_preferences')
+      .selectAll()
+      .where('user_id', '=', req.user_id)
+      .executeTakeFirst();
+
+    // Create default preferences if they don't exist
+    if (!preferences) {
+      await this.createDefaultPreferences(req.user_id);
+    }
+
+    // Only create in-app notification if enabled (or preferences don't exist yet)
+    if (!preferences || preferences.in_app_enabled === 1) {
+      await db
+        .insertInto('notifications')
+        .values({
+          id: notificationId,
+          user_id: req.user_id,
+          type: req.type,
+          title: req.title,
+          message: req.message,
+          read: 0,
+          action_url: req.action_url,
+          metadata: req.metadata ? JSON.stringify(req.metadata) : null,
+          created_at: now,
+          read_at: null
+        })
+        .execute();
+    }
+
+    // Send email notification if requested and enabled
+    if (req.send_email) {
+      await this.sendEmailNotification(req, preferences);
+    }
+
+    // Send real-time notification if requested
+    if (req.send_realtime) {
+      await this.sendRealtimeNotification(req.user_id, {
+        id: notificationId,
+        type: req.type,
+        title: req.title,
+        message: req.message,
+        action_url: req.action_url,
+        metadata: req.metadata
+      });
+    }
+
+    return new Response(JSON.stringify({
+      id: notificationId,
+      success: true
+    }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Mark notification as read
+   */
+  private async markAsRead(notificationId: string): Promise<Response> {
+    const db = this.env.AuditguardDb;
+    const now = Date.now();
+
+    await db
+      .updateTable('notifications')
+      .set({
+        read: 1,
+        read_at: now
+      })
+      .where('id', '=', notificationId)
+      .execute();
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Mark all notifications as read for a user
+   */
+  private async markAllAsRead(userId: string): Promise<Response> {
+    const db = this.env.AuditguardDb;
+    const now = Date.now();
+
+    await db
+      .updateTable('notifications')
+      .set({
+        read: 1,
+        read_at: now
+      })
+      .where('user_id', '=', userId)
+      .where('read', '=', 0)
+      .execute();
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Get unread notification count
+   */
+  private async getUnreadCount(userId: string): Promise<Response> {
+    const db = this.env.AuditguardDb;
+
+    const result = await db
+      .selectFrom('notifications')
+      .select((eb) => eb.fn.count<number>('id').as('count'))
+      .where('user_id', '=', userId)
+      .where('read', '=', 0)
+      .executeTakeFirst();
+
+    return new Response(JSON.stringify({
+      count: result?.count || 0
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Get user's notification preferences
+   */
+  private async getPreferences(userId: string): Promise<Response> {
+    const db = this.env.AuditguardDb;
+
+    let preferences = await db
+      .selectFrom('notification_preferences')
+      .selectAll()
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    // Create default preferences if they don't exist
+    if (!preferences) {
+      await this.createDefaultPreferences(userId);
+      preferences = await db
+        .selectFrom('notification_preferences')
+        .selectAll()
+        .where('user_id', '=', userId)
+        .executeTakeFirst();
+    }
+
+    // Convert integers to booleans
+    const parsed = {
+      ...preferences,
+      in_app_enabled: preferences?.in_app_enabled === 1,
+      in_app_sound: preferences?.in_app_sound === 1,
+      browser_push_enabled: preferences?.browser_push_enabled === 1
+    };
+
+    return new Response(JSON.stringify(parsed), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Update notification preferences
+   */
+  private async updatePreferences(userId: string, updates: UpdatePreferencesRequest): Promise<Response> {
+    const db = this.env.AuditguardDb;
+    const now = Date.now();
+
+    // Ensure preferences exist
+    const existing = await db
+      .selectFrom('notification_preferences')
+      .selectAll()
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!existing) {
+      await this.createDefaultPreferences(userId);
+    }
+
+    // Convert booleans to integers for SQLite
+    const updateData: any = {
+      updated_at: now
+    };
+
+    if (updates.email_issue_assigned !== undefined) updateData.email_issue_assigned = updates.email_issue_assigned;
+    if (updates.email_comments !== undefined) updateData.email_comments = updates.email_comments;
+    if (updates.email_mentions !== undefined) updateData.email_mentions = updates.email_mentions;
+    if (updates.email_due_date !== undefined) updateData.email_due_date = updates.email_due_date;
+    if (updates.email_status_change !== undefined) updateData.email_status_change = updates.email_status_change;
+    if (updates.in_app_enabled !== undefined) updateData.in_app_enabled = updates.in_app_enabled ? 1 : 0;
+    if (updates.in_app_sound !== undefined) updateData.in_app_sound = updates.in_app_sound ? 1 : 0;
+    if (updates.browser_push_enabled !== undefined) updateData.browser_push_enabled = updates.browser_push_enabled ? 1 : 0;
+
+    await db
+      .updateTable('notification_preferences')
+      .set(updateData)
+      .where('user_id', '=', userId)
+      .execute();
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Create default notification preferences for a user
+   */
+  private async createDefaultPreferences(userId: string): Promise<void> {
+    const db = this.env.AuditguardDb;
+    const now = Date.now();
+
+    await db
+      .insertInto('notification_preferences')
+      .values({
+        user_id: userId,
+        email_issue_assigned: 'instant',
+        email_comments: 'instant',
+        email_mentions: 'instant',
+        email_due_date: 'instant',
+        email_status_change: 'daily',
+        in_app_enabled: 1,
+        in_app_sound: 1,
+        browser_push_enabled: 0,
+        updated_at: now
+      })
+      .execute();
+  }
+
+  /**
+   * Send email notification via email-service
+   */
+  private async sendEmailNotification(
+    req: CreateNotificationRequest,
+    preferences: any
+  ): Promise<void> {
+    // Check email preferences based on notification type
+    let emailFrequency = 'never';
+
+    switch (req.type) {
+      case 'issue_assigned':
+        emailFrequency = preferences?.email_issue_assigned || 'instant';
+        break;
+      case 'comment':
+        emailFrequency = preferences?.email_comments || 'instant';
+        break;
+      case 'mention':
+        emailFrequency = preferences?.email_mentions || 'instant';
+        break;
+      case 'status_change':
+        emailFrequency = preferences?.email_status_change || 'daily';
+        break;
+      case 'due_date_reminder':
+      case 'overdue_alert':
+        emailFrequency = preferences?.email_due_date || 'instant';
+        break;
+    }
+
+    // Only send instant emails here (daily/weekly handled by cron jobs)
+    if (emailFrequency === 'instant') {
+      // Get user email
+      const db = this.env.AuditguardDb;
+      const user = await db
+        .selectFrom('users')
+        .select('email')
+        .where('id', '=', req.user_id)
+        .executeTakeFirst();
+
+      if (user) {
+        // Call email-service
+        await fetch(`http://email-service/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: user.email,
+            subject: req.title,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>${req.title}</h2>
+                <p>${req.message}</p>
+                <p style="margin-top: 20px;">
+                  <a href="${req.action_url}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                    View Details
+                  </a>
+                </p>
+                <p style="color: #666; font-size: 12px; margin-top: 40px;">
+                  You received this email because you have notifications enabled in AuditGuardX.
+                  <a href="/account/notifications">Manage your notification preferences</a>
+                </p>
+              </div>
+            `,
+            text: `${req.title}\n\n${req.message}\n\nView details: ${req.action_url}`
+          })
+        });
+      }
+    }
+  }
+
+  /**
+   * Send real-time notification via realtime-service
+   */
+  private async sendRealtimeNotification(userId: string, notification: any): Promise<void> {
+    // Call realtime-service to broadcast notification via WebSocket
+    try {
+      await fetch(`http://realtime-service/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          event: 'notification',
+          data: notification
+        })
+      });
+    } catch (error) {
+      console.error('Failed to send realtime notification:', error);
+      // Don't fail the whole operation if realtime fails
+    }
+  }
+}
