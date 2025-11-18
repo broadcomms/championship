@@ -515,12 +515,7 @@ Return JSON with issues array. If fully compliant, return empty array:
         temperature: 0.3,
       });
       
-      this.env.logger.info('✅ AI response received', { 
-        responseType: typeof aiResponse,
-        responseKeys: Object.keys(aiResponse || {}),
-        hasChoices: !!(aiResponse as any).choices,
-        fullRawResponse: JSON.stringify(aiResponse)
-      });
+
 
       // Extract content
       let content: string = '';
