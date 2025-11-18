@@ -678,6 +678,12 @@ export default class extends Service<Env> {
   }> {
     const db = this.getDb();
 
+    this.env.logger.info('🔍 getIssuesByStatus called', {
+      workspaceId,
+      userId,
+      status,
+    });
+
     // Verify workspace access
     const membership = await db
       .selectFrom('workspace_members')
@@ -690,9 +696,11 @@ export default class extends Service<Env> {
       throw new Error('Access denied: You are not a member of this workspace');
     }
 
+    this.env.logger.info('✅ Workspace access verified', { role: membership.role });
+
+    // CRITICAL FIX: Query directly from compliance_issues with workspace_id
     let query = db
       .selectFrom('compliance_issues')
-      .innerJoin('compliance_checks', 'compliance_issues.check_id', 'compliance_checks.id')
       .select([
         'compliance_issues.id',
         'compliance_issues.check_id',
@@ -708,13 +716,26 @@ export default class extends Service<Env> {
         'compliance_issues.created_at',
         'compliance_issues.resolved_at',
       ])
-      .where('compliance_checks.workspace_id', '=', workspaceId);
+      .where('compliance_issues.workspace_id', '=', workspaceId);
 
     if (status) {
       query = query.where('compliance_issues.status', '=', status);
+      this.env.logger.info('🔎 Filtering by status', { status });
     }
 
     const issues = await query.orderBy('compliance_issues.created_at', 'desc').execute();
+
+    this.env.logger.info('📊 Issues query result', {
+      issuesFound: issues.length,
+      workspaceId,
+      status: status || 'all',
+      firstIssue: issues[0] ? {
+        id: issues[0].id,
+        title: issues[0].title,
+        severity: issues[0].severity,
+        status: issues[0].status,
+      } : null,
+    });
 
     return {
       issues: issues.map((issue) => ({

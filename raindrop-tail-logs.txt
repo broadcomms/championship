@@ -1,715 +1,535 @@
-patrick@DESKTOP-PC01:~/championship/auditguard-v2$ raindrop logs tail --follow
-Using organization: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-Using user: user_01K8RV423SG75TDJC3014RQN9B
-Following logs for auditguard-v2@01ka6zr7vtjhb3p3tvx2nsz3qr...
-📜 Showing last 10 log events:
+Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools react-dom.development.js:38560:17
+Warning: Cannot update a component (`HotReload`) while rendering a different component (`KanbanBoard`). To locate the bad setState() call inside `KanbanBoard`, follow the stack trace as described in https://reactjs.org/link/setstate-in-render
+KanbanBoard@webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:48:34
+div
+div
+main
+div
+div
+ProtectedRoute@webpack-internal:///(app-pages-browser)/./src/components/auth/ProtectedRoute.tsx:16:24
+OrganizationLayout@webpack-internal:///(app-pages-browser)/./src/components/layout/OrganizationLayout.tsx:27:55
+WorkspaceIssuesPage@webpack-internal:///(app-pages-browser)/./src/app/org/[id]/workspace/[wsId]/issues/page.tsx:21:78
+ClientPageRoot@webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/client-page.js:14:32
+InnerLayoutRouter@webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/layout-router.js:244:18
+RedirectErrorBoundary@webpack-internal:///(app-pages-browser)/…
+app-index.js:33:22
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 11
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 8
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 8
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 8
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 8
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 8
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 8
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 8
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 12
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 9
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 9
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 9
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 9
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 9
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 9
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+Uncaught TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 9
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+page.js line 413 > eval:98:9
+The above error occurred in the <NotFoundErrorBoundary> component:
 
-[11/18/2025, 1:43:52 PM] 🔗 Trace: b3d87cd439ae5230cd7481e2e73aa0e0 (63ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: workspace-service
-  1. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.2041ms, 1 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:43:53 PM] 🔗 Trace: a80207d4b99691c000dd8045a0ea0ddf (60ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: organization-service
-  1. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "subscription_plans"."name" as "plan_name", "subscriptions"."status" as "subscription_status" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.2029ms, 6 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:43:53 PM] 🔗 Trace: fee5a34799281274cc0de3742cd00227 (178ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (61ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (180ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099db12e677aa8
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (59ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2253ms, 2 rows read, ENAM, DB: 1012.0KB
-  4. ✅ validateSession (59ms)
-  5. ✅ sql.all (55ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.1931ms, 1 rows read, ENAM, DB: 1012.0KB
-  6. ✅ getWorkspace (115ms)
-  7. ✅ getWorkspace (119ms)
-     service: WORKSPACE_SERVICE
-  8. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.2459ms, 1 rows read, ENAM, DB: 1012.0KB
-
-
-────────────────────────────────────────────────────────────────────────────────
-🔴 Live stream starting...
-────────────────────────────────────────────────────────────────────────────────
-
-Press Ctrl+C to stop following
-
-🔄 Started streaming logs for auditguard-v2@01ka6zr7vtjhb3p3tvx2nsz3qr
-   Organization: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-   User: user_01K8RV423SG75TDJC3014RQN9B
-   Time: 11/18/2025, 1:43:55 PM
-[11/18/2025, 1:43:59 PM] 🔗 Trace: 3e7dbf1fbf6e3fd91618d686c845d288 (306ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: organization-service
-  1. ✅ sql.all (61ms)
-     🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.2006ms, 1 rows read, ENAM, DB: 1012.0KB
-  2. ✅ getOrganizationUsageForecast (306ms)
-  3. ✅ validateSession (62ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (374ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/usage/forecast
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099dd95a96abe5
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (59ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2483ms, 2 rows read, ENAM, DB: 1012.0KB
-  6. ✅ validateSession (59ms)
-  7. ✅ sql.all (56ms)
-     🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.1663ms, 1 rows read, ENAM, DB: 1012.0KB
-  8. ✅ getOrganizationUsageForecast (312ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (56ms)
-     🗄️  SQL Query: select sum("documents_created") as "total_documents", sum("compliance_checks_count") as "total_checks", sum("assistant_messages_count") as "total_messages", sum("api_calls_count") as "total_api_calls", sum("storage_bytes") as "total_storage_bytes" from "organization_usage_daily" where "organization_id" = ? and "date" >= ? and "date" <= ?
-     📊 meta: 0.1991ms, 1 rows read, ENAM, DB: 1012.0KB
-  10. ✅ sql.all (65ms)
-     🗄️  SQL Query: select "w"."id" as "workspace_id", "w"."name" as "workspace_name", count(*) as "documents", count("cc"."id") as "checks", sum("d"."file_size") as "storage_bytes" from "workspaces" as "w" left join "documents" as "d" on "d"."workspace_id" = "w"."id" left join "compliance_checks" as "cc" on "cc"."workspace_id" = "w"."id" where "w"."organization_id" = ? group by "w"."id", "w"."name"
-     📊 meta: 0.1834ms, 40 rows read, ENAM, DB: 1012.0KB
-  11. ✅ sql.all (68ms)
-     🗄️  SQL Query: select "subscription_plans"."limits" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.2699ms, 5 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:44:00 PM] 🔗 Trace: a62d5ecf9689385353a67d7f63975581 (933ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (515ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2017ms, 2 rows read, ENAM, DB: 1012.0KB
-  2. ✅ validateSession (515ms)
-  3. ✅ sql.all (269ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.2395ms, 1 rows read, ENAM, DB: 1012.0KB
-  4. ✅ getWorkspace (336ms)
-  5. ✅ validateSession (520ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (935ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099ddcf978a244
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (67ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1997ms, 1 rows read, ENAM, DB: 1012.0KB
-  8. ✅ getWorkspace (415ms)
-     service: WORKSPACE_SERVICE
-
-[11/18/2025, 1:43:59 PM] 🔗 Trace: a31a0e3e6869a35dc24b52b8e3ed12fb (1104ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2312ms, 2 rows read, ENAM, DB: 1012.0KB
-  2. ✅ validateSession (63ms)
-  3. ✅ validateSession (68ms)
-     service: AUTH_SERVICE
-  4. ✅ sql.all (58ms)
-     🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.1526ms, 1 rows read, ENAM, DB: 1012.0KB
-  5. ✅ getOrganizationUsageForecast (1037ms)
-  6. ✅ sql.all (67ms)
-     🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.2022ms, 1 rows read, ENAM, DB: 1012.0KB
-  7. ✅ sql.all (104ms)
-     🗄️  SQL Query: select sum("documents_created") as "total_documents", sum("compliance_checks_count") as "total_checks", sum("assistant_messages_count") as "total_messages", sum("api_calls_count") as "total_api_calls", sum("storage_bytes") as "total_storage_bytes" from "organization_usage_daily" where "organization_id" = ? and "date" >= ? and "date" <= ?
-     📊 meta: 0.2507ms, 1 rows read, ENAM, DB: 1012.0KB
-  8. ✅ sql.all (465ms)
-     🗄️  SQL Query: select "w"."id" as "workspace_id", "w"."name" as "workspace_name", count(*) as "documents", count("cc"."id") as "checks", sum("d"."file_size") as "storage_bytes" from "workspaces" as "w" left join "documents" as "d" on "d"."workspace_id" = "w"."id" left join "compliance_checks" as "cc" on "cc"."workspace_id" = "w"."id" where "w"."organization_id" = ? group by "w"."id", "w"."name"
-     📊 meta: 0.2625ms, 40 rows read, ENAM, DB: 1012.0KB
-  9. ✅ sql.all (343ms)
-     🗄️  SQL Query: select "subscription_plans"."limits" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.277ms, 5 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:43:59 PM] 🔗 Trace: 589ef93bd31f557a65c86a5839f10ad3 (250ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (68ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (250ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/workspaces
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099dd9296db634
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (61ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1579ms, 2 rows read, ENAM, DB: 1012.0KB
-  4. ✅ validateSession (61ms)
-  5. ✅ sql.all (61ms)
-     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.2302ms, 2 rows read, ENAM, DB: 1012.0KB
-  6. ✅ sql.all (66ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.1474ms, 1 rows read, ENAM, DB: 1012.0KB
-  7. ✅ sql.all (55ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1955ms, 3 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:43:59 PM] 🔗 Trace: 5ca1c47727946045bed235ff0b810089 (373ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (115ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (373ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/workspaces
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099ddb1de5ec6f
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (111ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2385ms, 2 rows read, ENAM, DB: 1012.0KB
-  4. ✅ validateSession (111ms)
-  5. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.1995ms, 2 rows read, ENAM, DB: 1012.0KB
-  6. ✅ sql.all (57ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.1405ms, 1 rows read, ENAM, DB: 1012.0KB
-  7. ✅ sql.all (141ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1868ms, 3 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:43:59 PM] 🔗 Trace: 9f8dcc181e26b09a6b690bb505f34c5d (328ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: organization-service
-  1. ✅ sql.all (61ms)
-     🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.1121ms, 1 rows read, ENAM, DB: 1012.0KB
-  2. ✅ getOrganizationSettings (328ms)
-  3. ✅ sql.all (106ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1935ms, 2 rows read, ENAM, DB: 1012.0KB
-  4. ✅ validateSession (106ms)
-  5. ✅ validateSession (111ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (525ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099dd92df9a220
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (79ms)
-     🗄️  SQL Query: select * from "organizations" where "id" = ?
-     📊 meta: 0.1683ms, 1 rows read, ENAM, DB: 1012.0KB
-  8. ✅ getOrganizationSettings (414ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (64ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1174ms, 2 rows read, ENAM, DB: 1012.0KB
-  10. ✅ sql.all (64ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1545ms, 1 rows read, ENAM, DB: 1012.0KB
-  11. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "subscription_plans"."name" as "plan_name", "subscriptions"."status" as "subscription_status" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.335ms, 6 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:43:59 PM] 🔗 Trace: 87e500fea6060208248aed1bfe498814 (346ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (79ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (348ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099ddb4a2daac2
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (56ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.1562ms, 4 rows read, ENAM, DB: 1012.0KB
-  4. ✅ getUserOrganizations (266ms)
-  5. ✅ sql.all (77ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2643ms, 2 rows read, ENAM, DB: 1012.0KB
-  6. ✅ validateSession (77ms)
-  7. ✅ getUserOrganizations (269ms)
-     service: ORGANIZATION_SERVICE
-  8. ✅ sql.all (65ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1093ms, 2 rows read, ENAM, DB: 1012.0KB
-  9. ✅ sql.all (145ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.174ms, 1 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:43:59 PM] 🔗 Trace: 13202165b4dac2112c2ecb334c65cf88 (253ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (68ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.192ms, 2 rows read, ENAM, DB: 1012.0KB
-  2. ✅ validateSession (68ms)
-  3. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.1727ms, 4 rows read, ENAM, DB: 1012.0KB
-  4. ✅ getUserOrganizations (181ms)
-  5. ✅ validateSession (72ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (259ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099dd9282cabac
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (62ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1401ms, 2 rows read, ENAM, DB: 1012.0KB
-  8. ✅ getUserOrganizations (187ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (57ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1895ms, 1 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:43:59 PM] 🔗 Trace: 65063f60fceb9827becf2457480ab8e8 (787ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (68ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1157ms, 2 rows read, ENAM, DB: 1012.0KB
-  2. ✅ validateSession (68ms)
-  3. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.1899ms, 1 rows read, ENAM, DB: 1012.0KB
-  4. ✅ validateSession (71ms)
-     service: AUTH_SERVICE
-  5. ✅ sql.all (83ms)
-     🗄️  SQL Query: select * from "organizations" where "id" = ?
-     📊 meta: 0.2204ms, 1 rows read, ENAM, DB: 1012.0KB
-  6. ✅ sql.all (112ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1985ms, 2 rows read, ENAM, DB: 1012.0KB
-  7. ✅ sql.all (459ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1868ms, 1 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:44:01 PM] 🔗 Trace: f2527c0ef61d7f4e57e25ec9fb2506c4 (193ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2248ms, 2 rows read, ENAM, DB: 1012.0KB
-  2. ✅ validateSession (63ms)
-  3. ✅ validateSession (66ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (197ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099de32a03aadf
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.1861ms, 1 rows read, ENAM, DB: 1012.0KB
-  6. ✅ getWorkspace (126ms)
-  7. ✅ getWorkspace (131ms)
-     service: WORKSPACE_SERVICE
-  8. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.2009ms, 1 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:44:06 PM] 🔗 Trace: 4f9e556e2d2401f46c222ccfef7beab6 (123ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: document-service
-  1. ✅ sql.all (65ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.157ms, 1 rows read, ENAM, DB: 1012.0KB
-  2. ✅ listDocuments (120ms)
-  3. ✅ validateSession (65ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (190ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/documents
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099e041c38ebbd
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2047ms, 2 rows read, ENAM, DB: 1012.0KB
-  6. ✅ validateSession (62ms)
-  7. ✅ sql.all (55ms)
-     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
-     📊 meta: 0.6358ms, 9 rows read, ENAM, DB: 1012.0KB
-  8. ✅ listDocuments (125ms)
-     service: DOCUMENT_SERVICE
-
-[11/18/2025, 1:44:13 PM] 🔗 Trace: 8cccf269ab3d9414ad01255982915e2c (252ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (56ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1934ms, 2 rows read, ENAM, DB: 1012.0KB
-  2. ✅ validateSession (56ms)
-  3. ✅ sql.all (66ms)
-     🗄️  SQL Query: select "organization_id" from "workspaces" where "id" = ?
-     📊 meta: 0.1492ms, 1 rows read, ENAM, DB: 1012.0KB
-  4. ✅ checkLimit (193ms)
-  5. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "subscription_plans"."limits" from "subscriptions" inner join "subscription_plans" on "subscriptions"."plan_id" = "subscription_plans"."id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" = ?
-     📊 meta: 0.2439ms, ENAM, DB: 1012.0KB
-  6. ✅ sql.all (67ms)
-     🗄️  SQL Query: select * from "usage_summaries" where "workspace_id" = ? and "date" = ?
-     📊 meta: 0.1732ms, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:45:11 PM] 🔗 Trace: ec16b8fee7629f82f691bb1c71405e9f (260ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (74ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (260ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/workspaces
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099f9b79c039d2
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (70ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2034ms, 2 rows read, ENAM, DB: 1012.0KB
-  4. ✅ validateSession (70ms)
-  5. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.275ms, 2 rows read, ENAM, DB: 1012.0KB
-  6. ✅ sql.all (66ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.2696ms, 1 rows read, ENAM, DB: 1012.0KB
-  7. ✅ sql.all (56ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1681ms, 3 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:45:11 PM] 🔗 Trace: 82a9af0f2ec57e5115aabdba771c00af (513ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (82ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (521ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099f9b683636c5
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (77ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.29ms, 2 rows read, ENAM, DB: 1012.0KB
-  4. ✅ validateSession (77ms)
-  5. ✅ sql.all (94ms)
-     🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.2088ms, 1 rows read, ENAM, DB: 1012.0KB
-  6. ✅ getOrganizationSettings (429ms)
-  7. ✅ getOrganizationSettings (439ms)
-     service: ORGANIZATION_SERVICE
-  8. ✅ sql.all (76ms)
-     🗄️  SQL Query: select * from "organizations" where "id" = ?
-     📊 meta: 0.1726ms, 1 rows read, ENAM, DB: 1012.0KB
-  9. ✅ sql.all (91ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1544ms, 2 rows read, ENAM, DB: 1012.0KB
-  10. ✅ sql.all (101ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.159ms, 1 rows read, ENAM, DB: 1012.0KB
-  11. ✅ sql.all (67ms)
-     🗄️  SQL Query: select "subscription_plans"."name" as "plan_name", "subscriptions"."status" as "subscription_status" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.2471ms, 6 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:45:11 PM] 🔗 Trace: 8ce288379cc7f7b09ffdef972833687d (168ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: organization-service
-  1. ✅ sql.all (56ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.2532ms, 4 rows read, ENAM, DB: 1012.0KB
-  2. ✅ getUserOrganizations (168ms)
-  3. ✅ sql.all (65ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.5934ms, 2 rows read, ENAM, DB: 1012.0KB
-  4. ✅ validateSession (65ms)
-  5. ✅ validateSession (69ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (239ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099f9b5b7f7db1
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (55ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1473ms, 2 rows read, ENAM, DB: 1012.0KB
-  8. ✅ getUserOrganizations (170ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (57ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1623ms, 1 rows read, ENAM, DB: 1012.0KB
-
-[11/18/2025, 1:45:23 PM] 🔗 Trace: 309ab81bd75c38f79e5c5bfd423abd03 (127ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: compliance-service
-  1. ✅ sql.all (59ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.2411ms, 1 rows read, ENAM, DB: 1012.0KB
-  2. ✅ listComplianceChecks (123ms)
-  3. ✅ validateSession (71ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (199ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/compliance
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a099fe63925ac18
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (68ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1841ms, 2 rows read, ENAM, DB: 1012.0KB
-  6. ✅ validateSession (68ms)
-  7. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "compliance_checks"."id", "compliance_checks"."document_id", "documents"."filename" as "document_name", "compliance_checks"."framework", "compliance_checks"."status", "compliance_checks"."overall_score", "compliance_checks"."issues_found", "compliance_checks"."created_at", "compliance_checks"."completed_at" from "compliance_checks" inner join "documents" on "documents"."id" = "compliance_checks"."document_id" where "compliance_checks"."workspace_id" = ? order by "compliance_checks"."created_at" desc
-     📊 meta: 0.2427ms, 21 rows read, ENAM, DB: 1012.0KB
-  8. ✅ listComplianceChecks (128ms)
-     service: COMPLIANCE_SERVICE
-
-[11/18/2025, 1:45:33 PM] 🔗 Trace: 524f6fc8323399b0bcced3b423d187c7 (126ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: compliance-service
-  1. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1545ms, 1 rows read, ENAM, DB: 1012.0KB
-  2. ✅ listComplianceChecks (124ms)
-  3. ✅ validateSession (68ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (196ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/compliance
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09a02519d00702
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2278ms, 2 rows read, ENAM, DB: 1012.0KB
-  6. ✅ validateSession (64ms)
-  7. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "compliance_checks"."id", "compliance_checks"."document_id", "documents"."filename" as "document_name", "compliance_checks"."framework", "compliance_checks"."status", "compliance_checks"."overall_score", "compliance_checks"."issues_found", "compliance_checks"."created_at", "compliance_checks"."completed_at" from "compliance_checks" inner join "documents" on "documents"."id" = "compliance_checks"."document_id" where "compliance_checks"."workspace_id" = ? order by "compliance_checks"."created_at" desc
-     📊 meta: 0.2508ms, 21 rows read, ENAM, DB: 1012.0KB
-  8. ✅ listComplianceChecks (128ms)
-     service: COMPLIANCE_SERVICE
-
-^C
-patrick@DESKTOP-PC01:~/championship/auditguard-v2$
+KanbanBoard@webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:48:34
+div
+div
+main
+div
+div
+ProtectedRoute@webpack-internal:///(app-pages-browser)/./src/components/auth/ProtectedRoute.tsx:16:24
+OrganizationLayout@webpack-internal:///(app-pages-browser)/./src/components/layout/OrganizationLayout.tsx:27:55
+WorkspaceIssuesPage@webpack-internal:///(app-pages-browser)/./src/app/org/[id]/workspace/[wsId]/issues/page.tsx:21:78
+ClientPageRoot@webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/client-page.js:14:32
+InnerLayoutRouter@webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/layout-router.js:244:18
+RedirectErrorBoundary@webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/redirect-boundary.js:74:9
+RedirectBoundary@webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/redire…
+app-index.js:33:22
+Application error: TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 9
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+app-index.js:33:22
+Application error: TypeError: can't access property "filter", issues is undefined
+    getIssuesByStatus webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:98
+    children webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:123
+    KanbanBoard webpack-internal:///(app-pages-browser)/./src/components/kanban/KanbanBoard.tsx:122
+    React 9
+    workLoop webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:256
+    flushWork webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:225
+    performWorkUntilDeadline webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:534
+    EventHandlerNonNull* webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:569
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/cjs/scheduler.development.js:630
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/scheduler/index.js:4
+    NextJS 4
+    React 2
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/index.js:32
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/client.js:3
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-index.js:15
+    NextJS 4
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:9
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:57
+    loadScriptsInSequence webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:23
+    appBootstrap webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-bootstrap.js:56
+    <anonymous> webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/app-next-dev.js:8
+    NextJS 7
+app-index.js:33:22

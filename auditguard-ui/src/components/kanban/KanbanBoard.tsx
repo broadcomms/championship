@@ -55,10 +55,17 @@ export function KanbanBoard({ workspaceId, orgId }: KanbanBoardProps) {
 
   const fetchIssues = async () => {
     try {
-      const response = await api.get(`/workspaces/${workspaceId}/issues`);
-      setIssues(response.data);
+      const response = await api.get(`/api/workspaces/${workspaceId}/issues`);
+      console.log('📥 Issues API Response:', response);
+      
+      // Handle different response structures
+      const issuesData = response?.data?.issues || response?.issues || [];
+      console.log('📋 Issues data:', issuesData);
+      
+      setIssues(issuesData);
     } catch (error) {
       console.error('Failed to fetch issues:', error);
+      setIssues([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -104,7 +111,7 @@ export function KanbanBoard({ workspaceId, orgId }: KanbanBoardProps) {
   };
 
   const getIssuesByStatus = (status: string) => {
-    return issues.filter((issue) => issue.status === status);
+    return (issues || []).filter((issue) => issue.status === status);
   };
 
   const handleIssueClick = (issueId: string) => {
@@ -120,14 +127,14 @@ export function KanbanBoard({ workspaceId, orgId }: KanbanBoardProps) {
   }
 
   return (
-    <div className="flex gap-6 overflow-x-auto pb-4">
+    <div className="grid grid-cols-4 gap-4 w-full">
       {COLUMNS.map((column) => {
         const columnIssues = getIssuesByStatus(column.id);
 
         return (
           <div
             key={column.id}
-            className="flex-shrink-0 w-80"
+            className="flex flex-col min-w-0"
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, column.id)}
           >
