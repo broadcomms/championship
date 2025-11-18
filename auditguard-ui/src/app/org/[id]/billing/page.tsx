@@ -41,38 +41,72 @@ interface PlanTier {
   features: string[];
 }
 
-const PLAN_TIERS: Record<string, PlanTier> = {
+// Default plan tiers (will be replaced by API data)
+const DEFAULT_PLAN_TIERS: Record<string, PlanTier> = {
   Free: {
     name: 'Free',
     price: 0,
     uploads: 10,
-    checks: 5,
+    checks: 20,
     features: [
-      '10 document uploads/month',
-      '5 compliance checks/month',
-      '1 workspace',
+      '10 document uploads total',
+      '20 compliance checks/month',
+      '3 workspaces',
       'Basic compliance frameworks',
+      'Community support',
+    ],
+  },
+  Starter: {
+    name: 'Starter',
+    price: 29,
+    uploads: 10,
+    checks: 50,
+    features: [
+      '10 document uploads',
+      '50 compliance checks/month',
+      '5 workspaces',
+      'All compliance frameworks',
       'Email support',
     ],
   },
   Professional: {
     name: 'Professional',
-    price: 299,
-    uploads: 100,
-    checks: 50,
+    price: 99,
+    uploads: 50,
+    checks: 200,
     features: [
-      '100 document uploads/month',
-      '50 compliance checks/month',
-      'Unlimited workspaces',
+      '50 document uploads',
+      '200 compliance checks/month',
+      '20 workspaces',
       'All compliance frameworks',
       'Priority support',
       'Advanced analytics',
       'API access',
+      'Slack integration',
+      'Custom branding',
+    ],
+  },
+  Business: {
+    name: 'Business',
+    price: 299,
+    uploads: 1000,
+    checks: 2000,
+    features: [
+      '1,000 document uploads',
+      '2,000 compliance checks/month',
+      '50 workspaces',
+      'All frameworks',
+      'Priority support',
+      'Advanced analytics',
+      'API access',
+      'SSO',
+      'Audit trails',
+      'Custom frameworks',
     ],
   },
   Enterprise: {
     name: 'Enterprise',
-    price: 999,
+    price: 1999,
     uploads: -1, // unlimited
     checks: -1, // unlimited
     features: [
@@ -190,7 +224,7 @@ export default function OrganizationBillingPage() {
     );
   }
 
-  const currentPlan = subscription ? PLAN_TIERS[subscription.tier] : PLAN_TIERS.Free;
+  const currentPlan = subscription ? DEFAULT_PLAN_TIERS[subscription.tier] : DEFAULT_PLAN_TIERS.Free;
   const usagePercentUploads = usage
     ? (usage.uploads_used / usage.uploads_limit) * 100
     : 0;
@@ -330,7 +364,7 @@ export default function OrganizationBillingPage() {
               Available Plans
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {Object.entries(PLAN_TIERS).map(([tier, plan]) => {
+              {Object.entries(DEFAULT_PLAN_TIERS).map(([tier, plan]) => {
                 const isCurrent = subscription?.tier === tier;
 
                 return (

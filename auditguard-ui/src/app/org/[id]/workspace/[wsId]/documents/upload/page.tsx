@@ -154,16 +154,25 @@ export default function DocumentUploadPage() {
         const { file } = selectedFiles[i];
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('workspace_id', wsId);
-        formData.append('description', metadata.description);
-        formData.append('tags', JSON.stringify(metadata.tags));
-        if (metadata.framework) {
-          formData.append('framework', metadata.framework);
+        formData.append('filename', file.name);
+        // Note: description and tags are not supported by the current API endpoint
+        // The API expects: file, filename, category (optional), frameworkId (optional)
+        // TODO: Add support for description and tags in the API or remove from UI
+
+        // Use the correct API endpoint with workspace ID in the path
+        const response = await fetch(`/api/workspaces/${wsId}/documents`, {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
+          throw new Error(errorData.error || errorData.message || `Upload failed with status ${response.status}`);
         }
 
-        const response = await api.post('/documents/upload', formData);
-
-        uploaded.push(response.data);
+        const data = await response.json();
+        uploaded.push(data);
         setUploadProgress(((i + 1) / totalFiles) * 100);
       }
 
@@ -558,8 +567,8 @@ export default function DocumentUploadPage() {
               className="flex items-center justify-between py-3 border-b border-gray-200 last:border-b-0"
             >
               <div className="flex items-center gap-3">
-                <span className="text-2xl">{getFileIcon(doc.name)}</span>
-                <span className="font-medium text-gray-900">{doc.name}</span>
+                <span className="text-2xl">{getFileIcon(doc.filename)}</span>
+                <span className="font-medium text-gray-900">{doc.filename}</span>
               </div>
               <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
                 Processing

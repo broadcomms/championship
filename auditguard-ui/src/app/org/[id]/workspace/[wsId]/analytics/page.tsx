@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { MultiLevelSidebar } from '@/components/sidebar/MultiLevelSidebar';
+import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
 
 interface AnalyticsData {
@@ -47,6 +48,8 @@ export default function WorkspaceAnalyticsPage() {
   const params = useParams();
   const orgId = params.id as string;
   const wsId = params.wsId as string;
+  const { user } = useAuth();
+  const accountId = user?.userId;
 
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,20 +72,18 @@ export default function WorkspaceAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen">
-        <MultiLevelSidebar currentOrgId={orgId} currentWorkspaceId={wsId} />
-        <div className="flex-1 flex items-center justify-center">
+      <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
+        <div className="flex items-center justify-center p-8">
           <div className="text-gray-500">Loading...</div>
         </div>
-      </div>
+      </OrganizationLayout>
     );
   }
 
   if (!analytics) {
     return (
-      <div className="flex h-screen">
-        <MultiLevelSidebar currentOrgId={orgId} currentWorkspaceId={wsId} />
-        <div className="flex-1 flex items-center justify-center">
+      <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
+        <div className="flex items-center justify-center p-8">
           <div className="text-center">
             <div className="text-6xl mb-4">📊</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -93,7 +94,7 @@ export default function WorkspaceAnalyticsPage() {
             </p>
           </div>
         </div>
-      </div>
+      </OrganizationLayout>
     );
   }
 
@@ -106,10 +107,8 @@ export default function WorkspaceAnalyticsPage() {
       : 0;
 
   return (
-    <div className="flex h-screen">
-      <MultiLevelSidebar currentOrgId={orgId} currentWorkspaceId={wsId} />
-      <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-7xl mx-auto p-8">
+    <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
+      <div className="p-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -458,8 +457,7 @@ export default function WorkspaceAnalyticsPage() {
               <div className="text-center py-8 text-gray-500">No upload activity</div>
             )}
           </div>
-        </div>
       </div>
-    </div>
+    </OrganizationLayout>
   );
 }

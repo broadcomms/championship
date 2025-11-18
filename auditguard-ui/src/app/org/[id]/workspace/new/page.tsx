@@ -28,10 +28,10 @@ export default function NewWorkspacePage() {
 
     try {
       // Note: api.post() returns data directly, not wrapped in .data property
-      const newWorkspace = await api.post('/api/workspaces', {
+      // Using blueprint pattern: /api/organizations/{orgId}/workspaces
+      const newWorkspace = await api.post(`/api/organizations/${orgId}/workspaces`, {
         name: formData.name,
         description: formData.description,
-        organization_id: orgId,
       });
 
       // Navigate to the newly created workspace

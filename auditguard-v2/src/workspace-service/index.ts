@@ -350,7 +350,7 @@ export default class extends Service<Env> {
     await db
       .updateTable('users')
       .set({
-        workspace_count: sql.raw('GREATEST(workspace_count - 1, 0)'), // Prevent negative counts
+        workspace_count: sql.raw('MAX(workspace_count - 1, 0)'), // Prevent negative counts (SQLite compatible)
         updated_at: Date.now(),
       })
       .where('id', '=', userId)
@@ -614,7 +614,20 @@ export default class extends Service<Env> {
       viewer: 1,
     };
 
-    // Get user's role
+    // First, check if user is the workspace owner (for backwards compatibility)
+    const workspace = await db
+      .selectFrom('workspaces')
+      .select('owner_id')
+      .where('id', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (workspace && workspace.owner_id === userId) {
+      // Workspace owner has full permissions (owner role level = 4)
+      const requiredRoleLevel = roleHierarchy[requiredRole];
+      return roleHierarchy.owner >= requiredRoleLevel;
+    }
+
+    // Get user's role from workspace_members
     const membership = await db
       .selectFrom('workspace_members')
       .select('role')

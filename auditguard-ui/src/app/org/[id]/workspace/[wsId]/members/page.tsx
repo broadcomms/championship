@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { MultiLevelSidebar } from '@/components/sidebar/MultiLevelSidebar';
+import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
 
@@ -28,6 +29,8 @@ export default function WorkspaceMembersPage() {
   const params = useParams();
   const orgId = params.id as string;
   const wsId = params.wsId as string;
+  const { user } = useAuth();
+  const accountId = user?.userId;
 
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -149,20 +152,17 @@ export default function WorkspaceMembersPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen">
-        <MultiLevelSidebar currentOrgId={orgId} currentWorkspaceId={wsId} />
-        <div className="flex-1 flex items-center justify-center">
+      <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
+        <div className="flex items-center justify-center p-8">
           <div className="text-gray-500">Loading...</div>
         </div>
-      </div>
+      </OrganizationLayout>
     );
   }
 
   return (
-    <div className="flex h-screen">
-      <MultiLevelSidebar currentOrgId={orgId} currentWorkspaceId={wsId} />
-      <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-5xl mx-auto p-8">
+    <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
+      <div className="p-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -422,8 +422,7 @@ export default function WorkspaceMembersPage() {
               </div>
             </div>
           )}
-        </div>
       </div>
-    </div>
+    </OrganizationLayout>
   );
 }

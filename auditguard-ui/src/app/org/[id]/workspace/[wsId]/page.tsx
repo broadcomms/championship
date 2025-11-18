@@ -59,15 +59,27 @@ export default function WorkspaceDashboardPage() {
 
   const fetchData = async () => {
     try {
-      const [workspaceRes, statsRes, activityRes] = await Promise.all([
-        api.get(`/workspaces/${wsId}`),
-        api.get(`/workspaces/${wsId}/stats`),
-        api.get(`/workspaces/${wsId}/activity?limit=10`),
+      // Fetch workspace and stats (core data)
+      const [workspaceRes, statsRes] = await Promise.all([
+        api.get(`/api/workspaces/${wsId}`),
+        api.get(`/api/workspaces/${wsId}/stats`),
       ]);
 
-      setWorkspace(workspaceRes.data);
-      setStats(statsRes.data);
-      setActivity(activityRes.data);
+      // API returns data directly (not wrapped in .data)
+      setWorkspace(workspaceRes || null);
+      setStats(statsRes || null);
+
+      // Fetch activity separately (optional - may not be implemented yet)
+      try {
+        const activityRes = await api.get(`/api/workspaces/${wsId}/activity?limit=10`);
+        setActivity(Array.isArray(activityRes) ? activityRes : []);
+      } catch (activityError) {
+        // Activity endpoint not implemented yet - gracefully degrade
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Activity endpoint not available:', activityError);
+        }
+        setActivity([]);
+      }
     } catch (error) {
       console.error('Failed to fetch workspace data:', error);
     } finally {

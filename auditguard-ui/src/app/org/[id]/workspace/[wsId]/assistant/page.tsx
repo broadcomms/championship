@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { MultiLevelSidebar } from '@/components/sidebar/MultiLevelSidebar';
+import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
 
@@ -29,6 +30,8 @@ export default function WorkspaceAssistantPage() {
   const params = useParams();
   const orgId = params.id as string;
   const wsId = params.wsId as string;
+  const { user } = useAuth();
+  const accountId = user?.userId;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -150,10 +153,8 @@ export default function WorkspaceAssistantPage() {
   };
 
   return (
-    <div className="flex h-screen">
-      <MultiLevelSidebar currentOrgId={orgId} currentWorkspaceId={wsId} />
-
-      <div className="flex-1 flex overflow-hidden">
+    <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
+      <div className="flex flex-col h-full overflow-hidden">
         {/* Conversation History Sidebar */}
         {showSidebar && (
           <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
@@ -376,6 +377,6 @@ export default function WorkspaceAssistantPage() {
           </div>
         </div>
       </div>
-    </div>
+    </OrganizationLayout>
   );
 }

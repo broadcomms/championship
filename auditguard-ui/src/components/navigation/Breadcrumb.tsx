@@ -29,11 +29,11 @@ export function Breadcrumb({ accountId, orgId, workspaceId, customItems }: Bread
       try {
         if (orgId) {
           const orgResponse = await api.get(`/api/organizations/${orgId}`);
-          setOrgName(orgResponse.data.name);
+          setOrgName(orgResponse.name);
         }
         if (workspaceId) {
           const wsResponse = await api.get(`/api/workspaces/${workspaceId}`);
-          setWorkspaceName(wsResponse.data.name);
+          setWorkspaceName(wsResponse.name);
         }
       } catch (error) {
         console.error('Failed to fetch breadcrumb names:', error);

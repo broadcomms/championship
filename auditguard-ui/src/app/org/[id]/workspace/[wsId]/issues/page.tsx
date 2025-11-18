@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { MultiLevelSidebar } from '@/components/sidebar/MultiLevelSidebar';
+import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
 import { Button } from '@/components/common/Button';
 
@@ -10,15 +11,15 @@ export default function WorkspaceIssuesPage() {
   const params = useParams();
   const orgId = params.id as string;
   const wsId = params.wsId as string;
+  const { user } = useAuth();
+  const accountId = user?.userId;
 
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [filterSeverity, setFilterSeverity] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
 
   return (
-    <div className="flex h-screen">
-      <MultiLevelSidebar currentOrgId={orgId} currentWorkspaceId={wsId} />
-      <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-[1800px] mx-auto p-8">
+    <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
+      <div className="p-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -98,8 +99,7 @@ export default function WorkspaceIssuesPage() {
               <li>• Assign team members to issues for accountability</li>
             </ul>
           </div>
-        </div>
       </div>
-    </div>
+    </OrganizationLayout>
   );
 }

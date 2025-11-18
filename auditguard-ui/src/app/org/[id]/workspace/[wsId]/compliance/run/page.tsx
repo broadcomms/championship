@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MultiLevelSidebar } from '@/components/sidebar/MultiLevelSidebar';
+import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
 
@@ -43,6 +44,8 @@ export default function RunComplianceCheckPage() {
   const router = useRouter();
   const orgId = params.id as string;
   const wsId = params.wsId as string;
+  const { user } = useAuth();
+  const accountId = user?.userId;
 
   const [currentStep, setCurrentStep] = useState<CheckStep>('select_framework');
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -708,10 +711,8 @@ export default function RunComplianceCheckPage() {
   );
 
   return (
-    <div className="flex h-screen">
-      <MultiLevelSidebar currentOrgId={orgId} currentWorkspaceId={wsId} />
-      <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-6xl mx-auto p-8">
+    <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
+      <div className="p-8">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Run Compliance Check</h1>
@@ -729,8 +730,7 @@ export default function RunComplianceCheckPage() {
           {currentStep === 'configure' && renderConfigureStep()}
           {currentStep === 'running' && renderRunningStep()}
           {currentStep === 'complete' && renderCompleteStep()}
-        </div>
       </div>
-    </div>
+    </OrganizationLayout>
   );
 }

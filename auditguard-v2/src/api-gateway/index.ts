@@ -661,7 +661,7 @@ export default class extends Service<Env> {
             'organizations.name',
             'organization_members.role',
           ])
-          .where('organization_members.account_id', '=', user.userId)
+          .where('organization_members.user_id', '=', user.userId)
           .orderBy('organizations.created_at', 'desc')
           .execute();
 
@@ -730,6 +730,81 @@ export default class extends Service<Env> {
         );
 
         return new Response(JSON.stringify({ data: workspacesWithCounts }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // POST /api/organizations/:id/workspaces - Create workspace within organization
+      if (orgWorkspacesMatch && orgWorkspacesMatch[1] && request.method === 'POST') {
+        const organizationId = orgWorkspacesMatch[1];
+        const user = await this.validateSession(request);
+
+        // Parse request body
+        const parseResult = await this.safeParseJSON<{ name: string; description?: string }>(
+          request,
+          ['name'] // Only name is required
+        );
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        // Verify user has permission to create workspaces in this org
+        const db = this.getDb();
+        const membership = await db
+          .selectFrom('organization_members')
+          .select(['role'])
+          .where('organization_id', '=', organizationId)
+          .where('user_id', '=', user.userId)
+          .executeTakeFirst();
+
+        if (!membership) {
+          return new Response(JSON.stringify({ error: 'You are not a member of this organization' }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        // Create workspace with organization_id
+        const workspaceId = `wks_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+        await db
+          .insertInto('workspaces')
+          .values({
+            id: workspaceId,
+            name: body.name,
+            description: body.description || null,
+            organization_id: organizationId,
+            owner_id: user.userId,
+            created_at: Date.now(),
+            updated_at: Date.now(),
+          })
+          .execute();
+
+        // Add creator as workspace member with admin role
+        await db
+          .insertInto('workspace_members')
+          .values({
+            workspace_id: workspaceId,
+            user_id: user.userId,
+            role: 'admin',
+            added_at: Date.now(),
+            added_by: user.userId,
+          })
+          .execute();
+
+        // Fetch the created workspace
+        const newWorkspace = await db
+          .selectFrom('workspaces')
+          .select(['id', 'name', 'description', 'organization_id', 'owner_id', 'created_at', 'updated_at'])
+          .where('id', '=', workspaceId)
+          .executeTakeFirst();
+
+        return new Response(JSON.stringify(newWorkspace), {
+          status: 201,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
