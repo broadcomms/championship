@@ -4,36 +4,56 @@ Using user: user_01K8RV423SG75TDJC3014RQN9B
 Following logs for auditguard-v2@01ka6zr7vtjhb3p3tvx2nsz3qr...
 📜 Showing last 10 log events:
 
-[11/18/2025, 12:53:09 PM] 🔗 Trace: c12c1a09bef5665d33d67b57cbc5d50b (6021ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: document-service
-  1. ✅ sql.all (155ms)
-     🗄️  SQL Query: update "documents" set "text_extracted" = ?, "chunk_count" = ?, "processing_status" = ?, "updated_at" = ?, "extracted_text_key" = ?, "storage_key" = ?, "extraction_status" = ?, "smartbucket_indexing_status" = ?, "extracted_text" = ?, "page_count" = ?, "word_count" = ? where "id" = ?
-     📊 meta: 0.2862ms, 2 rows read, 3 rows written, ENAM, DB: 952.0KB
-  2. ✅ updateDocumentProcessing (155ms)
-  3. ✅ log
-     level: INFO
-     message: Processing email notification
-     fields: {"type":"document_processed","to":"patrick.10.07.2025@gmail.com","attempt":1,"timestamp":1763488394901}
-  4. ✅ process (449ms)
-  5. ✅ log
-     level: INFO
-     message: Attempting to send email
-     fields: {"to":"patrick.10.07.2025@gmail.com","subject":"Document processed: Social_Media_Policy.pdf","hasApiKey":true,"apiKeyPrefix":"re_dYKJNWc...","apiKeyLength":36,"emailFrom":"AuditGuardX <noreply@auditguardx.com>"}
-  6. ✅ sendDocumentProcessed (354ms)
-  7. ✅ sendDocumentProcessed (449ms)
-     service: EMAIL_SERVICE
-  8. ✅ fetch (346ms)
-     url: https://api.resend.com/emails
-     method: POST
-     status: 200
-  9. ✅ log
-     level: INFO
-     message: Email sent successfully
-     fields: {"to":"patrick.10.07.2025@gmail.com","subject":"Document processed: Social_Media_Policy.pdf","id":"55b54eef-5b37-47d1-a514-2f3968782a10"}
-  10. ✅ log
-     level: INFO
-     message: Email notification sent successfully
-     fields: {"type":"document_processed","to":"patrick.10.07.2025@gmail.com"}
+[11/18/2025, 1:43:52 PM] 🔗 Trace: b3d87cd439ae5230cd7481e2e73aa0e0 (63ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: workspace-service
+  1. ✅ sql.all (63ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2041ms, 1 rows read, ENAM, DB: 1012.0KB
+
+[11/18/2025, 1:43:53 PM] 🔗 Trace: a80207d4b99691c000dd8045a0ea0ddf (60ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: organization-service
+  1. ✅ sql.all (60ms)
+     🗄️  SQL Query: select "subscription_plans"."name" as "plan_name", "subscriptions"."status" as "subscription_status" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?, ?) order by "subscriptions"."created_at" desc
+     📊 meta: 0.2029ms, 6 rows read, ENAM, DB: 1012.0KB
+
+[11/18/2025, 1:43:53 PM] 🔗 Trace: fee5a34799281274cc0de3742cd00227 (178ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
+  1. ✅ validateSession (61ms)
+     service: AUTH_SERVICE
+  2. ✅ fetch (180ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
+     http.method: GET
+     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
+     http.scheme: https
+     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.5
+     http.authorization: undefined
+     http.cf_ray: 9a099db12e677aa8
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  3. ✅ sql.all (59ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2253ms, 2 rows read, ENAM, DB: 1012.0KB
+  4. ✅ validateSession (59ms)
+  5. ✅ sql.all (55ms)
+     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
+     📊 meta: 0.1931ms, 1 rows read, ENAM, DB: 1012.0KB
+  6. ✅ getWorkspace (115ms)
+  7. ✅ getWorkspace (119ms)
+     service: WORKSPACE_SERVICE
+  8. ✅ sql.all (60ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2459ms, 1 rows read, ENAM, DB: 1012.0KB
 
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -45,630 +65,124 @@ Press Ctrl+C to stop following
 🔄 Started streaming logs for auditguard-v2@01ka6zr7vtjhb3p3tvx2nsz3qr
    Organization: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
    User: user_01K8RV423SG75TDJC3014RQN9B
-   Time: 11/18/2025, 12:53:33 PM
-[11/18/2025, 12:53:36 PM] 🔗 Trace: 7a03399ecc63c4859cb183f3b7196e12 (182ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (65ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (186ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09540c988eaadc
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1337ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (62ms)
-  5. ✅ sql.all (58ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.2597ms, 1 rows read, ENAM, DB: 952.0KB
-  6. ✅ getDocument (115ms)
-  7. ✅ getDocument (121ms)
-     service: DOCUMENT_SERVICE
-  8. ✅ sql.all (57ms)
-     🗄️  SQL Query: select "documents"."id", "documents"."workspace_id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."storage_key", "documents"."vultr_key", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count", "documents"."word_count", "documents"."character_count", "documents"."page_count", "documents"."chunks_created", "documents"."embeddings_generated", "documents"."vector_indexing_status", "documents"."compliance_framework_id", "documents"."fully_completed" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."id" = ? and "documents"."workspace_id" = ?
-     📊 meta: 0.5196ms, 2 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:37 PM] 🔗 Trace: 86b2f154f96e5d726cd9ebe9cf0def28 (183ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1948ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (63ms)
-  3. ✅ sql.all (55ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.1348ms, 1 rows read, ENAM, DB: 952.0KB
-  4. ✅ getWorkspace (116ms)
-  5. ✅ validateSession (66ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (185ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a0954129958cf1c
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (61ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1563ms, 1 rows read, ENAM, DB: 952.0KB
-  8. ✅ getWorkspace (119ms)
-     service: WORKSPACE_SERVICE
-
-[11/18/2025, 12:53:37 PM] 🔗 Trace: 7ca6582b331db2a27dbf7e9645f1a861 (208ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (65ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.296ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (65ms)
-  3. ✅ sql.all (79ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.2372ms, 1 rows read, ENAM, DB: 952.0KB
-  4. ✅ getWorkspace (139ms)
-  5. ✅ validateSession (68ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (210ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095411fad55d15
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1133ms, 1 rows read, ENAM, DB: 952.0KB
-  8. ✅ getWorkspace (142ms)
-     service: WORKSPACE_SERVICE
-
-[11/18/2025, 12:53:36 PM] 🔗 Trace: 6ec64728931788ddc82041202d99b382 (218ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (70ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1856ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (70ms)
-  3. ✅ validateSession (74ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (223ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09540c9a75a450
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (80ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.2123ms, 1 rows read, ENAM, DB: 952.0KB
-  6. ✅ getDocument (144ms)
-  7. ✅ getDocument (149ms)
-     service: DOCUMENT_SERVICE
-  8. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "documents"."id", "documents"."workspace_id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."storage_key", "documents"."vultr_key", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count", "documents"."word_count", "documents"."character_count", "documents"."page_count", "documents"."chunks_created", "documents"."embeddings_generated", "documents"."vector_indexing_status", "documents"."compliance_framework_id", "documents"."fully_completed" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."id" = ? and "documents"."workspace_id" = ?
-     📊 meta: 0.2279ms, 2 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:37 PM] 🔗 Trace: 4745d50bf62efe44023f4455c9b976ea (387ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (65ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (391ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09540f1986aadf
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2433ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (63ms)
-  5. ✅ sql.all (68ms)
-     🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.2166ms, 1 rows read, ENAM, DB: 952.0KB
-  6. ✅ getOrganizationSettings (320ms)
-  7. ✅ getOrganizationSettings (326ms)
-     service: ORGANIZATION_SERVICE
-  8. ✅ sql.all (63ms)
-     🗄️  SQL Query: select * from "organizations" where "id" = ?
-     📊 meta: 0.1342ms, 1 rows read, ENAM, DB: 952.0KB
-  9. ✅ sql.all (64ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.2131ms, 2 rows read, ENAM, DB: 952.0KB
-  10. ✅ sql.all (62ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1671ms, 1 rows read, ENAM, DB: 952.0KB
-  11. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "subscription_plans"."name" as "plan_name", "subscriptions"."status" as "subscription_status" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.5083ms, 6 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:37 PM] 🔗 Trace: 24ff2504599cc3d2efa85e9115c67b4c (220ms total)
+   Time: 11/18/2025, 1:43:55 PM
+[11/18/2025, 1:43:59 PM] 🔗 Trace: 3e7dbf1fbf6e3fd91618d686c845d288 (306ms total)
   Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: organization-service
-  1. ✅ sql.all (67ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.8648ms, 4 rows read, ENAM, DB: 952.0KB
-  2. ✅ getUserOrganizations (220ms)
+  1. ✅ sql.all (61ms)
+     🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
+     📊 meta: 0.2006ms, 1 rows read, ENAM, DB: 1012.0KB
+  2. ✅ getOrganizationUsageForecast (306ms)
   3. ✅ validateSession (62ms)
      service: AUTH_SERVICE
-  4. ✅ fetch (287ms)
+  4. ✅ fetch (374ms)
      organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
      service.namespace: auditguard-v2
      service.name: api-gateway
      service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
      http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
+     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/usage/forecast
      http.scheme: https
      http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
      http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
      http.content_type: application/json
      http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
      http.accept: */*
      http.accept_encoding: gzip, br
      http.accept_language: en-US,en;q=0.5
      http.authorization: undefined
-     http.cf_ray: 9a09540eda6aab64
+     http.cf_ray: 9a099dd95a96abe5
      http.cf_connecting_ip: 184.146.37.240
      http.cf_country: CA
      http.status: ✅ 200
-  5. ✅ sql.all (58ms)
+  5. ✅ sql.all (59ms)
      🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1693ms, 2 rows read, ENAM, DB: 952.0KB
-  6. ✅ validateSession (58ms)
-  7. ✅ sql.all (80ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.4092ms, 2 rows read, ENAM, DB: 952.0KB
-  8. ✅ getUserOrganizations (225ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (73ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1473ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:37 PM] 🔗 Trace: f5be435057991f8b4ed7dc2c7e897859 (204ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: organization-service
-  1. ✅ sql.all (66ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.1418ms, 4 rows read, ENAM, DB: 952.0KB
-  2. ✅ getUserOrganizations (204ms)
-  3. ✅ sql.all (65ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1421ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (65ms)
-  5. ✅ validateSession (68ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (276ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09540ef901ab06
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (71ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1073ms, 2 rows read, ENAM, DB: 952.0KB
-  8. ✅ getUserOrganizations (208ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (67ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.0882ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:37 PM] 🔗 Trace: 43d22a10c4d8b4129c4cef807bcead3e (260ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2359ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (60ms)
-  3. ✅ validateSession (64ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (261ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/workspaces
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09540f0a87ab76
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.9473ms, 2 rows read, ENAM, DB: 952.0KB
-  6. ✅ sql.all (66ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.156ms, 1 rows read, ENAM, DB: 952.0KB
-  7. ✅ sql.all (67ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.192ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:36 PM] 🔗 Trace: 2ea1f6ceec54b1b65786a10f14801ca9 (130ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (58ms)
-     🗄️  SQL Query: select "id", "email", "created_at" from "users" where "id" = ?
-     📊 meta: 0.2622ms, 1 rows read, ENAM, DB: 952.0KB
-  2. ✅ getUserById (128ms)
-  3. ✅ sql.all (68ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.6056ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (68ms)
-  5. ✅ validateSession (72ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (204ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/auth/me
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09540c88e9130e
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (70ms)
-     🗄️  SQL Query: select "user_id" from "admin_users" where "user_id" = ?
-     📊 meta: 0.3348ms, ENAM, DB: 952.0KB
-  8. ✅ getUserById (132ms)
-     service: AUTH_SERVICE
-
-[11/18/2025, 12:53:36 PM] 🔗 Trace: 9d35a18224784b58009f44744e0eaa7d (145ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (79ms)
-     🗄️  SQL Query: select "id", "email", "created_at" from "users" where "id" = ?
-     📊 meta: 0.1422ms, 1 rows read, ENAM, DB: 952.0KB
-  2. ✅ getUserById (143ms)
-  3. ✅ sql.all (68ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.26ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (68ms)
-  5. ✅ validateSession (71ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (218ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/auth/me
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09540cacd1abae
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "user_id" from "admin_users" where "user_id" = ?
-     📊 meta: 0.1729ms, ENAM, DB: 952.0KB
-  8. ✅ getUserById (147ms)
-     service: AUTH_SERVICE
-
-[11/18/2025, 12:53:37 PM] 🔗 Trace: 4d5e06495c6da64644c223bc436abd82 (318ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: organization-service
-  1. ✅ sql.all (67ms)
+     📊 meta: 0.2483ms, 2 rows read, ENAM, DB: 1012.0KB
+  6. ✅ validateSession (59ms)
+  7. ✅ sql.all (56ms)
      🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.1992ms, 1 rows read, ENAM, DB: 952.0KB
-  2. ✅ getOrganizationSettings (318ms)
-  3. ✅ validateSession (74ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (400ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09540fb93f3b8e
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (69ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2349ms, 2 rows read, ENAM, DB: 952.0KB
-  6. ✅ validateSession (69ms)
-  7. ✅ sql.all (69ms)
-     🗄️  SQL Query: select * from "organizations" where "id" = ?
-     📊 meta: 0.1662ms, 1 rows read, ENAM, DB: 952.0KB
-  8. ✅ getOrganizationSettings (326ms)
+     📊 meta: 0.1663ms, 1 rows read, ENAM, DB: 1012.0KB
+  8. ✅ getOrganizationUsageForecast (312ms)
      service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (59ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1433ms, 2 rows read, ENAM, DB: 952.0KB
-  10. ✅ sql.all (60ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.2407ms, 1 rows read, ENAM, DB: 952.0KB
-  11. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "subscription_plans"."name" as "plan_name", "subscriptions"."status" as "subscription_status" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.2128ms, 6 rows read, ENAM, DB: 952.0KB
+  9. ✅ sql.all (56ms)
+     🗄️  SQL Query: select sum("documents_created") as "total_documents", sum("compliance_checks_count") as "total_checks", sum("assistant_messages_count") as "total_messages", sum("api_calls_count") as "total_api_calls", sum("storage_bytes") as "total_storage_bytes" from "organization_usage_daily" where "organization_id" = ? and "date" >= ? and "date" <= ?
+     📊 meta: 0.1991ms, 1 rows read, ENAM, DB: 1012.0KB
+  10. ✅ sql.all (65ms)
+     🗄️  SQL Query: select "w"."id" as "workspace_id", "w"."name" as "workspace_name", count(*) as "documents", count("cc"."id") as "checks", sum("d"."file_size") as "storage_bytes" from "workspaces" as "w" left join "documents" as "d" on "d"."workspace_id" = "w"."id" left join "compliance_checks" as "cc" on "cc"."workspace_id" = "w"."id" where "w"."organization_id" = ? group by "w"."id", "w"."name"
+     📊 meta: 0.1834ms, 40 rows read, ENAM, DB: 1012.0KB
+  11. ✅ sql.all (68ms)
+     🗄️  SQL Query: select "subscription_plans"."limits" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?) order by "subscriptions"."created_at" desc
+     📊 meta: 0.2699ms, 5 rows read, ENAM, DB: 1012.0KB
 
-[11/18/2025, 12:53:37 PM] 🔗 Trace: ffe72aecca44c802701a5bf4aedc9d34 (248ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (66ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (248ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/workspaces
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488365557_hb1o3
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09540fcb09e930
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2443ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (64ms)
-  5. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.1991ms, 2 rows read, ENAM, DB: 952.0KB
-  6. ✅ sql.all (58ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.1335ms, 1 rows read, ENAM, DB: 952.0KB
-  7. ✅ sql.all (62ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1431ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:51 PM] 🔗 Trace: 48945a241b735780bc44c2328f28ebbd (127ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: document-service
-  1. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1664ms, 1 rows read, ENAM, DB: 952.0KB
-  2. ✅ listDocuments (124ms)
-  3. ✅ validateSession (617ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (746ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/documents
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095462eeccab46
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (615ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1269ms, 2 rows read, ENAM, DB: 952.0KB
-  6. ✅ validateSession (615ms)
-  7. ✅ sql.all (61ms)
-     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
-     📊 meta: 0.1814ms, 3 rows read, ENAM, DB: 952.0KB
-  8. ✅ listDocuments (129ms)
-     service: DOCUMENT_SERVICE
-
-[11/18/2025, 12:53:51 PM] 🔗 Trace: c43d09887a1fd310364fb8be6d7c5f65 (186ms total)
+[11/18/2025, 1:44:00 PM] 🔗 Trace: a62d5ecf9689385353a67d7f63975581 (933ms total)
   Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (65ms)
+  1. ✅ sql.all (515ms)
      🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1707ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (65ms)
+     📊 meta: 0.2017ms, 2 rows read, ENAM, DB: 1012.0KB
+  2. ✅ validateSession (515ms)
+  3. ✅ sql.all (269ms)
+     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
+     📊 meta: 0.2395ms, 1 rows read, ENAM, DB: 1012.0KB
+  4. ✅ getWorkspace (336ms)
+  5. ✅ validateSession (520ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (935ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
+     http.method: GET
+     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
+     http.scheme: https
+     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.5
+     http.authorization: undefined
+     http.cf_ray: 9a099ddcf978a244
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (67ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1997ms, 1 rows read, ENAM, DB: 1012.0KB
+  8. ✅ getWorkspace (415ms)
+     service: WORKSPACE_SERVICE
+
+[11/18/2025, 1:43:59 PM] 🔗 Trace: a31a0e3e6869a35dc24b52b8e3ed12fb (1104ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
+  1. ✅ sql.all (63ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2312ms, 2 rows read, ENAM, DB: 1012.0KB
+  2. ✅ validateSession (63ms)
   3. ✅ validateSession (68ms)
      service: AUTH_SERVICE
-  4. ✅ fetch (189ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a0954694b66e7e3
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.2029ms, 1 rows read, ENAM, DB: 952.0KB
-  6. ✅ getWorkspace (118ms)
-  7. ✅ getWorkspace (121ms)
-     service: WORKSPACE_SERVICE
-  8. ✅ sql.all (56ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1264ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:50 PM] 🔗 Trace: a394cd6b5fe5ca27336ac1664aa902ce (951ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (628ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (954ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095462d914c109
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (626ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1999ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (626ms)
-  5. ✅ sql.all (64ms)
+  4. ✅ sql.all (58ms)
      🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.1671ms, 1 rows read, ENAM, DB: 952.0KB
-  6. ✅ getOrganizationSettings (319ms)
-  7. ✅ getOrganizationSettings (326ms)
-     service: ORGANIZATION_SERVICE
-  8. ✅ sql.all (67ms)
-     🗄️  SQL Query: select * from "organizations" where "id" = ?
-     📊 meta: 0.158ms, 1 rows read, ENAM, DB: 952.0KB
-  9. ✅ sql.all (63ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1762ms, 2 rows read, ENAM, DB: 952.0KB
-  10. ✅ sql.all (61ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1483ms, 1 rows read, ENAM, DB: 952.0KB
-  11. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "subscription_plans"."name" as "plan_name", "subscriptions"."status" as "subscription_status" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.2799ms, 6 rows read, ENAM, DB: 952.0KB
+     📊 meta: 0.1526ms, 1 rows read, ENAM, DB: 1012.0KB
+  5. ✅ getOrganizationUsageForecast (1037ms)
+  6. ✅ sql.all (67ms)
+     🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
+     📊 meta: 0.2022ms, 1 rows read, ENAM, DB: 1012.0KB
+  7. ✅ sql.all (104ms)
+     🗄️  SQL Query: select sum("documents_created") as "total_documents", sum("compliance_checks_count") as "total_checks", sum("assistant_messages_count") as "total_messages", sum("api_calls_count") as "total_api_calls", sum("storage_bytes") as "total_storage_bytes" from "organization_usage_daily" where "organization_id" = ? and "date" >= ? and "date" <= ?
+     📊 meta: 0.2507ms, 1 rows read, ENAM, DB: 1012.0KB
+  8. ✅ sql.all (465ms)
+     🗄️  SQL Query: select "w"."id" as "workspace_id", "w"."name" as "workspace_name", count(*) as "documents", count("cc"."id") as "checks", sum("d"."file_size") as "storage_bytes" from "workspaces" as "w" left join "documents" as "d" on "d"."workspace_id" = "w"."id" left join "compliance_checks" as "cc" on "cc"."workspace_id" = "w"."id" where "w"."organization_id" = ? group by "w"."id", "w"."name"
+     📊 meta: 0.2625ms, 40 rows read, ENAM, DB: 1012.0KB
+  9. ✅ sql.all (343ms)
+     🗄️  SQL Query: select "subscription_plans"."limits" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?) order by "subscriptions"."created_at" desc
+     📊 meta: 0.277ms, 5 rows read, ENAM, DB: 1012.0KB
 
-[11/18/2025, 12:53:50 PM] 🔗 Trace: 467098a67aab212e740b08e53ea0ea84 (696ms total)
+[11/18/2025, 1:43:59 PM] 🔗 Trace: 589ef93bd31f557a65c86a5839f10ad3 (250ms total)
   Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (509ms)
+  1. ✅ validateSession (68ms)
      service: AUTH_SERVICE
-  2. ✅ fetch (696ms)
+  2. ✅ fetch (250ms)
      organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
      service.namespace: auditguard-v2
      service.name: api-gateway
@@ -680,204 +194,81 @@ Press Ctrl+C to stop following
      http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
      http.content_type: application/json
      http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
      http.accept: */*
      http.accept_encoding: gzip, br
      http.accept_language: en-US,en;q=0.5
      http.authorization: undefined
-     http.cf_ray: 9a0954638f85eff9
+     http.cf_ray: 9a099dd9296db634
      http.cf_connecting_ip: 184.146.37.240
      http.cf_country: CA
      http.status: ✅ 200
-  3. ✅ sql.all (506ms)
+  3. ✅ sql.all (61ms)
      🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2098ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (506ms)
+     📊 meta: 0.1579ms, 2 rows read, ENAM, DB: 1012.0KB
+  4. ✅ validateSession (61ms)
+  5. ✅ sql.all (61ms)
+     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
+     📊 meta: 0.2302ms, 2 rows read, ENAM, DB: 1012.0KB
+  6. ✅ sql.all (66ms)
+     🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
+     📊 meta: 0.1474ms, 1 rows read, ENAM, DB: 1012.0KB
+  7. ✅ sql.all (55ms)
+     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
+     📊 meta: 0.1955ms, 3 rows read, ENAM, DB: 1012.0KB
+
+[11/18/2025, 1:43:59 PM] 🔗 Trace: 5ca1c47727946045bed235ff0b810089 (373ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
+  1. ✅ validateSession (115ms)
+     service: AUTH_SERVICE
+  2. ✅ fetch (373ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
+     http.method: GET
+     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/workspaces
+     http.scheme: https
+     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.5
+     http.authorization: undefined
+     http.cf_ray: 9a099ddb1de5ec6f
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  3. ✅ sql.all (111ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2385ms, 2 rows read, ENAM, DB: 1012.0KB
+  4. ✅ validateSession (111ms)
   5. ✅ sql.all (60ms)
      🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.1677ms, 2 rows read, ENAM, DB: 952.0KB
-  6. ✅ sql.all (62ms)
+     📊 meta: 0.1995ms, 2 rows read, ENAM, DB: 1012.0KB
+  6. ✅ sql.all (57ms)
      🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.0988ms, 1 rows read, ENAM, DB: 952.0KB
-  7. ✅ sql.all (65ms)
+     📊 meta: 0.1405ms, 1 rows read, ENAM, DB: 1012.0KB
+  7. ✅ sql.all (141ms)
      🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.2194ms, 1 rows read, ENAM, DB: 952.0KB
+     📊 meta: 0.1868ms, 3 rows read, ENAM, DB: 1012.0KB
 
-[11/18/2025, 12:53:51 PM] 🔗 Trace: e9abdaf954bfff6f7398b9cb3f5d3b65 (237ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2874ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (63ms)
-  3. ✅ validateSession (66ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (241ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/documents
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a0954684b30cca0
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (72ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1424ms, 1 rows read, ENAM, DB: 952.0KB
-  6. ✅ listDocuments (171ms)
-  7. ✅ listDocuments (175ms)
-     service: DOCUMENT_SERVICE
-  8. ✅ sql.all (99ms)
-     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
-     📊 meta: 0.2585ms, 3 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:50 PM] 🔗 Trace: 81548ee9c5124e4f8bc2f39a12c730b8 (821ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (641ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (823ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095462cd5dac8e
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (638ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1935ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (638ms)
-  5. ✅ sql.all (61ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.1412ms, 4 rows read, ENAM, DB: 952.0KB
-  6. ✅ getUserOrganizations (178ms)
-  7. ✅ getUserOrganizations (182ms)
-     service: ORGANIZATION_SERVICE
-  8. ✅ sql.all (59ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1714ms, 2 rows read, ENAM, DB: 952.0KB
-  9. ✅ sql.all (58ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1522ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:51 PM] 🔗 Trace: 3cdbe1bff757717b41454d55a9b7b7b6 (194ms total)
+[11/18/2025, 1:43:59 PM] 🔗 Trace: 9f8dcc181e26b09a6b690bb505f34c5d (328ms total)
   Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: organization-service
-  1. ✅ sql.all (69ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.1807ms, 4 rows read, ENAM, DB: 952.0KB
-  2. ✅ getUserOrganizations (194ms)
-  3. ✅ sql.all (517ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1956ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (517ms)
-  5. ✅ validateSession (522ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (723ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09546389b73981
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (60ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1624ms, 2 rows read, ENAM, DB: 952.0KB
-  8. ✅ getUserOrganizations (201ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (65ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1834ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:51 PM] 🔗 Trace: 44b3d0bfb9108d2c1bb9709ba8f3c725 (177ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1335ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (60ms)
-  3. ✅ validateSession (64ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (181ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09546afeb2e7e3
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.1636ms, 1 rows read, ENAM, DB: 952.0KB
-  6. ✅ getWorkspace (114ms)
-  7. ✅ getWorkspace (117ms)
-     service: WORKSPACE_SERVICE
-  8. ✅ sql.all (54ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.2007ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:51 PM] 🔗 Trace: 44053d637e55a4ac682dc89b4135ffc0 (382ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (58ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1727ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (58ms)
-  3. ✅ sql.all (65ms)
+  1. ✅ sql.all (61ms)
      🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.3478ms, 1 rows read, ENAM, DB: 952.0KB
-  4. ✅ getOrganizationSettings (320ms)
-  5. ✅ validateSession (62ms)
+     📊 meta: 0.1121ms, 1 rows read, ENAM, DB: 1012.0KB
+  2. ✅ getOrganizationSettings (328ms)
+  3. ✅ sql.all (106ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.1935ms, 2 rows read, ENAM, DB: 1012.0KB
+  4. ✅ validateSession (106ms)
+  5. ✅ validateSession (111ms)
      service: AUTH_SERVICE
-  6. ✅ fetch (388ms)
+  6. ✅ fetch (525ms)
      organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
      service.namespace: auditguard-v2
      service.name: api-gateway
@@ -889,220 +280,85 @@ Press Ctrl+C to stop following
      http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
      http.content_type: application/json
      http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
      http.accept: */*
      http.accept_encoding: gzip, br
      http.accept_language: en-US,en;q=0.5
      http.authorization: undefined
-     http.cf_ray: 9a095468082aab10
+     http.cf_ray: 9a099dd92df9a220
      http.cf_connecting_ip: 184.146.37.240
      http.cf_country: CA
      http.status: ✅ 200
-  7. ✅ sql.all (63ms)
+  7. ✅ sql.all (79ms)
      🗄️  SQL Query: select * from "organizations" where "id" = ?
-     📊 meta: 0.1642ms, 1 rows read, ENAM, DB: 952.0KB
-  8. ✅ getOrganizationSettings (326ms)
+     📊 meta: 0.1683ms, 1 rows read, ENAM, DB: 1012.0KB
+  8. ✅ getOrganizationSettings (414ms)
      service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (62ms)
+  9. ✅ sql.all (64ms)
      🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1211ms, 2 rows read, ENAM, DB: 952.0KB
-  10. ✅ sql.all (68ms)
+     📊 meta: 0.1174ms, 2 rows read, ENAM, DB: 1012.0KB
+  10. ✅ sql.all (64ms)
      🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.2796ms, 1 rows read, ENAM, DB: 952.0KB
-  11. ✅ sql.all (62ms)
+     📊 meta: 0.1545ms, 1 rows read, ENAM, DB: 1012.0KB
+  11. ✅ sql.all (60ms)
      🗄️  SQL Query: select "subscription_plans"."name" as "plan_name", "subscriptions"."status" as "subscription_status" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.159ms, 6 rows read, ENAM, DB: 952.0KB
+     📊 meta: 0.335ms, 6 rows read, ENAM, DB: 1012.0KB
 
-[11/18/2025, 12:53:50 PM] 🔗 Trace: 33f9431e38e8f716f6801247319c2265 (815ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (631ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1722ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (631ms)
-  3. ✅ validateSession (634ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (816ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/workspaces
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095462ec5fdc46
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (61ms)
-     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.187ms, 2 rows read, ENAM, DB: 952.0KB
-  6. ✅ sql.all (62ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.1363ms, 1 rows read, ENAM, DB: 952.0KB
-  7. ✅ sql.all (59ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.199ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:53:56 PM] 🔗 Trace: 28cb842b9b59cf785d6f0274240ad42b (73ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (73ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.278ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (73ms)
-
-[11/18/2025, 12:53:57 PM] 🔗 Trace: f8b7748b745d8180dc3a66490eb6dff5 (59ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (59ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2594ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (59ms)
-
-[11/18/2025, 12:53:57 PM] 🔗 Trace: 14d569d80000c3fa46565b75ece9ab5e (57ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (57ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1755ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (57ms)
-
-[11/18/2025, 12:54:09 PM] 🔗 Trace: 2689047d005afbf7bcfd00986b976993 (189ms total)
+[11/18/2025, 1:43:59 PM] 🔗 Trace: 87e500fea6060208248aed1bfe498814 (346ms total)
   Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (66ms)
+  1. ✅ validateSession (79ms)
      service: AUTH_SERVICE
-  2. ✅ fetch (192ms)
+  2. ✅ fetch (348ms)
      organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
      service.namespace: auditguard-v2
      service.name: api-gateway
      service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
      http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/compliance
+     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
      http.scheme: https
      http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
      http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
      http.content_type: application/json
      http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
      http.accept: */*
      http.accept_encoding: gzip, br
      http.accept_language: en-US,en;q=0.5
      http.authorization: undefined
-     http.cf_ray: 9a0954d6bee8b634
+     http.cf_ray: 9a099ddb4a2daac2
      http.cf_connecting_ip: 184.146.37.240
      http.cf_country: CA
      http.status: ✅ 200
+  3. ✅ sql.all (56ms)
+     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
+     📊 meta: 0.1562ms, 4 rows read, ENAM, DB: 1012.0KB
+  4. ✅ getUserOrganizations (266ms)
+  5. ✅ sql.all (77ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2643ms, 2 rows read, ENAM, DB: 1012.0KB
+  6. ✅ validateSession (77ms)
+  7. ✅ getUserOrganizations (269ms)
+     service: ORGANIZATION_SERVICE
+  8. ✅ sql.all (65ms)
+     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
+     📊 meta: 0.1093ms, 2 rows read, ENAM, DB: 1012.0KB
+  9. ✅ sql.all (145ms)
+     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
+     📊 meta: 0.174ms, 1 rows read, ENAM, DB: 1012.0KB
+
+[11/18/2025, 1:43:59 PM] 🔗 Trace: 13202165b4dac2112c2ecb334c65cf88 (253ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
+  1. ✅ sql.all (68ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.192ms, 2 rows read, ENAM, DB: 1012.0KB
+  2. ✅ validateSession (68ms)
   3. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2297ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (62ms)
-  5. ✅ sql.all (58ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1194ms, 1 rows read, ENAM, DB: 952.0KB
-  6. ✅ listComplianceChecks (121ms)
-  7. ✅ listComplianceChecks (126ms)
-     service: COMPLIANCE_SERVICE
-  8. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "compliance_checks"."id", "compliance_checks"."document_id", "documents"."filename" as "document_name", "compliance_checks"."framework", "compliance_checks"."status", "compliance_checks"."overall_score", "compliance_checks"."issues_found", "compliance_checks"."created_at", "compliance_checks"."completed_at" from "compliance_checks" inner join "documents" on "documents"."id" = "compliance_checks"."document_id" where "compliance_checks"."workspace_id" = ? order by "compliance_checks"."created_at" desc
-     📊 meta: 0.1923ms, 3 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:54:19 PM] 🔗 Trace: a88797994e3b189f79ed2148d8681b53 (186ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (62ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (188ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/compliance
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09551519efaba0
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (59ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2377ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (59ms)
-  5. ✅ sql.all (65ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1592ms, 1 rows read, ENAM, DB: 952.0KB
-  6. ✅ listComplianceChecks (122ms)
-  7. ✅ listComplianceChecks (126ms)
-     service: COMPLIANCE_SERVICE
-  8. ✅ sql.all (57ms)
-     🗄️  SQL Query: select "compliance_checks"."id", "compliance_checks"."document_id", "documents"."filename" as "document_name", "compliance_checks"."framework", "compliance_checks"."status", "compliance_checks"."overall_score", "compliance_checks"."issues_found", "compliance_checks"."created_at", "compliance_checks"."completed_at" from "compliance_checks" inner join "documents" on "documents"."id" = "compliance_checks"."document_id" where "compliance_checks"."workspace_id" = ? order by "compliance_checks"."created_at" desc
-     📊 meta: 0.2068ms, 3 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:54:29 PM] 🔗 Trace: 307dcad866b644c7914ec4a85122b6e0 (205ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (70ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (208ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/compliance
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095553ce4fab90
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (67ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2281ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (67ms)
-  5. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1489ms, 1 rows read, ENAM, DB: 952.0KB
-  6. ✅ listComplianceChecks (134ms)
-  7. ✅ listComplianceChecks (138ms)
-     service: COMPLIANCE_SERVICE
-  8. ✅ sql.all (70ms)
-     🗄️  SQL Query: select "compliance_checks"."id", "compliance_checks"."document_id", "documents"."filename" as "document_name", "compliance_checks"."framework", "compliance_checks"."status", "compliance_checks"."overall_score", "compliance_checks"."issues_found", "compliance_checks"."created_at", "compliance_checks"."completed_at" from "compliance_checks" inner join "documents" on "documents"."id" = "compliance_checks"."document_id" where "compliance_checks"."workspace_id" = ? order by "compliance_checks"."created_at" desc
-     📊 meta: 0.2066ms, 3 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:54:29 PM] 🔗 Trace: 9b173b0423acb21197a2a0e3796df168 (192ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: organization-service
-  1. ✅ sql.all (72ms)
      🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.1926ms, 4 rows read, ENAM, DB: 952.0KB
-  2. ✅ getUserOrganizations (192ms)
-  3. ✅ sql.all (73ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2174ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (73ms)
-  5. ✅ validateSession (77ms)
+     📊 meta: 0.1727ms, 4 rows read, ENAM, DB: 1012.0KB
+  4. ✅ getUserOrganizations (181ms)
+  5. ✅ validateSession (72ms)
      service: AUTH_SERVICE
-  6. ✅ fetch (274ms)
+  6. ✅ fetch (259ms)
      organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
      service.namespace: auditguard-v2
      service.name: api-gateway
@@ -1114,707 +370,52 @@ Press Ctrl+C to stop following
      http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
      http.content_type: application/json
      http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
      http.accept: */*
      http.accept_encoding: gzip, br
      http.accept_language: en-US,en;q=0.5
      http.authorization: undefined
-     http.cf_ray: 9a095557df5bab03
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (58ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1897ms, 2 rows read, ENAM, DB: 952.0KB
-  8. ✅ getUserOrganizations (197ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (62ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1455ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:54:29 PM] 🔗 Trace: ec8499edd9d7d2532e7686aeb6f75c64 (379ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.0976ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (64ms)
-  3. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.1339ms, 1 rows read, ENAM, DB: 952.0KB
-  4. ✅ getOrganizationSettings (312ms)
-  5. ✅ validateSession (67ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (381ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095557fecc860b
+     http.cf_ray: 9a099dd9282cabac
      http.cf_connecting_ip: 184.146.37.240
      http.cf_country: CA
      http.status: ✅ 200
   7. ✅ sql.all (62ms)
-     🗄️  SQL Query: select * from "organizations" where "id" = ?
-     📊 meta: 0.1449ms, 1 rows read, ENAM, DB: 952.0KB
-  8. ✅ getOrganizationSettings (314ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (61ms)
      🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.0938ms, 2 rows read, ENAM, DB: 952.0KB
-  10. ✅ sql.all (63ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1278ms, 1 rows read, ENAM, DB: 952.0KB
-  11. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "subscription_plans"."name" as "plan_name", "subscriptions"."status" as "subscription_status" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.3111ms, 6 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:54:29 PM] 🔗 Trace: b7094e55b41306ba07fa082cf2c6eb15 (263ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (71ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (263ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/workspaces
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a0955580859de74
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  3. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1665ms, 2 rows read, ENAM, DB: 952.0KB
-  4. ✅ validateSession (64ms)
-  5. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.1443ms, 2 rows read, ENAM, DB: 952.0KB
-  6. ✅ sql.all (66ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.1459ms, 1 rows read, ENAM, DB: 952.0KB
-  7. ✅ sql.all (63ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1114ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:54:29 PM] 🔗 Trace: 22d89d2de591549607a5a9766014b898 (187ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (58ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.104ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (58ms)
-  3. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.1016ms, 1 rows read, ENAM, DB: 952.0KB
-  4. ✅ getWorkspace (123ms)
-  5. ✅ validateSession (62ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (189ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095558086dcbfd
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1477ms, 1 rows read, ENAM, DB: 952.0KB
-  8. ✅ getWorkspace (127ms)
-     service: WORKSPACE_SERVICE
-
-[11/18/2025, 12:54:29 PM] 🔗 Trace: a71ca8af0532d596aa5650721007f9ff (241ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.3017ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (64ms)
-  3. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.2477ms, 4 rows read, ENAM, DB: 952.0KB
-  4. ✅ getUserOrganizations (174ms)
-  5. ✅ validateSession (68ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (242ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095558ef6797b9
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (55ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1873ms, 2 rows read, ENAM, DB: 952.0KB
-  8. ✅ getUserOrganizations (174ms)
+     📊 meta: 0.1401ms, 2 rows read, ENAM, DB: 1012.0KB
+  8. ✅ getUserOrganizations (187ms)
      service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (59ms)
+  9. ✅ sql.all (57ms)
      🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.2125ms, 1 rows read, ENAM, DB: 952.0KB
+     📊 meta: 0.1895ms, 1 rows read, ENAM, DB: 1012.0KB
 
-[11/18/2025, 12:54:29 PM] 🔗 Trace: 523a6ca77720e633d8e1453570806f0b (288ms total)
+[11/18/2025, 1:43:59 PM] 🔗 Trace: 65063f60fceb9827becf2457480ab8e8 (787ms total)
   Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (64ms)
+  1. ✅ sql.all (68ms)
      🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.127ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (64ms)
-  3. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1892ms, 1 rows read, ENAM, DB: 952.0KB
-  4. ✅ getWorkspaceStats (221ms)
-  5. ✅ validateSession (67ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (297ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/stats
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a0955581916c9d6
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (58ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1449ms, 1 rows read, ENAM, DB: 952.0KB
-  8. ✅ getWorkspaceStats (230ms)
-     service: USAGE_SERVICE
-  9. ✅ sql.all (62ms)
-     🗄️  SQL Query: select count("compliance_issues"."id") as "count" from "compliance_issues" inner join "compliance_checks" on "compliance_issues"."check_id" = "compliance_checks"."id" where "compliance_checks"."workspace_id" = ? and "compliance_issues"."status" = ?
-     📊 meta: 0.1295ms, 14 rows read, ENAM, DB: 952.0KB
-  10. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "overall_score" from "workspace_scores" where "workspace_id" = ? order by "calculated_at" desc limit ?
-     📊 meta: 0.2126ms, 14 rows read, ENAM, DB: 952.0KB
-  11. ✅ sql.all (65ms)
-     🗄️  SQL Query: select count("id") as "count" from "compliance_checks" where "workspace_id" = ?
-     📊 meta: 0.0825ms, 1 rows read, ENAM, DB: 952.0KB
-  12. ✅ sql.all (92ms)
-     🗄️  SQL Query: select sum("file_size") as "total" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1936ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:54:30 PM] 🔗 Trace: aeb96b5c3d9a6180887a245c443b631c (251ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (67ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1286ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (67ms)
-  3. ✅ validateSession (70ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (253ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/workspaces
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a0955598a227db1
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (56ms)
-     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.1848ms, 2 rows read, ENAM, DB: 952.0KB
-  6. ✅ sql.all (62ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.1251ms, 1 rows read, ENAM, DB: 952.0KB
-  7. ✅ sql.all (65ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1211ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:54:30 PM] 🔗 Trace: 8034b238747488ed70013e0164ca708e (383ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1825ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (64ms)
-  3. ✅ validateSession (67ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (386ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095559edccb402
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (62ms)
+     📊 meta: 0.1157ms, 2 rows read, ENAM, DB: 1012.0KB
+  2. ✅ validateSession (68ms)
+  3. ✅ sql.all (62ms)
      🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.2988ms, 1 rows read, ENAM, DB: 952.0KB
-  6. ✅ getOrganizationSettings (315ms)
-  7. ✅ getOrganizationSettings (319ms)
-     service: ORGANIZATION_SERVICE
-  8. ✅ sql.all (68ms)
+     📊 meta: 0.1899ms, 1 rows read, ENAM, DB: 1012.0KB
+  4. ✅ validateSession (71ms)
+     service: AUTH_SERVICE
+  5. ✅ sql.all (83ms)
      🗄️  SQL Query: select * from "organizations" where "id" = ?
-     📊 meta: 0.1155ms, 1 rows read, ENAM, DB: 952.0KB
-  9. ✅ sql.all (59ms)
+     📊 meta: 0.2204ms, 1 rows read, ENAM, DB: 1012.0KB
+  6. ✅ sql.all (112ms)
      🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.0941ms, 2 rows read, ENAM, DB: 952.0KB
-  10. ✅ sql.all (66ms)
+     📊 meta: 0.1985ms, 2 rows read, ENAM, DB: 1012.0KB
+  7. ✅ sql.all (459ms)
      🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1678ms, 1 rows read, ENAM, DB: 952.0KB
-  11. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "subscription_plans"."name" as "plan_name", "subscriptions"."status" as "subscription_status" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.1737ms, 6 rows read, ENAM, DB: 952.0KB
+     📊 meta: 0.1868ms, 1 rows read, ENAM, DB: 1012.0KB
 
-[11/18/2025, 12:54:30 PM] 🔗 Trace: 45ec5b1d238b4c1f3a5e18ecda408ced (222ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1632ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (60ms)
-  3. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.1625ms, 1 rows read, ENAM, DB: 952.0KB
-  4. ✅ getWorkspace (159ms)
-  5. ✅ validateSession (65ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (224ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095559fbc7a06e
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (95ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1659ms, 1 rows read, ENAM, DB: 952.0KB
-  8. ✅ getWorkspace (159ms)
-     service: WORKSPACE_SERVICE
-
-[11/18/2025, 12:54:30 PM] 🔗 Trace: 776e9c1d69d5a71dfc82d85796c9a3b8 (263ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (66ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1921ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (66ms)
-  3. ✅ validateSession (70ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (267ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/stats
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09555a5b5eebb8
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (58ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.112ms, 1 rows read, ENAM, DB: 952.0KB
-  6. ✅ getWorkspaceStats (193ms)
-  7. ✅ getWorkspaceStats (197ms)
-     service: USAGE_SERVICE
-  8. ✅ sql.all (61ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1495ms, 1 rows read, ENAM, DB: 952.0KB
-  9. ✅ sql.all (63ms)
-     🗄️  SQL Query: select count("id") as "count" from "compliance_checks" where "workspace_id" = ?
-     📊 meta: 0.0916ms, 1 rows read, ENAM, DB: 952.0KB
-  10. ✅ sql.all (68ms)
-     🗄️  SQL Query: select "overall_score" from "workspace_scores" where "workspace_id" = ? order by "calculated_at" desc limit ?
-     📊 meta: 0.1786ms, 14 rows read, ENAM, DB: 952.0KB
-  11. ✅ sql.all (72ms)
-     🗄️  SQL Query: select count("compliance_issues"."id") as "count" from "compliance_issues" inner join "compliance_checks" on "compliance_issues"."check_id" = "compliance_checks"."id" where "compliance_checks"."workspace_id" = ? and "compliance_issues"."status" = ?
-     📊 meta: 0.1359ms, 14 rows read, ENAM, DB: 952.0KB
-  12. ✅ sql.all (63ms)
-     🗄️  SQL Query: select sum("file_size") as "total" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1412ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:54:30 PM] 🔗 Trace: a6b83c79999427298de58e33915ad9a9 (97ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ sql.run (97ms)
-     🗄️  SQL Query:
-          INSERT INTO performance_metrics (operation, start_time, end_time, duration, success, meta_info, error, created_at)
-          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-
-     📊 meta: 0.4786ms, 2 rows read, 5 rows written, ENAM, DB: 952.0KB
-  2. ✅ fetch (97ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/activity?limit=10
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09555ace2ef337
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ❌ 404
-
-[11/18/2025, 12:54:30 PM] 🔗 Trace: 0d8a1030b9ef9fe1e08db7efb8d22284 (193ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (76ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.282ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (76ms)
-  3. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.1641ms, 1 rows read, ENAM, DB: 952.0KB
-  4. ✅ getWorkspace (116ms)
-  5. ✅ validateSession (79ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (195ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09555adbf8ac52
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (56ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1628ms, 1 rows read, ENAM, DB: 952.0KB
-  8. ✅ getWorkspace (116ms)
-     service: WORKSPACE_SERVICE
-
-[11/18/2025, 12:54:30 PM] 🔗 Trace: 6004949cd9c00dd59287a2209d3e66be (100ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ sql.run (100ms)
-     🗄️  SQL Query:
-          INSERT INTO performance_metrics (operation, start_time, end_time, duration, success, meta_info, error, created_at)
-          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-
-     📊 meta: 0.2228ms, 2 rows read, 5 rows written, ENAM, DB: 952.0KB
-  2. ✅ fetch (100ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/activity?limit=10
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09555c7ef219cf
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ❌ 404
-
-[11/18/2025, 12:54:30 PM] 🔗 Trace: 16609b345094b393528bfb10927b2bc8 (319ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (92ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2008ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (92ms)
-  3. ✅ sql.all (59ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.1215ms, 1 rows read, ENAM, DB: 952.0KB
-  4. ✅ getWorkspace (123ms)
-  5. ✅ validateSession (97ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (322ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09555cbf7939d8
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1679ms, 1 rows read, ENAM, DB: 952.0KB
-  8. ✅ getWorkspace (225ms)
-     service: WORKSPACE_SERVICE
-
-[11/18/2025, 12:54:58 PM] 🔗 Trace: b4d90913c8b953b368ea443e4f6d0566 (325ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (67ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1924ms, 2 rows read, ENAM, DB: 952.0KB
-  2. ✅ validateSession (67ms)
-  3. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "organization_id" from "workspaces" where "id" = ?
-     📊 meta: 0.2967ms, 1 rows read, ENAM, DB: 952.0KB
-  4. ✅ checkLimit (190ms)
-  5. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "subscription_plans"."limits" from "subscriptions" inner join "subscription_plans" on "subscriptions"."plan_id" = "subscription_plans"."id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" = ?
-     📊 meta: 0.2041ms, ENAM, DB: 952.0KB
-  6. ✅ sql.all (63ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.2294ms, 1 rows read, ENAM, DB: 952.0KB
-
-[11/18/2025, 12:55:05 PM] 🔗 Trace: b4d90913c8b953b368ea443e4f6d0566 (955ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: document-service
-  1. ✅ sql.all (105ms)
-     🗄️  SQL Query: select "id", "workspace_id", "filename", "content_type", "storage_key" from "documents" where "id" = ?
-     📊 meta: 0.2613ms, 1 rows read, ENAM, DB: 956.0KB
-  2. ✅ getDocumentMetadata (105ms)
-  3. ✅ log
-     level: INFO
-     message: ⚡ DOCUMENT PROCESSOR OBSERVER TRIGGERED ⚡
-     fields: {"messageBody":{"documentId":"doc_1763488499107_epo9y","workspaceId":"wks_1763435204539_ns0may","userId":"usr_1763400863213_j829z","vultrKey":"wks_1763435204539_ns0may/doc_1763488499107_epo9y/Data_Protection_Policy.pdf","action":"extract_and_index"},"attempt":1,"timestamp":1763488505669}
-  4. ✅ sql.all (130ms)
-     🗄️  SQL Query: update "documents" set "processing_status" = ?, "updated_at" = ? where "id" = ?
-     📊 meta: 0.203ms, 2 rows read, 1 rows written, ENAM, DB: 956.0KB
-  5. ✅ updateProcessingStatus (130ms)
-  6. ✅ log
-     level: INFO
-     message: Observer: Processing message from queue
-     fields: {"documentId":"doc_1763488499107_epo9y","workspaceId":"wks_1763435204539_ns0may","vultrKey":"wks_1763435204539_ns0may/doc_1763488499107_epo9y/Data_Protection_Policy.pdf","action":"extract_and_index","attempt":1}
-  7. ✅ log
-     level: INFO
-     message: Processing new document with text extraction
-     fields: {"documentId":"doc_1763488499107_epo9y","vultrKey":"wks_1763435204539_ns0may/doc_1763488499107_epo9y/Data_Protection_Policy.pdf"}
-  8. ✅ getDocumentMetadata (105ms)
-     service: DOCUMENT_SERVICE
-  9. ✅ log
-     level: INFO
-     message: Initializing processing steps
-     fields: {"documentId":"doc_1763488499107_epo9y"}
-  10. ✅ sql.run (147ms)
-     🗄️  SQL Query: INSERT INTO document_processing_steps
-           (id, document_id, step_name, step_order, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'pending', ?, ?)
-           ON CONFLICT(document_id, step_name) DO NOTHING
-     📊 meta: 0.2703ms, 6 rows written, ENAM, DB: 956.0KB
-  11. ✅ sql.run (139ms)
-     🗄️  SQL Query: INSERT INTO document_processing_steps
-           (id, document_id, step_name, step_order, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'pending', ?, ?)
-           ON CONFLICT(document_id, step_name) DO NOTHING
-     📊 meta: 0.2732ms, 6 rows written, ENAM, DB: 956.0KB
-  12. ✅ sql.run (147ms)
-     🗄️  SQL Query: INSERT INTO document_processing_steps
-           (id, document_id, step_name, step_order, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'pending', ?, ?)
-           ON CONFLICT(document_id, step_name) DO NOTHING
-     📊 meta: 0.1982ms, 6 rows written, ENAM, DB: 956.0KB
-  13. ✅ sql.run (158ms)
-     🗄️  SQL Query: INSERT INTO document_processing_steps
-           (id, document_id, step_name, step_order, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'pending', ?, ?)
-           ON CONFLICT(document_id, step_name) DO NOTHING
-     📊 meta: 0.2195ms, 6 rows written, ENAM, DB: 956.0KB
-  14. ✅ sql.run (130ms)
-     🗄️  SQL Query: INSERT INTO document_processing_steps
-           (id, document_id, step_name, step_order, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'pending', ?, ?)
-           ON CONFLICT(document_id, step_name) DO NOTHING
-     📊 meta: 0.2458ms, 6 rows written, ENAM, DB: 956.0KB
-  15. ✅ sql.run (129ms)
-     🗄️  SQL Query: INSERT INTO document_processing_steps
-           (id, document_id, step_name, step_order, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'pending', ?, ?)
-           ON CONFLICT(document_id, step_name) DO NOTHING
-     📊 meta: 0.1853ms, 6 rows written, ENAM, DB: 956.0KB
-  16. ✅ log
-     level: INFO
-     message: Processing steps initialized
-     fields: {"documentId":"doc_1763488499107_epo9y","totalSteps":6}
-
-[11/18/2025, 12:55:08 PM] 🔗 Trace: 52bcf9f1ff4b3db542aebeb1dc00dead (283ms total)
+[11/18/2025, 1:44:01 PM] 🔗 Trace: f2527c0ef61d7f4e57e25ec9fb2506c4 (193ms total)
   Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
   1. ✅ sql.all (63ms)
      🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2334ms, 2 rows read, ENAM, DB: 960.0KB
+     📊 meta: 0.2248ms, 2 rows read, ENAM, DB: 1012.0KB
   2. ✅ validateSession (63ms)
-  3. ✅ sql.all (85ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.1865ms, 4 rows read, ENAM, DB: 960.0KB
-  4. ✅ getUserOrganizations (215ms)
-  5. ✅ validateSession (68ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (287ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09564b1cbf3b8e
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (66ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.164ms, 2 rows read, ENAM, DB: 960.0KB
-  8. ✅ getUserOrganizations (219ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (64ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.0871ms, 1 rows read, ENAM, DB: 960.0KB
-
-[11/18/2025, 12:55:08 PM] 🔗 Trace: 910dae391917c74a5cec19cc4cefd64c (59ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (59ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1755ms, 2 rows read, ENAM, DB: 960.0KB
-  2. ✅ validateSession (59ms)
-
-[11/18/2025, 12:55:08 PM] 🔗 Trace: dcd02bdbfd403e2fce1ec5d0e608aae9 (65ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (65ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1725ms, 2 rows read, ENAM, DB: 960.0KB
-  2. ✅ validateSession (65ms)
-
-[11/18/2025, 12:55:08 PM] 🔗 Trace: d24c3931d6573dea6480c57ae17d0012 (195ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1172ms, 2 rows read, ENAM, DB: 960.0KB
-  2. ✅ validateSession (60ms)
-  3. ✅ validateSession (65ms)
+  3. ✅ validateSession (66ms)
      service: AUTH_SERVICE
   4. ✅ fetch (197ms)
      organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
@@ -1822,180 +423,92 @@ Press Ctrl+C to stop following
      service.name: api-gateway
      service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
      http.method: GET
+     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
+     http.scheme: https
+     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.5
+     http.authorization: undefined
+     http.cf_ray: 9a099de32a03aadf
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (62ms)
+     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
+     📊 meta: 0.1861ms, 1 rows read, ENAM, DB: 1012.0KB
+  6. ✅ getWorkspace (126ms)
+  7. ✅ getWorkspace (131ms)
+     service: WORKSPACE_SERVICE
+  8. ✅ sql.all (64ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2009ms, 1 rows read, ENAM, DB: 1012.0KB
+
+[11/18/2025, 1:44:06 PM] 🔗 Trace: 4f9e556e2d2401f46c222ccfef7beab6 (123ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: document-service
+  1. ✅ sql.all (65ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.157ms, 1 rows read, ENAM, DB: 1012.0KB
+  2. ✅ listDocuments (120ms)
+  3. ✅ validateSession (65ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (190ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
+     http.method: GET
      http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/documents
      http.scheme: https
      http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
      http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
      http.content_type: application/json
      http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance/run
      http.accept: */*
      http.accept_encoding: gzip, br
      http.accept_language: en-US,en;q=0.5
      http.authorization: undefined
-     http.cf_ray: 9a09564b6d14bf5d
+     http.cf_ray: 9a099e041c38ebbd
      http.cf_connecting_ip: 184.146.37.240
      http.cf_country: CA
      http.status: ✅ 200
-  5. ✅ sql.all (61ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1386ms, 1 rows read, ENAM, DB: 960.0KB
-  6. ✅ listDocuments (130ms)
-  7. ✅ listDocuments (132ms)
-     service: DOCUMENT_SERVICE
-  8. ✅ sql.all (69ms)
+  5. ✅ sql.all (62ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2047ms, 2 rows read, ENAM, DB: 1012.0KB
+  6. ✅ validateSession (62ms)
+  7. ✅ sql.all (55ms)
      🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
-     📊 meta: 0.2687ms, 6 rows read, ENAM, DB: 960.0KB
+     📊 meta: 0.6358ms, 9 rows read, ENAM, DB: 1012.0KB
+  8. ✅ listDocuments (125ms)
+     service: DOCUMENT_SERVICE
 
-[11/18/2025, 12:55:08 PM] 🔗 Trace: c212c6ade4fc831da8607e0714154874 (56ms total)
+[11/18/2025, 1:44:13 PM] 🔗 Trace: 8cccf269ab3d9414ad01255982915e2c (252ms total)
   Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
   1. ✅ sql.all (56ms)
      🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1575ms, 2 rows read, ENAM, DB: 960.0KB
+     📊 meta: 0.1934ms, 2 rows read, ENAM, DB: 1012.0KB
   2. ✅ validateSession (56ms)
+  3. ✅ sql.all (66ms)
+     🗄️  SQL Query: select "organization_id" from "workspaces" where "id" = ?
+     📊 meta: 0.1492ms, 1 rows read, ENAM, DB: 1012.0KB
+  4. ✅ checkLimit (193ms)
+  5. ✅ sql.all (60ms)
+     🗄️  SQL Query: select "subscription_plans"."limits" from "subscriptions" inner join "subscription_plans" on "subscriptions"."plan_id" = "subscription_plans"."id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" = ?
+     📊 meta: 0.2439ms, ENAM, DB: 1012.0KB
+  6. ✅ sql.all (67ms)
+     🗄️  SQL Query: select * from "usage_summaries" where "workspace_id" = ? and "date" = ?
+     📊 meta: 0.1732ms, ENAM, DB: 1012.0KB
 
-[11/18/2025, 12:55:08 PM] 🔗 Trace: 2e3693937bd1ba3e8ca019d8bb062e9d (82ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (82ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1906ms, 2 rows read, ENAM, DB: 960.0KB
-  2. ✅ validateSession (82ms)
-
-[11/18/2025, 12:55:18 PM] 🔗 Trace: b4d90913c8b953b368ea443e4f6d0566 (755ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: compliance-service
-  1. ✅ sql.all (149ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1926ms, 1 rows read, ENAM, DB: 960.0KB
-  2. ✅ sql.all (112ms)
-     🗄️  SQL Query: select "id", "filename", "storage_key" from "documents" where "id" = ? and "workspace_id" = ?
-     📊 meta: 0.1732ms, 1 rows read, ENAM, DB: 960.0KB
-  3. ✅ sql.all (142ms)
-     🗄️  SQL Query: insert into "compliance_checks" ("id", "document_id", "workspace_id", "framework", "status", "issues_found", "created_at", "created_by") values (?, ?, ?, ?, ?, ?, ?, ?)
-     📊 meta: 0.2728ms, 1 rows read, 5 rows written, ENAM, DB: 960.0KB
-  4. ❌ fetch (0ms)
-     service: REALTIME_SERVICE
-  5. ✅ log
-     level: ERROR
-     message: Failed to broadcast real-time message
-     fields: {"workspaceId":"wks_1763435204539_ns0may","channel":"compliance-checks","messageType":"compliance_check_update","error":"Illegal invocation: function called with incorrect `this` reference. See https://developers.cloudflare.com/workers/observability/errors/#illegal-invocation-errors for details."}
-  6. ✅ log
-     level: INFO
-     message: 🚀 Running compliance analysis SYNCHRONOUSLY for demo
-     fields: {"checkId":"chk_1763488518829_7uwqz","documentId":"doc_1763488499107_epo9y","framework":"gdpr"}
-  7. ✅ log
-     level: INFO
-     message: 📊 Starting analyzeCompliance
-     fields: {"checkId":"chk_1763488518829_7uwqz","documentId":"doc_1763488499107_epo9y","framework":"gdpr","storageKey":"wks_1763435204539_ns0may/doc_1763488499107_epo9y/extracted.txt"}
-  8. ✅ log
-     level: INFO
-     message: 📂 Fetching document from SmartBucket
-     fields: {"storageKey":"wks_1763435204539_ns0may/doc_1763488499107_epo9y/extracted.txt"}
-  9. ✅ bucket.get (245ms)
-     key: wks_1763435204539_ns0may/doc_1763488499107_epo9y/extracted.txt
-     bucket: DOCUMENTS_BUCKET
-     size: 3563
-  10. ✅ log
-     level: INFO
-     message: ✅ Document fetched
-     fields: {"contentLength":3563}
-  11. ✅ sql.all (107ms)
-     🗄️  SQL Query: select "chunk_text" from "document_chunks" where "document_id" = ?
-     📊 meta: 0.1357ms, 1 rows read, ENAM, DB: 960.0KB
-  12. ✅ log
-     level: INFO
-     message: 📄 Document chunks retrieved
-     fields: {"chunkCount":1}
-  13. ✅ log
-     level: INFO
-     message: 🤖 Starting AI compliance analysis
-     fields: {"framework":"gdpr","textLength":3563}
-  14. ✅ log
-     level: INFO
-     message: Starting multi-pass compliance analysis
-     fields: {"framework":"gdpr"}
-  15. ✅ log
-     level: INFO
-     message: Running AI analysis
-     fields: {"framework":"gdpr","analysisType":"quick","model":"llama-3.1-8b-instruct-fast"}
-
-[11/18/2025, 12:55:28 PM] 🔗 Trace: b4d90913c8b953b368ea443e4f6d0566 (263ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: email-sender
-  1. ✅ log
-     level: INFO
-     message: Processing email notification
-     fields: {"type":"document_processed","to":"patrick.10.07.2025@gmail.com","attempt":1,"timestamp":1763488528230}
-  2. ✅ process (263ms)
-  3. ✅ log
-     level: INFO
-     message: Attempting to send email
-     fields: {"to":"patrick.10.07.2025@gmail.com","subject":"Document processed: Data_Protection_Policy.pdf","hasApiKey":true,"apiKeyPrefix":"re_dYKJNWc...","apiKeyLength":36,"emailFrom":"AuditGuardX <noreply@auditguardx.com>"}
-  4. ✅ sendDocumentProcessed (263ms)
-  5. ✅ sendDocumentProcessed (263ms)
-     service: EMAIL_SERVICE
-  6. ✅ fetch (263ms)
-     url: https://api.resend.com/emails
-     method: POST
-     status: 200
-  7. ✅ log
-     level: INFO
-     message: Email notification sent successfully
-     fields: {"type":"document_processed","to":"patrick.10.07.2025@gmail.com"}
-  8. ✅ log
-     level: INFO
-     message: Email sent successfully
-     fields: {"to":"patrick.10.07.2025@gmail.com","subject":"Document processed: Data_Protection_Policy.pdf","id":"ccabf85c-7e05-40c9-929a-69b102d05ff1"}
-
-[11/18/2025, 12:56:21 PM] 🔗 Trace: a554ea9f55c70ecfe2116c8094bdc34d (252ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (76ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1613ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (76ms)
-  3. ✅ sql.all (56ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.2325ms, 4 rows read, ENAM, DB: 964.0KB
-  4. ✅ getUserOrganizations (173ms)
-  5. ✅ validateSession (79ms)
+[11/18/2025, 1:45:11 PM] 🔗 Trace: ec16b8fee7629f82f691bb1c71405e9f (260ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
+  1. ✅ validateSession (74ms)
      service: AUTH_SERVICE
-  6. ✅ fetch (253ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488499107_epo9y
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095810cf58178c
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (57ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1405ms, 2 rows read, ENAM, DB: 964.0KB
-  8. ✅ getUserOrganizations (174ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (60ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1557ms, 1 rows read, ENAM, DB: 964.0KB
-
-[11/18/2025, 12:56:21 PM] 🔗 Trace: 35357d20b93160d42fc4c4075b2df6f1 (254ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1399ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (64ms)
-  3. ✅ validateSession (67ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (255ms)
+  2. ✅ fetch (260ms)
      organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
      service.namespace: auditguard-v2
      service.name: api-gateway
@@ -2007,34 +520,34 @@ Press Ctrl+C to stop following
      http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
      http.content_type: application/json
      http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488499107_epo9y
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
      http.accept: */*
      http.accept_encoding: gzip, br
      http.accept_language: en-US,en;q=0.5
      http.authorization: undefined
-     http.cf_ray: 9a095810d89f3786
+     http.cf_ray: 9a099f9b79c039d2
      http.cf_connecting_ip: 184.146.37.240
      http.cf_country: CA
      http.status: ✅ 200
-  5. ✅ sql.all (59ms)
+  3. ✅ sql.all (70ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2034ms, 2 rows read, ENAM, DB: 1012.0KB
+  4. ✅ validateSession (70ms)
+  5. ✅ sql.all (64ms)
      🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.1399ms, 2 rows read, ENAM, DB: 964.0KB
+     📊 meta: 0.275ms, 2 rows read, ENAM, DB: 1012.0KB
   6. ✅ sql.all (66ms)
      🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.1133ms, 1 rows read, ENAM, DB: 964.0KB
-  7. ✅ sql.all (63ms)
+     📊 meta: 0.2696ms, 1 rows read, ENAM, DB: 1012.0KB
+  7. ✅ sql.all (56ms)
      🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.2456ms, 2 rows read, ENAM, DB: 964.0KB
+     📊 meta: 0.1681ms, 3 rows read, ENAM, DB: 1012.0KB
 
-[11/18/2025, 12:56:21 PM] 🔗 Trace: 8229d7efaacb525d1799b0739ca1dc97 (395ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2165ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (62ms)
-  3. ✅ validateSession (67ms)
+[11/18/2025, 1:45:11 PM] 🔗 Trace: 82a9af0f2ec57e5115aabdba771c00af (513ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
+  1. ✅ validateSession (82ms)
      service: AUTH_SERVICE
-  4. ✅ fetch (401ms)
+  2. ✅ fetch (521ms)
      organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
      service.namespace: auditguard-v2
      service.name: api-gateway
@@ -2046,45 +559,49 @@ Press Ctrl+C to stop following
      http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
      http.content_type: application/json
      http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488499107_epo9y
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
      http.accept: */*
      http.accept_encoding: gzip, br
      http.accept_language: en-US,en;q=0.5
      http.authorization: undefined
-     http.cf_ray: 9a095810dc2cab1c
+     http.cf_ray: 9a099f9b683636c5
      http.cf_connecting_ip: 184.146.37.240
      http.cf_country: CA
      http.status: ✅ 200
-  5. ✅ sql.all (70ms)
+  3. ✅ sql.all (77ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.29ms, 2 rows read, ENAM, DB: 1012.0KB
+  4. ✅ validateSession (77ms)
+  5. ✅ sql.all (94ms)
      🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.1598ms, 1 rows read, ENAM, DB: 964.0KB
-  6. ✅ getOrganizationSettings (329ms)
-  7. ✅ getOrganizationSettings (334ms)
+     📊 meta: 0.2088ms, 1 rows read, ENAM, DB: 1012.0KB
+  6. ✅ getOrganizationSettings (429ms)
+  7. ✅ getOrganizationSettings (439ms)
      service: ORGANIZATION_SERVICE
-  8. ✅ sql.all (61ms)
+  8. ✅ sql.all (76ms)
      🗄️  SQL Query: select * from "organizations" where "id" = ?
-     📊 meta: 0.1731ms, 1 rows read, ENAM, DB: 964.0KB
-  9. ✅ sql.all (66ms)
+     📊 meta: 0.1726ms, 1 rows read, ENAM, DB: 1012.0KB
+  9. ✅ sql.all (91ms)
      🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.355ms, 2 rows read, ENAM, DB: 964.0KB
-  10. ✅ sql.all (65ms)
+     📊 meta: 0.1544ms, 2 rows read, ENAM, DB: 1012.0KB
+  10. ✅ sql.all (101ms)
      🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1253ms, 1 rows read, ENAM, DB: 964.0KB
+     📊 meta: 0.159ms, 1 rows read, ENAM, DB: 1012.0KB
   11. ✅ sql.all (67ms)
      🗄️  SQL Query: select "subscription_plans"."name" as "plan_name", "subscriptions"."status" as "subscription_status" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.262ms, 6 rows read, ENAM, DB: 964.0KB
+     📊 meta: 0.2471ms, 6 rows read, ENAM, DB: 1012.0KB
 
-[11/18/2025, 12:56:21 PM] 🔗 Trace: 902901a6e2da74256388687601ae5621 (238ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (59ms)
+[11/18/2025, 1:45:11 PM] 🔗 Trace: 8ce288379cc7f7b09ffdef972833687d (168ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: organization-service
+  1. ✅ sql.all (56ms)
+     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
+     📊 meta: 0.2532ms, 4 rows read, ENAM, DB: 1012.0KB
+  2. ✅ getUserOrganizations (168ms)
+  3. ✅ sql.all (65ms)
      🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.146ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (59ms)
-  3. ✅ sql.all (99ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1451ms, 1 rows read, ENAM, DB: 964.0KB
-  4. ✅ getDocument (177ms)
-  5. ✅ validateSession (61ms)
+     📊 meta: 0.5934ms, 2 rows read, ENAM, DB: 1012.0KB
+  4. ✅ validateSession (65ms)
+  5. ✅ validateSession (69ms)
      service: AUTH_SERVICE
   6. ✅ fetch (239ms)
      organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
@@ -2092,287 +609,6 @@ Press Ctrl+C to stop following
      service.name: api-gateway
      service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
      http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/documents/doc_1763488499107_epo9y
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488499107_epo9y
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095810e9a4ac76
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (78ms)
-     🗄️  SQL Query: select "documents"."id", "documents"."workspace_id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."storage_key", "documents"."vultr_key", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count", "documents"."word_count", "documents"."character_count", "documents"."page_count", "documents"."chunks_created", "documents"."embeddings_generated", "documents"."vector_indexing_status", "documents"."compliance_framework_id", "documents"."fully_completed" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."id" = ? and "documents"."workspace_id" = ?
-     📊 meta: 0.3453ms, 2 rows read, ENAM, DB: 964.0KB
-  8. ✅ getDocument (178ms)
-     service: DOCUMENT_SERVICE
-
-[11/18/2025, 12:56:21 PM] 🔗 Trace: ba96061cd9663a0a4afa4a16c120c20e (276ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2095ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (63ms)
-  3. ✅ validateSession (67ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (278ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/workspaces
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488499107_epo9y
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a0958118b5ba641
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (67ms)
-     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.1278ms, 2 rows read, ENAM, DB: 964.0KB
-  6. ✅ sql.all (70ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.1545ms, 1 rows read, ENAM, DB: 964.0KB
-  7. ✅ sql.all (74ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.2479ms, 2 rows read, ENAM, DB: 964.0KB
-
-[11/18/2025, 12:56:21 PM] 🔗 Trace: 0c2c1f715ec98e90768e031f19b5377b (251ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (68ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2232ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (68ms)
-  3. ✅ sql.all (59ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.1368ms, 4 rows read, ENAM, DB: 964.0KB
-  4. ✅ getUserOrganizations (180ms)
-  5. ✅ validateSession (71ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (252ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488499107_epo9y
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a0958118aecaba0
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (60ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.1353ms, 2 rows read, ENAM, DB: 964.0KB
-  8. ✅ getUserOrganizations (181ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (61ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.1577ms, 1 rows read, ENAM, DB: 964.0KB
-
-[11/18/2025, 12:56:21 PM] 🔗 Trace: 80c5e6b18d9918b4100accfca32d4c66 (361ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (61ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2726ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (61ms)
-  3. ✅ sql.all (58ms)
-     🗄️  SQL Query: select "role" from "organization_members" where "organization_id" = ? and "user_id" = ?
-     📊 meta: 0.1653ms, 1 rows read, ENAM, DB: 964.0KB
-  4. ✅ getOrganizationSettings (297ms)
-  5. ✅ validateSession (63ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (363ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488499107_epo9y
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095812bebcc8b1
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (54ms)
-     🗄️  SQL Query: select * from "organizations" where "id" = ?
-     📊 meta: 0.1621ms, 1 rows read, ENAM, DB: 964.0KB
-  8. ✅ getOrganizationSettings (300ms)
-     service: ORGANIZATION_SERVICE
-  9. ✅ sql.all (56ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.2167ms, 2 rows read, ENAM, DB: 964.0KB
-  10. ✅ sql.all (69ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.2154ms, 1 rows read, ENAM, DB: 964.0KB
-  11. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "subscription_plans"."name" as "plan_name", "subscriptions"."status" as "subscription_status" from "subscriptions" inner join "subscription_plans" on "subscription_plans"."id" = "subscriptions"."plan_id" where "subscriptions"."organization_id" = ? and "subscriptions"."status" in (?, ?, ?) order by "subscriptions"."created_at" desc
-     📊 meta: 0.2272ms, 6 rows read, ENAM, DB: 964.0KB
-
-[11/18/2025, 12:56:21 PM] 🔗 Trace: 2af334a76c646a1c15ca77b0f316ab12 (183ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (65ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.136ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (65ms)
-  3. ✅ sql.all (60ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1651ms, 1 rows read, ENAM, DB: 964.0KB
-  4. ✅ getDocument (116ms)
-  5. ✅ validateSession (68ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (185ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/documents/doc_1763488499107_epo9y
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488499107_epo9y
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095812dabdab4b
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (56ms)
-     🗄️  SQL Query: select "documents"."id", "documents"."workspace_id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."storage_key", "documents"."vultr_key", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count", "documents"."word_count", "documents"."character_count", "documents"."page_count", "documents"."chunks_created", "documents"."embeddings_generated", "documents"."vector_indexing_status", "documents"."compliance_framework_id", "documents"."fully_completed" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."id" = ? and "documents"."workspace_id" = ?
-     📊 meta: 0.2397ms, 2 rows read, ENAM, DB: 964.0KB
-  8. ✅ getDocument (117ms)
-     service: DOCUMENT_SERVICE
-
-[11/18/2025, 12:56:21 PM] 🔗 Trace: 9353c998098be0667cb577a70c8bc420 (195ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (68ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1982ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (68ms)
-  3. ✅ sql.all (56ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.1164ms, 1 rows read, ENAM, DB: 964.0KB
-  4. ✅ getWorkspace (121ms)
-  5. ✅ validateSession (75ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (198ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488499107_epo9y
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095813bb8faa9e
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (65ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1377ms, 1 rows read, ENAM, DB: 964.0KB
-  8. ✅ getWorkspace (123ms)
-     service: WORKSPACE_SERVICE
-
-[11/18/2025, 12:56:22 PM] 🔗 Trace: fee36968c21d9795968ee23d80780c1d (192ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (64ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1766ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (64ms)
-  3. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "id", "name", "description", "owner_id", "organization_id", "created_at", "updated_at" from "workspaces" where "id" = ?
-     📊 meta: 0.2041ms, 1 rows read, ENAM, DB: 964.0KB
-  4. ✅ getWorkspace (124ms)
-  5. ✅ validateSession (67ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (194ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/documents/doc_1763488499107_epo9y
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a0958158caef2bc
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1542ms, 1 rows read, ENAM, DB: 964.0KB
-  8. ✅ getWorkspace (127ms)
-     service: WORKSPACE_SERVICE
-
-[11/18/2025, 12:56:28 PM] 🔗 Trace: 5849f3ad4223949bee82d53ea7a9015c (271ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (67ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1944ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (67ms)
-  3. ✅ validateSession (69ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (271ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
      http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
      http.scheme: https
      http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
@@ -2384,208 +620,28 @@ Press Ctrl+C to stop following
      http.accept_encoding: gzip, br
      http.accept_language: en-US,en;q=0.5
      http.authorization: undefined
-     http.cf_ray: 9a0958409c04de44
+     http.cf_ray: 9a099f9b5b7f7db1
      http.cf_connecting_ip: 184.146.37.240
      http.cf_country: CA
      http.status: ✅ 200
-  5. ✅ sql.all (69ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.254ms, 4 rows read, ENAM, DB: 964.0KB
-  6. ✅ getUserOrganizations (201ms)
-  7. ✅ getUserOrganizations (202ms)
-     service: ORGANIZATION_SERVICE
-  8. ✅ sql.all (59ms)
+  7. ✅ sql.all (55ms)
      🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.101ms, 2 rows read, ENAM, DB: 964.0KB
-  9. ✅ sql.all (73ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.25ms, 1 rows read, ENAM, DB: 964.0KB
-
-[11/18/2025, 12:56:28 PM] 🔗 Trace: 1aa03c8ad635ef77ee8241ad63732108 (59ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (59ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1232ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (59ms)
-
-[11/18/2025, 12:56:28 PM] 🔗 Trace: 4f5ae49c12888c17e66d6c2b4dd0e930 (246ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (58ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1123ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (58ms)
-  3. ✅ validateSession (62ms)
-     service: AUTH_SERVICE
-  4. ✅ fetch (248ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/workspaces
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095840cfdfebbc
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (63ms)
-     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.1707ms, 2 rows read, ENAM, DB: 964.0KB
-  6. ✅ sql.all (63ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.1358ms, 1 rows read, ENAM, DB: 964.0KB
-  7. ✅ sql.all (60ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1833ms, 2 rows read, ENAM, DB: 964.0KB
-
-[11/18/2025, 12:56:28 PM] 🔗 Trace: 3d832f8d05d471910f9977fd49e12c41 (284ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (62ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.2276ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (62ms)
-  3. ✅ sql.all (70ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1486ms, 1 rows read, ENAM, DB: 964.0KB
-  4. ✅ listComplianceChecks (150ms)
-  5. ✅ validateSession (65ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (286ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/compliance
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a095840c85db400
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (80ms)
-     🗄️  SQL Query: select "compliance_checks"."id", "compliance_checks"."document_id", "documents"."filename" as "document_name", "compliance_checks"."framework", "compliance_checks"."status", "compliance_checks"."overall_score", "compliance_checks"."issues_found", "compliance_checks"."created_at", "compliance_checks"."completed_at" from "compliance_checks" inner join "documents" on "documents"."id" = "compliance_checks"."document_id" where "compliance_checks"."workspace_id" = ? order by "compliance_checks"."created_at" desc
-     📊 meta: 0.2764ms, 6 rows read, ENAM, DB: 964.0KB
-  8. ✅ listComplianceChecks (221ms)
-     service: COMPLIANCE_SERVICE
-
-[11/18/2025, 12:56:29 PM] 🔗 Trace: a7c4e8885ed0505c9cfa83235a2defdc (236ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (57ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1786ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (57ms)
-  3. ✅ sql.all (67ms)
-     🗄️  SQL Query: select "organizations"."id", "organizations"."name", "organizations"."slug", "organization_members"."role" from "organization_members" inner join "organizations" on "organizations"."id" = "organization_members"."organization_id" where "organization_members"."user_id" = ? order by "organization_members"."joined_at" asc
-     📊 meta: 0.1976ms, 4 rows read, ENAM, DB: 964.0KB
-  4. ✅ getUserOrganizations (176ms)
-  5. ✅ validateSession (61ms)
-     service: AUTH_SERVICE
-  6. ✅ fetch (238ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a0958416b06ab9f
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  7. ✅ sql.all (52ms)
-     🗄️  SQL Query: select count("id") as "count" from "organization_members" where "organization_id" = ?
-     📊 meta: 0.0985ms, 2 rows read, ENAM, DB: 964.0KB
-  8. ✅ getUserOrganizations (177ms)
+     📊 meta: 0.1473ms, 2 rows read, ENAM, DB: 1012.0KB
+  8. ✅ getUserOrganizations (170ms)
      service: ORGANIZATION_SERVICE
   9. ✅ sql.all (57ms)
      🗄️  SQL Query: select count("id") as "count" from "workspaces" where "organization_id" = ?
-     📊 meta: 0.196ms, 1 rows read, ENAM, DB: 964.0KB
+     📊 meta: 0.1623ms, 1 rows read, ENAM, DB: 1012.0KB
 
-[11/18/2025, 12:56:29 PM] 🔗 Trace: c863300ef3f5fb89f4e4c876f7b2af3e (242ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (58ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1359ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (58ms)
-  3. ✅ validateSession (62ms)
+[11/18/2025, 1:45:23 PM] 🔗 Trace: 309ab81bd75c38f79e5c5bfd423abd03 (127ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: compliance-service
+  1. ✅ sql.all (59ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2411ms, 1 rows read, ENAM, DB: 1012.0KB
+  2. ✅ listComplianceChecks (123ms)
+  3. ✅ validateSession (71ms)
      service: AUTH_SERVICE
-  4. ✅ fetch (244ms)
-     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
-     service.namespace: auditguard-v2
-     service.name: api-gateway
-     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
-     http.method: GET
-     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/organizations/org_1763400863213_r51p3i/workspaces
-     http.scheme: https
-     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
-     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
-     http.content_type: application/json
-     http.content_length: undefined
-     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
-     http.accept: */*
-     http.accept_encoding: gzip, br
-     http.accept_language: en-US,en;q=0.5
-     http.authorization: undefined
-     http.cf_ray: 9a09584179ba378a
-     http.cf_connecting_ip: 184.146.37.240
-     http.cf_country: CA
-     http.status: ✅ 200
-  5. ✅ sql.all (58ms)
-     🗄️  SQL Query: select "workspaces"."id", "workspaces"."name", "workspaces"."description", "workspaces"."created_at", "workspaces"."updated_at" from "workspaces" where "workspaces"."organization_id" = ? order by "workspaces"."created_at" desc
-     📊 meta: 0.2038ms, 2 rows read, ENAM, DB: 964.0KB
-  6. ✅ sql.all (63ms)
-     🗄️  SQL Query: select count("id") as "count" from "workspace_members" where "workspace_id" = ?
-     📊 meta: 0.1033ms, 1 rows read, ENAM, DB: 964.0KB
-  7. ✅ sql.all (61ms)
-     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
-     📊 meta: 0.1751ms, 2 rows read, ENAM, DB: 964.0KB
-
-[11/18/2025, 12:56:29 PM] 🔗 Trace: f641bdaa80847d26093853a41e0f07d1 (56ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (56ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1947ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (56ms)
-
-[11/18/2025, 12:56:29 PM] 🔗 Trace: 7789677039156220d9ed2e3cbb832461 (66ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: auth-service
-  1. ✅ sql.all (66ms)
-     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1466ms, 2 rows read, ENAM, DB: 964.0KB
-  2. ✅ validateSession (66ms)
-
-[11/18/2025, 12:56:41 PM] 🔗 Trace: 8fd40786c4c5a394a637945821a7e148 (215ms total)
-  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: api-gateway
-  1. ✅ validateSession (76ms)
-     service: AUTH_SERVICE
-  2. ✅ fetch (218ms)
+  4. ✅ fetch (199ms)
      organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
      service.namespace: auditguard-v2
      service.name: api-gateway
@@ -2602,20 +658,58 @@ Press Ctrl+C to stop following
      http.accept_encoding: gzip, br
      http.accept_language: en-US,en;q=0.5
      http.authorization: undefined
-     http.cf_ray: 9a09588c3a5839f8
+     http.cf_ray: 9a099fe63925ac18
      http.cf_connecting_ip: 184.146.37.240
      http.cf_country: CA
      http.status: ✅ 200
-  3. ✅ sql.all (70ms)
+  5. ✅ sql.all (68ms)
      🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
-     📊 meta: 0.1683ms, 2 rows read, ENAM, DB: 964.0KB
-  4. ✅ validateSession (70ms)
-  5. ✅ sql.all (65ms)
-     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
-     📊 meta: 0.1282ms, 1 rows read, ENAM, DB: 964.0KB
-  6. ✅ listComplianceChecks (136ms)
-  7. ✅ listComplianceChecks (142ms)
-     service: COMPLIANCE_SERVICE
-  8. ✅ sql.all (71ms)
+     📊 meta: 0.1841ms, 2 rows read, ENAM, DB: 1012.0KB
+  6. ✅ validateSession (68ms)
+  7. ✅ sql.all (64ms)
      🗄️  SQL Query: select "compliance_checks"."id", "compliance_checks"."document_id", "documents"."filename" as "document_name", "compliance_checks"."framework", "compliance_checks"."status", "compliance_checks"."overall_score", "compliance_checks"."issues_found", "compliance_checks"."created_at", "compliance_checks"."completed_at" from "compliance_checks" inner join "documents" on "documents"."id" = "compliance_checks"."document_id" where "compliance_checks"."workspace_id" = ? order by "compliance_checks"."created_at" desc
-     📊 meta: 0.2827ms, 6 rows read, ENAM, DB: 964.0KB
+     📊 meta: 0.2427ms, 21 rows read, ENAM, DB: 1012.0KB
+  8. ✅ listComplianceChecks (128ms)
+     service: COMPLIANCE_SERVICE
+
+[11/18/2025, 1:45:33 PM] 🔗 Trace: 524f6fc8323399b0bcced3b423d187c7 (126ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01ka6zr7vtjhb3p3tvx2nsz3qr, Script: compliance-service
+  1. ✅ sql.all (62ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.1545ms, 1 rows read, ENAM, DB: 1012.0KB
+  2. ✅ listComplianceChecks (124ms)
+  3. ✅ validateSession (68ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (196ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01ka6zr7vtjhb3p3tvx2nsz3qr
+     http.method: GET
+     http.url: https://svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1763435204539_ns0may/compliance
+     http.scheme: https
+     http.host: svc-01ka6zrdd8edsverbpr6jm9e8b.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
+     http.content_type: application/json
+     http.content_length: undefined
+     http.referer: http://localhost:3000/org/org_1763400863213_r51p3i/workspace/wks_1763435204539_ns0may/compliance
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.5
+     http.authorization: undefined
+     http.cf_ray: 9a09a02519d00702
+     http.cf_connecting_ip: 184.146.37.240
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (64ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2278ms, 2 rows read, ENAM, DB: 1012.0KB
+  6. ✅ validateSession (64ms)
+  7. ✅ sql.all (62ms)
+     🗄️  SQL Query: select "compliance_checks"."id", "compliance_checks"."document_id", "documents"."filename" as "document_name", "compliance_checks"."framework", "compliance_checks"."status", "compliance_checks"."overall_score", "compliance_checks"."issues_found", "compliance_checks"."created_at", "compliance_checks"."completed_at" from "compliance_checks" inner join "documents" on "documents"."id" = "compliance_checks"."document_id" where "compliance_checks"."workspace_id" = ? order by "compliance_checks"."created_at" desc
+     📊 meta: 0.2508ms, 21 rows read, ENAM, DB: 1012.0KB
+  8. ✅ listComplianceChecks (128ms)
+     service: COMPLIANCE_SERVICE
+
+^C
+patrick@DESKTOP-PC01:~/championship/auditguard-v2$

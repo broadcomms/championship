@@ -237,8 +237,8 @@ export default class extends Service<Env> {
     try {
       const db = this.getDb();
 
-      // Get document content from SmartBucket
-      this.env.logger.info('📂 Fetching document from SmartBucket', { storageKey });
+      // Get document content 
+      this.env.logger.info('📂 Fetching document ', { storageKey });
       const file = await this.env.DOCUMENTS_BUCKET.get(storageKey);
       if (!file) {
         throw new Error('Document file not found in storage');
@@ -450,212 +450,6 @@ export default class extends Service<Env> {
   }
 
   /**
-   * PHASE 1.1.2: SmartInference Model Selection
-   * Routes to appropriate AI model based on analysis complexity
-   */
-  private selectAIModel(
-    analysisType: 'quick' | 'deep'
-  ): 'llama-3.1-8b-instruct-fast' | 'llama-3.1-70b-instruct' {
-    if (analysisType === 'quick') {
-      // Fast, efficient model for initial scanning
-      return 'llama-3.1-8b-instruct-fast';
-    } else {
-      // More powerful model for deep analysis
-      return 'llama-3.1-70b-instruct';
-    }
-  }
-
-  /**
-   * PHASE 1.1.2: Multi-Pass Compliance Analysis
-   * Performs quick scan first, then deep analysis if issues found
-   */
-  private async performMultiPassAnalysis(
-    documentText: string,
-    framework: string
-  ): Promise<ComplianceIssue[]> {
-    this.env.logger.info('Starting multi-pass compliance analysis', { framework });
-
-    // Pass 1: Quick scan to identify potential issues
-    const quickIssues = await this.performSinglePassAnalysis(documentText, framework, 'quick');
-
-    // If no issues found in quick scan, return early
-    if (quickIssues.length === 0) {
-      this.env.logger.info('Quick scan found no issues', { framework });
-      return [];
-    }
-
-    // Pass 2: Deep analysis for documents with potential issues
-    this.env.logger.info('Quick scan found issues, performing deep analysis', {
-      framework,
-      quickIssueCount: quickIssues.length,
-    });
-
-    const deepIssues = await this.performSinglePassAnalysis(documentText, framework, 'deep');
-
-    // Return deep analysis results (more accurate)
-    return deepIssues;
-  }
-
-  /**
-   * PHASE 1.1.2: Single-Pass Analysis
-   * Performs one analysis pass with specified depth
-   */
-  private async performSinglePassAnalysis(
-    documentText: string,
-    framework: string,
-    analysisType: 'quick' | 'deep'
-  ): Promise<ComplianceIssue[]> {
-    try {
-      // Get framework rules with caching
-      const frameworkRules = this.getFrameworkRulesWithCache(framework);
-
-      // Optimize document length based on analysis type
-      const maxLength = analysisType === 'quick' ? 2000 : 6000;
-      const truncatedText = documentText.substring(0, maxLength);
-
-      // ENHANCED: Improved prompt engineering for genuine compliance analysis
-      const systemPrompt =
-        analysisType === 'quick'
-          ? 'You are a senior compliance auditor specializing in ' + framework + '. Analyze the document for SPECIFIC violations. Return empty array if no actual violations exist. DO NOT suggest general reviews.'
-          : 'You are an expert ' + framework + ' compliance auditor. Provide detailed analysis of ACTUAL violations found in the document. Only report real issues with specific evidence. Return empty array if document is compliant.';
-
-      const prompt =
-        analysisType === 'quick'
-          ? `COMPLIANCE AUDIT: ${framework}
-
-SPECIFIC REQUIREMENTS TO CHECK:
-${frameworkRules.slice(0, 5).join('\n')}
-
-DOCUMENT TO ANALYZE:
-${truncatedText}
-
-INSTRUCTIONS:
-- Only identify SPECIFIC violations with evidence from the document
-- Do NOT suggest general reviews or manual analysis
-- If no violations found, return empty issues array
-- Each issue must reference specific text from the document
-- Provide confidence level (70-95%) based on evidence strength
-
-REQUIRED JSON FORMAT:
-{
-  "issues": [
-    {
-      "severity": "critical|high|medium|low",
-      "category": "specific ${framework} requirement violated",
-      "title": "Specific violation found",
-      "description": "What exactly violates the requirement with document evidence",
-      "recommendation": "Specific action to fix this violation",
-      "location": "Document section/page reference if available",
-      "confidence": 75
-    }
-  ]
-}
-
-Return empty array if document is compliant.`
-          : `DETAILED ${framework} COMPLIANCE AUDIT
-
-ALL REQUIREMENTS TO VERIFY:
-${frameworkRules.join('\n')}
-
-COMPLETE DOCUMENT:
-${truncatedText}
-
-AUDIT INSTRUCTIONS:
-- Analyze document against each requirement above
-- Only report ACTUAL violations with specific evidence
-- Quote relevant document text that violates each requirement
-- Do NOT create generic or placeholder issues
-- If document meets all requirements, return empty array
-- High confidence (80-95%) required for each issue
-
-REQUIRED JSON FORMAT:
-{
-  "issues": [
-    {
-      "severity": "critical|high|medium|low",
-      "category": "specific ${framework} requirement",
-      "title": "Specific violation with evidence",
-      "description": "Detailed explanation with quotes from document",
-      "recommendation": "Specific remediation steps",
-      "location": "document section/paragraph reference",
-      "confidence": 85
-    }
-  ]
-}
-
-If document is fully compliant, return: {"issues": []}`;
-
-      // Select appropriate model
-      const model = this.selectAIModel(analysisType);
-
-      this.env.logger.info('Running AI analysis', { framework, analysisType, model });
-
-      // Use AI for compliance analysis with timeout to prevent hanging
-      const aiResponse = await Promise.race([
-        this.env.AI.run(model, {
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.2, // Lower temperature for consistent structured output
-          max_tokens: analysisType === 'quick' ? 400 : 800,
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('AI analysis timeout after 30 seconds')), 30000)
-        )
-      ]);
-
-      this.env.logger.info('AI response received', {
-        framework,
-        analysisType,
-        responseType: typeof aiResponse,
-      });
-
-      // Parse AI response - handle different response formats like ai-enrichment.ts does
-      let responseText: string;
-      if (typeof aiResponse === 'string') {
-        responseText = aiResponse;
-      } else if ((aiResponse as any).response) {
-        responseText = (aiResponse as any).response;
-      } else if ('choices' in (aiResponse as object) && (aiResponse as any).choices?.[0]?.message?.content) {
-        responseText = (aiResponse as any).choices[0].message.content;
-      } else {
-        responseText = JSON.stringify(aiResponse);
-      }
-
-      try {
-        // Clean up response - remove markdown code blocks if present
-        const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const result = JSON.parse(cleaned);
-        if (result.issues && Array.isArray(result.issues)) {
-          // Filter and enrich issues with confidence
-          return result.issues
-            .filter((issue: ComplianceIssue) => issue.severity && issue.title)
-            .map((issue: ComplianceIssue) => ({
-              ...issue,
-              confidence: issue.confidence || (analysisType === 'quick' ? 60 : 75), // Default confidence
-            }));
-        }
-      } catch (parseError) {
-        this.env.logger.error('Failed to parse AI response', {
-          error: parseError instanceof Error ? parseError.message : String(parseError),
-          responseText: responseText.substring(0, 200), // Log first 200 chars for debugging
-        });
-        // CRITICAL FIX: Don't return fallback - return empty array for failed parsing
-        return [];
-      }
-
-      // CRITICAL FIX: Don't return fallback - return empty array
-      this.env.logger.warn('AI response did not contain valid issues array');
-      return [];
-    } catch (error) {
-      this.env.logger.error(`AI compliance analysis failed: ${error instanceof Error ? error.message : 'Unknown'}`);
-      // CRITICAL FIX: Don't return fallback - return empty array for genuine failures
-      return [];
-    }
-  }
-
-  /**
    * PHASE 1.1.2: Get Framework Rules with Caching
    */
   private getFrameworkRulesWithCache(framework: string): string[] {
@@ -671,58 +465,145 @@ If document is fully compliant, return: {"issues": []}`;
   }
 
   private async performAIComplianceAnalysis(documentText: string, framework: string): Promise<ComplianceIssue[]> {
-    // PHASE 1.1.2: Use multi-pass analysis instead of single-pass
-    return this.performMultiPassAnalysis(documentText, framework);
-
-    /* OLD SINGLE-PASS CODE (kept for reference):
+    this.env.logger.info('🎯 === STARTING AI COMPLIANCE ANALYSIS ===', { framework });
+    
     try {
       // Get framework rules
-      const frameworkRules = this.getFrameworkRules(framework);
-
-      const prompt = `Analyze the following document for compliance with ${framework}.
-
-Framework Requirements:
-${frameworkRules.join('\n')}
-
-Document Content:
-${documentText.substring(0, 4000)}
-
-Provide a compliance analysis including:
-1. Overall compliance score (0-100)
-2. List of issues found with severity levels
-3. Recommendations for each issue
-
-Format as JSON with: { score: number, issues: [{severity, category, title, description, recommendation}], summary: string }`;
-
-      // Use AI for compliance analysis
-      const analysis = await this.env.AI.run('llama-3.1-8b-instruct-fast', {
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a compliance expert analyzing documents for regulatory compliance. Provide detailed, actionable feedback.',
-          },
-          { role: 'user', content: prompt },
-        ],
+      const rules = this.getFrameworkRules(framework);
+      this.env.logger.info('📋 Framework rules loaded', { 
+        framework, 
+        ruleCount: rules.length,
+        rules: rules.slice(0, 5)
       });
 
-      // Parse AI response
-      const responseText = ('choices' in analysis && analysis.choices?.[0]?.message?.content) || '{}';
+      // Truncate document for AI
+      const maxLength = 3000;
+      const truncatedText = documentText.substring(0, maxLength);
+      this.env.logger.info('📄 Document prepared', { 
+        originalLength: documentText.length,
+        truncatedLength: truncatedText.length,
+        textPreview: truncatedText.substring(0, 200) + '...'
+      });
 
-      try {
-        const result = JSON.parse(responseText);
-        if (result.issues && Array.isArray(result.issues)) {
-          return result.issues.filter((issue: ComplianceIssue) => issue.severity && issue.title);
-        }
-      } catch {
-        // JSON parse failed, fallback
+      // Build prompt
+      const prompt = `Analyze this document for ${framework} compliance violations.
+
+Framework Requirements:
+${rules.slice(0, 5).join('\n')}
+
+Document:
+${truncatedText}
+
+Return JSON with issues array. If fully compliant, return empty array:
+{"issues": [{"severity": "critical|high|medium|low", "category": "requirement name", "title": "violation", "description": "details", "recommendation": "fix", "confidence": 80}]}`;
+
+      this.env.logger.info('💬 Prompt created', { 
+        promptLength: prompt.length,
+        promptPreview: prompt.substring(0, 300) + '...'
+      });
+
+      const model = 'llama-3.1-70b-instruct';
+      this.env.logger.info('🤖 Calling AI model', { model, framework });
+
+      // AI CALL
+      const aiResponse = await this.env.AI.run(model, {
+        messages: [
+          { role: 'system', content: `You are a ${framework} compliance auditor. Return JSON only.` },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 1500,
+        temperature: 0.3,
+      });
+      
+      this.env.logger.info('✅ AI response received', { 
+        responseType: typeof aiResponse,
+        responseKeys: Object.keys(aiResponse || {}),
+        hasChoices: !!(aiResponse as any).choices,
+        fullRawResponse: JSON.stringify(aiResponse)
+      });
+
+      // Extract content
+      let content: string = '';
+      if ((aiResponse as any).choices?.[0]?.message?.content) {
+        content = (aiResponse as any).choices[0].message.content;
+        this.env.logger.info('📝 Content extracted from choices[0].message.content', { 
+          contentLength: content.length,
+          contentPreview: content.substring(0, 500)
+        });
+      } else if ((aiResponse as any).response) {
+        content = (aiResponse as any).response;
+        this.env.logger.info('📝 Content extracted from response property', { 
+          contentLength: content.length,
+          contentPreview: content.substring(0, 500)
+        });
+      } else if (typeof aiResponse === 'string') {
+        content = aiResponse;
+        this.env.logger.info('📝 Response is string', { 
+          contentLength: content.length,
+          contentPreview: content.substring(0, 500)
+        });
+      } else {
+        this.env.logger.error('❌ Could not extract content from response', { 
+          aiResponse: JSON.stringify(aiResponse)
+        });
+        return [];
       }
 
-      return this.getFallbackIssues(framework);
+      this.env.logger.info('📄 FULL LLM OUTPUT:', { 
+        framework,
+        model,
+        fullContent: content,
+        contentLength: content.length
+      });
+
+      // Parse JSON
+      const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      this.env.logger.info('🧹 Cleaned for parsing', { 
+        originalLength: content.length,
+        cleanedLength: cleaned.length,
+        cleaned: cleaned
+      });
+      
+      const result = JSON.parse(cleaned);
+      this.env.logger.info('✅ JSON parsed successfully', { 
+        hasIssues: !!result.issues,
+        isArray: Array.isArray(result.issues),
+        issueCount: result.issues?.length || 0,
+        parsedResult: JSON.stringify(result, null, 2)
+      });
+      
+      if (result.issues && Array.isArray(result.issues)) {
+        const issues = result.issues.map((issue: any) => ({
+          ...issue,
+          confidence: issue.confidence || 75
+        }));
+        
+        this.env.logger.info('🎉 Returning issues', { 
+          count: issues.length,
+          issues: issues.map((i: any) => ({
+            severity: i.severity,
+            category: i.category,
+            title: i.title,
+            confidence: i.confidence
+          }))
+        });
+        
+        return issues;
+      }
+      
+      this.env.logger.warn('⚠️ No issues array in result', { 
+        resultKeys: Object.keys(result)
+      });
+      return [];
+      
     } catch (error) {
-      this.env.logger.error(`AI compliance analysis failed: ${error instanceof Error ? error.message : 'Unknown'}`);
-      return this.getFallbackIssues(framework);
+      this.env.logger.error('❌ AI compliance analysis failed', {
+        framework,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      return [];
     }
-    */
   }
 
   private getFrameworkRules(framework: string): string[] {
