@@ -53,11 +53,11 @@ export default function ComplianceCheckDetailPage() {
       setLoading(true);
       
       // Fetch compliance check details
-      const checkResponse = await api.get(`/workspaces/${wsId}/compliance/${checkId}`);
+      const checkResponse = await api.get(`/api/workspaces/${wsId}/compliance/${checkId}`);
       setCheck(checkResponse);
 
       // Fetch compliance issues
-      const issuesResponse = await api.get(`/workspaces/${wsId}/compliance/${checkId}/issues`);
+      const issuesResponse = await api.get(`/api/workspaces/${wsId}/compliance/${checkId}/issues`);
       setIssues(issuesResponse.issues || []);
 
     } catch (error) {
