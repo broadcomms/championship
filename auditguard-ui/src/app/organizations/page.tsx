@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { TopNavBar } from '@/components/navigation/TopNavBar';
 import { useAuth } from '@/contexts/AuthContext';
 import { OrganizationCard } from '@/components/organizations/OrganizationCard';
 import { api } from '@/lib/api';
@@ -32,8 +33,14 @@ export default function OrganizationsPage() {
   }, []);
 
   return (
-    <AppLayout>
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <ProtectedRoute>
+      <div className="flex h-screen flex-col">
+        {/* Top Navigation Bar - no org switcher on this page */}
+        <TopNavBar showOrgSwitcher={false} />
+
+        {/* Main content */}
+        <main className="flex-1 overflow-y-auto bg-gray-50">
+          <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Page Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3">
@@ -95,7 +102,9 @@ export default function OrganizationsPage() {
             ))}
           </div>
         )}
+          </div>
+        </main>
       </div>
-    </AppLayout>
+    </ProtectedRoute>
   );
 }

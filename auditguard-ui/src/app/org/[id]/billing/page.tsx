@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MultiLevelSidebar } from '@/components/sidebar/MultiLevelSidebar';
+import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Subscription {
   tier: 'Free' | 'Professional' | 'Enterprise';
@@ -92,7 +93,9 @@ const PLAN_TIERS: Record<string, PlanTier> = {
 export default function OrganizationBillingPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   const orgId = params.id as string;
+  const accountId = user?.userId;
 
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [usage, setUsage] = useState<UsageMetrics | null>(null);
@@ -102,17 +105,63 @@ export default function OrganizationBillingPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [subRes, usageRes, invoicesRes] = await Promise.all([
-          api.get(`/organizations/${orgId}/subscription`),
-          api.get(`/organizations/${orgId}/usage`),
-          api.get(`/organizations/${orgId}/invoices`),
-        ]);
+        // Fetch usage forecast (includes current usage + plan limits)
+        // Note: api.get() returns data directly, not wrapped in .data property
+        const forecast = await api.get(`/api/organizations/${orgId}/usage/forecast`);
 
-        setSubscription(subRes.data);
-        setUsage(usageRes.data);
-        setInvoices(invoicesRes.data);
+        // Check if forecast data is valid
+        if (forecast && typeof forecast === 'object' && forecast.current_usage && forecast.plan_limits) {
+          // Map backend data structure to frontend expected format
+          setUsage({
+            uploads_used: forecast.current_usage?.documents || 0,
+            uploads_limit: forecast.plan_limits?.max_documents || 10,
+            checks_used: forecast.current_usage?.checks || 0,
+            checks_limit: forecast.plan_limits?.max_checks || 5,
+            period_start: Date.now() - 30 * 24 * 60 * 60 * 1000, // 30 days ago
+            period_end: Date.now(),
+          });
+        } else {
+          // No forecast data available, use defaults
+          setUsage({
+            uploads_used: 0,
+            uploads_limit: 10,
+            checks_used: 0,
+            checks_limit: 5,
+            period_start: Date.now() - 30 * 24 * 60 * 60 * 1000,
+            period_end: Date.now(),
+          });
+        }
+
+        // Set default subscription (Free tier) - subscription management not yet implemented
+        setSubscription({
+          tier: 'Free',
+          status: 'active',
+          current_period_start: Date.now() - 30 * 24 * 60 * 60 * 1000,
+          current_period_end: Date.now() + 30 * 24 * 60 * 60 * 1000,
+          cancel_at_period_end: false,
+        });
+
+        // Invoices not yet implemented
+        setInvoices([]);
       } catch (error) {
         console.error('Failed to fetch billing data:', error);
+        // Set defaults on error
+        setSubscription({
+          tier: 'Free',
+          status: 'active',
+          current_period_start: Date.now(),
+          current_period_end: Date.now() + 30 * 24 * 60 * 60 * 1000,
+          cancel_at_period_end: false,
+        });
+        setUsage({
+          uploads_used: 0,
+          uploads_limit: 10,
+          checks_used: 0,
+          checks_limit: 5,
+          period_start: Date.now() - 30 * 24 * 60 * 60 * 1000,
+          period_end: Date.now(),
+        });
+        setInvoices([]);
       } finally {
         setLoading(false);
       }
@@ -122,43 +171,22 @@ export default function OrganizationBillingPage() {
   }, [orgId]);
 
   const handleUpgrade = async (tier: string) => {
-    try {
-      const response = await api.post(`/organizations/${orgId}/subscription/upgrade`, {
-        tier,
-      });
-
-      if (response.data.checkout_url) {
-        window.location.href = response.data.checkout_url;
-      }
-    } catch (error) {
-      console.error('Failed to upgrade:', error);
-      alert('Failed to start upgrade process. Please try again.');
-    }
+    // Subscription upgrades not yet implemented
+    alert('Subscription management is coming soon! Please contact support to upgrade your plan.');
   };
 
   const handleCancelSubscription = async () => {
-    if (!confirm('Are you sure you want to cancel your subscription? You will retain access until the end of your billing period.')) {
-      return;
-    }
-
-    try {
-      await api.post(`/organizations/${orgId}/subscription/cancel`);
-      alert('Subscription canceled. You will retain access until ' + new Date(subscription!.current_period_end).toLocaleDateString());
-      window.location.reload();
-    } catch (error) {
-      console.error('Failed to cancel subscription:', error);
-      alert('Failed to cancel subscription. Please contact support.');
-    }
+    // Subscription management not yet implemented
+    alert('Subscription management is coming soon! Please contact support to cancel your plan.');
   };
 
   if (loading) {
     return (
-      <div className="flex h-screen">
-        <MultiLevelSidebar currentOrgId={orgId} />
-        <div className="flex-1 flex items-center justify-center">
+      <OrganizationLayout accountId={accountId} orgId={orgId}>
+        <div className="flex items-center justify-center py-12">
           <div className="text-gray-500">Loading...</div>
         </div>
-      </div>
+      </OrganizationLayout>
     );
   }
 
@@ -171,10 +199,8 @@ export default function OrganizationBillingPage() {
     : 0;
 
   return (
-    <div className="flex h-screen">
-      <MultiLevelSidebar currentOrgId={orgId} />
-      <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-5xl mx-auto p-8">
+    <OrganizationLayout accountId={accountId} orgId={orgId}>
+      <div className="p-8">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -415,7 +441,6 @@ export default function OrganizationBillingPage() {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </OrganizationLayout>
   );
 }

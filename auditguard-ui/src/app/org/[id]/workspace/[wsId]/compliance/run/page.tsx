@@ -32,6 +32,12 @@ interface ComplianceCheckResult {
   issues_found: number;
 }
 
+interface UsageLimits {
+  checks_used: number;
+  checks_limit: number;
+  subscription_tier: string;
+}
+
 export default function RunComplianceCheckPage() {
   const params = useParams();
   const router = useRouter();
@@ -49,6 +55,36 @@ export default function RunComplianceCheckPage() {
   });
   const [checkResult, setCheckResult] = useState<ComplianceCheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [usageLimits, setUsageLimits] = useState<UsageLimits | null>(null);
+  const [loadingLimits, setLoadingLimits] = useState(true);
+
+  // Fetch usage limits on mount
+  useEffect(() => {
+    const fetchUsageLimits = async () => {
+      try {
+        const data = await api.get(`/api/organizations/${orgId}/usage/forecast`);
+        if (data && data.plan_limits && data.current_usage) {
+          setUsageLimits({
+            checks_used: data.current_usage.checks || 0,
+            checks_limit: data.plan_limits.max_checks || 5,
+            subscription_tier: data.plan_limits.tier || 'Free',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch usage limits:', error);
+        // Set defaults if fetch fails
+        setUsageLimits({
+          checks_used: 0,
+          checks_limit: 5,
+          subscription_tier: 'Free',
+        });
+      } finally {
+        setLoadingLimits(false);
+      }
+    };
+
+    fetchUsageLimits();
+  }, [orgId]);
 
   const frameworks = [
     {
@@ -124,6 +160,93 @@ export default function RunComplianceCheckPage() {
         ? prev.document_ids.filter((id) => id !== docId)
         : [...prev.document_ids, docId],
     }));
+  };
+
+  // Calculate usage after this check
+  const calculateUsageAfterCheck = () => {
+    if (!usageLimits) return { used: 0, limit: 5, remaining: 5, willExceed: false, percentage: 0 };
+
+    // Each compliance check run counts as 1 check credit
+    const futureUsed = usageLimits.checks_used + 1;
+    const remaining = Math.max(0, usageLimits.checks_limit - futureUsed);
+    const willExceed = futureUsed > usageLimits.checks_limit;
+    const percentage = Math.min(100, (futureUsed / usageLimits.checks_limit) * 100);
+
+    return {
+      used: futureUsed,
+      limit: usageLimits.checks_limit,
+      remaining,
+      willExceed,
+      percentage,
+    };
+  };
+
+  // Render billing warning banner
+  const renderBillingWarning = () => {
+    if (!usageLimits || !config.framework) return null;
+
+    const usage = calculateUsageAfterCheck();
+
+    if (usage.willExceed) {
+      return (
+        <div className="mb-6 rounded-lg border-2 border-red-300 bg-red-50 p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-900 mb-1">Check Limit Exceeded</h3>
+              <p className="text-sm text-red-800 mb-2">
+                This compliance check would use {usage.used} of your {usage.limit} monthly check credits.
+                You need to upgrade your plan to run this compliance check.
+              </p>
+              <p className="text-xs text-red-700">
+                Current usage: {usageLimits.checks_used}/{usageLimits.checks_limit} checks ({usageLimits.subscription_tier} plan)
+              </p>
+              <button
+                onClick={() => router.push(`/org/${orgId}/billing`)}
+                className="mt-3 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
+              >
+                Upgrade Plan
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (usage.percentage > 80) {
+      return (
+        <div className="mb-6 rounded-lg border-2 border-yellow-300 bg-yellow-50 p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">⚡</span>
+            <div className="flex-1">
+              <h3 className="font-semibold text-yellow-900 mb-1">Approaching Check Limit</h3>
+              <p className="text-sm text-yellow-800 mb-2">
+                After this check, you'll have used {usage.used} of {usage.limit} monthly checks ({Math.round(usage.percentage)}%).
+                Only {usage.remaining} check(s) remaining.
+              </p>
+              <p className="text-xs text-yellow-700">
+                Consider upgrading to avoid interruptions in your compliance workflow.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">💡</span>
+          <div className="flex-1">
+            <h3 className="font-semibold text-blue-900 mb-1">Compliance Check Credit</h3>
+            <p className="text-sm text-blue-800">
+              This check will use 1 of your {usage.remaining} remaining check credits.
+              After check: {usage.used}/{usage.limit} used ({Math.round(usage.percentage)}%)
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const handleRunCheck = async () => {
@@ -334,6 +457,7 @@ export default function RunComplianceCheckPage() {
 
   const renderConfigureStep = () => {
     const selectedFramework = frameworks.find((f) => f.id === config.framework);
+    const usage = calculateUsageAfterCheck();
 
     return (
       <div className="max-w-3xl mx-auto">
@@ -343,6 +467,9 @@ export default function RunComplianceCheckPage() {
             Customize how the compliance check should run
           </p>
         </div>
+
+        {/* Billing Warning */}
+        {renderBillingWarning()}
 
         <div className="bg-white rounded-lg border border-gray-200 p-8 space-y-6">
           {/* Summary */}
@@ -444,7 +571,10 @@ export default function RunComplianceCheckPage() {
           <Button variant="outline" onClick={() => setCurrentStep('select_documents')}>
             ← Back
           </Button>
-          <Button onClick={handleRunCheck}>
+          <Button
+            onClick={handleRunCheck}
+            disabled={usage.willExceed}
+          >
             Run Compliance Check
           </Button>
         </div>

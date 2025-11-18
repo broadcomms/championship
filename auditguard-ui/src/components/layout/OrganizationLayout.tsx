@@ -48,7 +48,7 @@ export function OrganizationLayout({
           <main className="flex-1 overflow-y-auto bg-gray-50">
             {/* Breadcrumb */}
             <div className="bg-white border-b border-gray-200">
-              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
                 <Breadcrumb
                   accountId={accountId}
                   orgId={orgId}

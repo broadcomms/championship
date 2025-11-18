@@ -30,7 +30,7 @@ export function AccountLayout({ children, accountId }: AccountLayoutProps) {
           {/* Breadcrumb */}
           {accountId && (
             <div className="bg-white border-b border-gray-200">
-              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
                 <Breadcrumb accountId={accountId} />
               </div>
             </div>

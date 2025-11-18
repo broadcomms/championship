@@ -50,15 +50,16 @@ export default function OrganizationOverviewPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Note: api.get() returns data directly, not wrapped in .data property
         const [orgRes, workspacesRes, statsRes] = await Promise.all([
-          api.get(`/organizations/${orgId}`),
-          api.get(`/organizations/${orgId}/workspaces`),
-          api.get(`/organizations/${orgId}/stats`),
+          api.get(`/api/organizations/${orgId}`),
+          api.get(`/api/organizations/${orgId}/workspaces`),
+          api.get(`/api/organizations/${orgId}/stats`),
         ]);
 
-        setOrganization(orgRes.data);
-        setWorkspaces(workspacesRes.data);
-        setStats(statsRes.data);
+        setOrganization(orgRes || null);
+        setWorkspaces(Array.isArray(workspacesRes) ? workspacesRes : []);
+        setStats(statsRes || null);
       } catch (error) {
         console.error('Failed to fetch organization data:', error);
       } finally {

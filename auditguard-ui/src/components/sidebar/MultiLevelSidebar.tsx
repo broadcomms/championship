@@ -5,12 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
 
-interface Organization {
-  id: string;
-  name: string;
-  role: string;
-}
-
 interface Workspace {
   id: string;
   name: string;
@@ -24,23 +18,8 @@ interface SidebarProps {
 
 export function MultiLevelSidebar({ currentOrgId, currentWorkspaceId }: SidebarProps) {
   const pathname = usePathname();
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Fetch user's organizations
-  useEffect(() => {
-    const fetchOrganizations = async () => {
-      try {
-        const response = await api.get('/organizations');
-        setOrganizations(response.data);
-      } catch (error) {
-        console.error('Failed to fetch organizations:', error);
-      }
-    };
-
-    fetchOrganizations();
-  }, []);
 
   // Fetch workspaces for current org
   useEffect(() => {
@@ -51,10 +30,11 @@ export function MultiLevelSidebar({ currentOrgId, currentWorkspaceId }: SidebarP
       }
 
       try {
-        const response = await api.get(`/organizations/${currentOrgId}/workspaces`);
-        setWorkspaces(response.data);
+        const response = await api.get(`/api/organizations/${currentOrgId}/workspaces`);
+        setWorkspaces(response?.data || response || []);
       } catch (error) {
         console.error('Failed to fetch workspaces:', error);
+        setWorkspaces([]);
       } finally {
         setLoading(false);
       }
@@ -89,28 +69,6 @@ export function MultiLevelSidebar({ currentOrgId, currentWorkspaceId }: SidebarP
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-full overflow-hidden">
-      {/* Organization Selector */}
-      {organizations.length > 0 && (
-        <div className="p-4 border-b border-gray-200">
-          <select
-            value={currentOrgId || ''}
-            onChange={(e) => {
-              if (e.target.value) {
-                window.location.href = `/org/${e.target.value}`;
-              }
-            }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Select Organization...</option>
-            {organizations.map((org) => (
-              <option key={org.id} value={org.id}>
-                {org.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto">
         {/* Organization-level Navigation */}

@@ -28,11 +28,11 @@ export function Breadcrumb({ accountId, orgId, workspaceId, customItems }: Bread
     const fetchNames = async () => {
       try {
         if (orgId) {
-          const orgResponse = await api.get(`/organizations/${orgId}`);
+          const orgResponse = await api.get(`/api/organizations/${orgId}`);
           setOrgName(orgResponse.data.name);
         }
         if (workspaceId) {
-          const wsResponse = await api.get(`/workspaces/${workspaceId}`);
+          const wsResponse = await api.get(`/api/workspaces/${workspaceId}`);
           setWorkspaceName(wsResponse.data.name);
         }
       } catch (error) {
@@ -46,15 +46,11 @@ export function Breadcrumb({ accountId, orgId, workspaceId, customItems }: Bread
   // Build breadcrumb items
   const items: BreadcrumbItem[] = [];
 
-  // Home - redirect to account dashboard if we have accountId, otherwise to root
-  if (accountId) {
-    items.push({ label: '🏠 Home', href: `/account/${accountId}` });
-  } else {
-    items.push({ label: '🏠 Home', href: '/' });
-  }
+  // Home - always links to landing page
+  items.push({ label: '🏠 Home', href: '/' });
 
-  // Account level - only show as separate item if we're deeper in the hierarchy
-  if (accountId && (orgId || workspaceId)) {
+  // Account level - always show if we have accountId
+  if (accountId) {
     items.push({ label: 'Account', href: `/account/${accountId}` });
   }
 
@@ -156,7 +152,7 @@ export function Breadcrumb({ accountId, orgId, workspaceId, customItems }: Bread
   }
 
   return (
-    <nav className="flex items-center space-x-2 text-sm text-gray-600 mb-6">
+    <nav className="flex items-center space-x-2 text-sm text-gray-600">
       {items.map((item, index) => (
         <div key={index} className="flex items-center">
           {index > 0 && <span className="mx-2 text-gray-400">/</span>}

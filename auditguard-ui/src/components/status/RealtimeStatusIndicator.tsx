@@ -4,42 +4,115 @@ import { useState, useEffect } from 'react';
 
 interface RealtimeStatusIndicatorProps {
   position?: 'fixed' | 'inline';
+  workspaceId?: string; // Optional workspace ID to connect to
 }
 
-export function RealtimeStatusIndicator({ position = 'fixed' }: RealtimeStatusIndicatorProps) {
+export function RealtimeStatusIndicator({ position = 'fixed', workspaceId }: RealtimeStatusIndicatorProps) {
   const [status, setStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
   const [showDetails, setShowDetails] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [lastConnectedAt, setLastConnectedAt] = useState<number | null>(null);
 
   useEffect(() => {
-    // Simulate WebSocket connection status
-    // In production, this would be connected to the actual realtime service
-    const checkConnection = () => {
-      // Check if WebSocket is available and connected
-      // This is a placeholder - actual implementation would check window.realtimeSocket or similar
-      const isConnected = typeof window !== 'undefined' && Math.random() > 0.1; // Simulate 90% uptime
+    // If no workspaceId is provided, show connected status (optional display mode)
+    if (!workspaceId) {
+      setStatus('connected');
+      setLastConnectedAt(Date.now());
+      return;
+    }
 
-      if (isConnected) {
-        setStatus('connected');
-        if (!lastConnectedAt) {
-          setLastConnectedAt(Date.now());
+    let websocket: WebSocket | null = null;
+    let pingInterval: NodeJS.Timeout | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+
+    const connect = () => {
+      try {
+        setStatus('connecting');
+
+        // Get backend API URL
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        if (!backendUrl) {
+          console.error('NEXT_PUBLIC_API_URL not configured');
+          setStatus('disconnected');
+          return;
         }
-        setRetryCount(0);
-      } else {
+
+        // Convert to WebSocket URL
+        const wsUrl = backendUrl.replace(/^https?:\/\//, (match) =>
+          match === 'https://' ? 'wss://' : 'ws://'
+        );
+
+        // Connect through API gateway at /api/realtime/:workspaceId
+        // Gateway forwards to realtime service at /ws/:workspaceId/realtime
+        websocket = new WebSocket(`${wsUrl}/api/realtime/${workspaceId}`);
+
+        websocket.onopen = () => {
+          console.log('RealtimeStatusIndicator: WebSocket connected');
+          setStatus('connected');
+          setRetryCount(0);
+          setLastConnectedAt(Date.now());
+
+          // Send ping every 30 seconds to keep connection alive
+          pingInterval = setInterval(() => {
+            if (websocket?.readyState === WebSocket.OPEN) {
+              websocket.send(JSON.stringify({ type: 'ping' }));
+            }
+          }, 30000);
+        };
+
+        websocket.onmessage = (event) => {
+          // Handle pong responses
+          try {
+            const message = JSON.parse(event.data);
+            if (message.type === 'pong') {
+              // Connection is alive
+              setLastConnectedAt(Date.now());
+            }
+          } catch (error) {
+            // Ignore parse errors
+          }
+        };
+
+        websocket.onerror = (error) => {
+          console.error('RealtimeStatusIndicator: WebSocket error', error);
+          setStatus('disconnected');
+        };
+
+        websocket.onclose = () => {
+          console.log('RealtimeStatusIndicator: WebSocket closed');
+          setStatus('disconnected');
+
+          if (pingInterval) {
+            clearInterval(pingInterval);
+            pingInterval = null;
+          }
+
+          // Attempt reconnection with exponential backoff (max 3 attempts)
+          if (retryCount < 3) {
+            const delays = [1000, 2000, 4000];
+            const delay = delays[retryCount] || 4000;
+            console.log(`Reconnecting in ${delay}ms... (attempt ${retryCount + 1}/3)`);
+
+            setRetryCount((prev) => prev + 1);
+            reconnectTimeout = setTimeout(connect, delay);
+          }
+        };
+      } catch (error) {
+        console.error('RealtimeStatusIndicator: Failed to connect', error);
         setStatus('disconnected');
-        setRetryCount((prev) => prev + 1);
       }
     };
 
-    // Check connection immediately
-    checkConnection();
+    // Initial connection
+    connect();
 
-    // Check connection every 5 seconds
-    const interval = setInterval(checkConnection, 5000);
-
-    return () => clearInterval(interval);
-  }, [lastConnectedAt]);
+    // Cleanup on unmount
+    return () => {
+      if (pingInterval) clearInterval(pingInterval);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (websocket) websocket.close();
+    };
+  }, [workspaceId, retryCount]);
 
   const getStatusColor = () => {
     switch (status) {

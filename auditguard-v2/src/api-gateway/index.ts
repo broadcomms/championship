@@ -647,6 +647,29 @@ export default class extends Service<Env> {
         });
       }
 
+      // Match /api/organizations (get all organizations for user) - must come before specific org match
+      if (path === '/api/organizations' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+        const db = this.getDb();
+
+        // Get all organizations where user is a member
+        const organizations = await db
+          .selectFrom('organization_members')
+          .innerJoin('organizations', 'organizations.id', 'organization_members.organization_id')
+          .select([
+            'organizations.id',
+            'organizations.name',
+            'organization_members.role',
+          ])
+          .where('organization_members.account_id', '=', user.userId)
+          .orderBy('organizations.created_at', 'desc')
+          .execute();
+
+        return new Response(JSON.stringify({ data: organizations }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/organizations/:id (get single organization)
       const orgMatch = path.match(/^\/api\/organizations\/([^\/]+)$/);
       if (orgMatch && orgMatch[1] && request.method === 'GET') {

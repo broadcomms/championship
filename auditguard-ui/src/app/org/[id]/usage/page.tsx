@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { MultiLevelSidebar } from '@/components/sidebar/MultiLevelSidebar';
+import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UsageData {
   uploads: {
@@ -18,6 +19,18 @@ interface UsageData {
     percentage: number;
     history: Array<{ date: string; count: number }>;
   };
+  messages: {
+    current: number;
+    limit: number;
+    percentage: number;
+    history: Array<{ date: string; count: number }>;
+  };
+  storage: {
+    current_bytes: number;
+    limit_gb: number;
+    percentage: number;
+    current_gb: number;
+  };
   period_start: number;
   period_end: number;
 }
@@ -27,18 +40,22 @@ interface WorkspaceUsage {
   workspace_name: string;
   uploads: number;
   checks: number;
+  messages: number;
+  storage_bytes: number;
   members: number;
   documents: number;
 }
 
 export default function OrganizationUsagePage() {
   const params = useParams();
+  const { user } = useAuth();
   const orgId = params.id as string;
+  const accountId = user?.userId;
 
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [workspaceUsage, setWorkspaceUsage] = useState<WorkspaceUsage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const [timeRange, setTimeRange] = useState<'current' | 'last30days' | 'all-time'>('current');
 
   useEffect(() => {
     fetchData();
@@ -46,15 +63,92 @@ export default function OrganizationUsagePage() {
 
   const fetchData = async () => {
     try {
-      const [usageRes, workspacesRes] = await Promise.all([
-        api.get(`/organizations/${orgId}/usage?range=${timeRange}`),
-        api.get(`/organizations/${orgId}/workspace-usage`),
+      // Note: api.get() returns data directly, not wrapped in .data property
+      const [usageRes, workspaces] = await Promise.all([
+        api.get(`/api/organizations/${orgId}/usage?period=${timeRange}`),
+        api.get(`/api/organizations/${orgId}/workspaces`),
       ]);
 
-      setUsage(usageRes.data);
-      setWorkspaceUsage(workspacesRes.data);
+      // Map backend data structure to frontend expected format
+      // Backend returns: { total_documents, total_checks, by_workspace: [], period, start_date, end_date }
+      // Frontend expects: { uploads: { current, limit, percentage, history }, checks: {...}, period_start, period_end }
+
+      const mappedUsage: UsageData = {
+        uploads: {
+          current: usageRes?.total_documents || 0,
+          limit: 100, // Default limit - TODO: get from subscription
+          percentage: ((usageRes?.total_documents || 0) / 100) * 100,
+          history: [], // TODO: Map historical data if available
+        },
+        checks: {
+          current: usageRes?.total_checks || 0,
+          limit: 50, // Default limit - TODO: get from subscription
+          percentage: ((usageRes?.total_checks || 0) / 50) * 100,
+          history: [], // TODO: Map historical data if available
+        },
+        messages: {
+          current: usageRes?.total_messages || 0,
+          limit: 1000, // Default limit - TODO: get from subscription
+          percentage: ((usageRes?.total_messages || 0) / 1000) * 100,
+          history: [], // TODO: Map historical data if available
+        },
+        storage: {
+          current_bytes: usageRes?.total_storage_bytes || 0,
+          limit_gb: 10, // Default limit - TODO: get from subscription
+          percentage: ((usageRes?.total_storage_bytes || 0) / (10 * 1024 * 1024 * 1024)) * 100,
+          current_gb: (usageRes?.total_storage_bytes || 0) / (1024 * 1024 * 1024),
+        },
+        period_start: usageRes?.start_date ? new Date(usageRes.start_date).getTime() : Date.now() - 30 * 24 * 60 * 60 * 1000,
+        period_end: usageRes?.end_date ? new Date(usageRes.end_date).getTime() : Date.now(),
+      };
+
+      setUsage(mappedUsage);
+
+      // Map workspace data - backend returns by_workspace array
+      const mappedWorkspaces = (usageRes?.by_workspace || []).map((ws: any) => ({
+        workspace_id: ws.workspace_id,
+        workspace_name: ws.workspace_name,
+        uploads: ws.documents || 0,
+        checks: ws.checks || 0,
+        messages: ws.messages || 0,
+        storage_bytes: ws.storage_bytes || 0,
+        members: 0, // Not included in usage response
+        documents: ws.documents || 0,
+      }));
+
+      setWorkspaceUsage(mappedWorkspaces);
     } catch (error) {
       console.error('Failed to fetch usage data:', error);
+      // Set safe defaults
+      setUsage({
+        uploads: {
+          current: 0,
+          limit: 100,
+          percentage: 0,
+          history: [],
+        },
+        checks: {
+          current: 0,
+          limit: 50,
+          percentage: 0,
+          history: [],
+        },
+        messages: {
+          current: 0,
+          limit: 1000,
+          percentage: 0,
+          history: [],
+        },
+        storage: {
+          current_bytes: 0,
+          limit_gb: 10,
+          percentage: 0,
+          current_gb: 0,
+        },
+        period_start: Date.now() - 30 * 24 * 60 * 60 * 1000,
+        period_end: Date.now(),
+      });
+      setWorkspaceUsage([]);
     } finally {
       setLoading(false);
     }
@@ -62,31 +156,27 @@ export default function OrganizationUsagePage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen">
-        <MultiLevelSidebar currentOrgId={orgId} />
-        <div className="flex-1 flex items-center justify-center">
+      <OrganizationLayout accountId={accountId} orgId={orgId}>
+        <div className="flex items-center justify-center py-12">
           <div className="text-gray-500">Loading...</div>
         </div>
-      </div>
+      </OrganizationLayout>
     );
   }
 
   if (!usage) {
     return (
-      <div className="flex h-screen">
-        <MultiLevelSidebar currentOrgId={orgId} />
-        <div className="flex-1 flex items-center justify-center">
+      <OrganizationLayout accountId={accountId} orgId={orgId}>
+        <div className="flex items-center justify-center py-12">
           <div className="text-red-500">Failed to load usage data</div>
         </div>
-      </div>
+      </OrganizationLayout>
     );
   }
 
   return (
-    <div className="flex h-screen">
-      <MultiLevelSidebar currentOrgId={orgId} />
-      <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-6xl mx-auto p-8">
+    <OrganizationLayout accountId={accountId} orgId={orgId}>
+      <div className="p-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -100,7 +190,7 @@ export default function OrganizationUsagePage() {
 
             {/* Time Range Selector */}
             <div className="flex gap-2">
-              {(['7d', '30d', '90d'] as const).map((range) => (
+              {(['current', 'last30days', 'all-time'] as const).map((range) => (
                 <button
                   key={range}
                   onClick={() => setTimeRange(range)}
@@ -110,7 +200,7 @@ export default function OrganizationUsagePage() {
                       : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                   }`}
                 >
-                  {range === '7d' ? 'Last 7 days' : range === '30d' ? 'Last 30 days' : 'Last 90 days'}
+                  {range === 'current' ? 'Current Period' : range === 'last30days' ? 'Last 30 Days' : 'All Time'}
                 </button>
               ))}
             </div>
@@ -128,7 +218,7 @@ export default function OrganizationUsagePage() {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {/* Document Uploads */}
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -194,6 +284,78 @@ export default function OrganizationUsagePage() {
                     {usage.checks.percentage.toFixed(1)}% used
                   </span>
                   {usage.checks.percentage > 75 && (
+                    <span className="text-red-600 font-medium">
+                      ⚠️ Approaching limit
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* AI Messages */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    AI Messages
+                  </span>
+                  <span className="text-sm text-gray-900 font-semibold">
+                    {usage.messages.current} / {usage.messages.limit === -1 ? '∞' : usage.messages.limit}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
+                  <div
+                    className={`h-4 rounded-full transition-all ${
+                      usage.messages.percentage > 90
+                        ? 'bg-red-600'
+                        : usage.messages.percentage > 75
+                        ? 'bg-yellow-600'
+                        : 'bg-purple-600'
+                    }`}
+                    style={{
+                      width: `${Math.min(usage.messages.percentage, 100)}%`,
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600">
+                    {usage.messages.percentage.toFixed(1)}% used
+                  </span>
+                  {usage.messages.percentage > 75 && (
+                    <span className="text-red-600 font-medium">
+                      ⚠️ Approaching limit
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Storage */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    Storage
+                  </span>
+                  <span className="text-sm text-gray-900 font-semibold">
+                    {usage.storage.current_gb.toFixed(2)} GB / {usage.storage.limit_gb === -1 ? '∞' : usage.storage.limit_gb} GB
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
+                  <div
+                    className={`h-4 rounded-full transition-all ${
+                      usage.storage.percentage > 90
+                        ? 'bg-red-600'
+                        : usage.storage.percentage > 75
+                        ? 'bg-yellow-600'
+                        : 'bg-indigo-600'
+                    }`}
+                    style={{
+                      width: `${Math.min(usage.storage.percentage, 100)}%`,
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600">
+                    {usage.storage.percentage.toFixed(1)}% used
+                  </span>
+                  {usage.storage.percentage > 75 && (
                     <span className="text-red-600 font-medium">
                       ⚠️ Approaching limit
                     </span>
@@ -301,6 +463,12 @@ export default function OrganizationUsagePage() {
                       Checks
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      AI Messages
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Storage
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Members
                     </th>
                   </tr>
@@ -323,6 +491,12 @@ export default function OrganizationUsagePage() {
                         {workspace.checks}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {workspace.messages}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {(workspace.storage_bytes / (1024 * 1024 * 1024)).toFixed(2)} GB
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {workspace.members}
                       </td>
                     </tr>
@@ -330,7 +504,7 @@ export default function OrganizationUsagePage() {
                   {workspaceUsage.length === 0 && (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={7}
                         className="px-6 py-12 text-center text-gray-500"
                       >
                         No workspace data available
@@ -342,7 +516,6 @@ export default function OrganizationUsagePage() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </OrganizationLayout>
   );
 }

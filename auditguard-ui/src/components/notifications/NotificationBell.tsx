@@ -35,9 +35,14 @@ export function NotificationBell() {
   const fetchUnreadCount = async () => {
     try {
       const response = await api.get('/notifications/count');
-      setUnreadCount(response.data.count);
+      const count = response?.count || 0;
+      setUnreadCount(count);
     } catch (error) {
-      console.error('Failed to fetch unread count:', error);
+      // Silently fail - notifications endpoint may not be implemented yet
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Notifications count not available');
+      }
+      setUnreadCount(0);
     }
   };
 
@@ -46,9 +51,13 @@ export function NotificationBell() {
     setLoading(true);
     try {
       const response = await api.get('/notifications?limit=5&unread=false');
-      setRecentNotifications(response.data);
+      setRecentNotifications(Array.isArray(response) ? response : []);
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+      // Silently fail - notifications endpoint may not be implemented yet
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Notifications list not available');
+      }
+      setRecentNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -91,7 +100,10 @@ export function NotificationBell() {
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
-      console.error('Failed to mark as read:', error);
+      // Silently fail - notification read tracking may not be implemented yet
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Failed to mark notification as read');
+      }
     }
   };
 

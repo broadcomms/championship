@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { MultiLevelSidebar } from '@/components/sidebar/MultiLevelSidebar';
 import { Button } from '@/components/common/Button';
@@ -17,6 +17,12 @@ interface UploadMetadata {
   tags: string[];
   description: string;
   framework?: string;
+}
+
+interface UsageLimits {
+  uploads_used: number;
+  uploads_limit: number;
+  subscription_tier: string;
 }
 
 export default function DocumentUploadPage() {
@@ -36,6 +42,36 @@ export default function DocumentUploadPage() {
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [usageLimits, setUsageLimits] = useState<UsageLimits | null>(null);
+  const [loadingLimits, setLoadingLimits] = useState(true);
+
+  // Fetch usage limits on mount
+  useEffect(() => {
+    const fetchUsageLimits = async () => {
+      try {
+        const data = await api.get(`/api/organizations/${orgId}/usage/forecast`);
+        if (data && data.plan_limits && data.current_usage) {
+          setUsageLimits({
+            uploads_used: data.current_usage.documents || 0,
+            uploads_limit: data.plan_limits.max_documents || 10,
+            subscription_tier: data.plan_limits.tier || 'Free',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch usage limits:', error);
+        // Set defaults if fetch fails
+        setUsageLimits({
+          uploads_used: 0,
+          uploads_limit: 10,
+          subscription_tier: 'Free',
+        });
+      } finally {
+        setLoadingLimits(false);
+      }
+    };
+
+    fetchUsageLimits();
+  }, [orgId]);
 
   const frameworks = [
     'SOC 2',
@@ -155,6 +191,92 @@ export default function DocumentUploadPage() {
     return '📎';
   };
 
+  // Calculate usage after this upload
+  const calculateUsageAfterUpload = () => {
+    if (!usageLimits) return { used: 0, limit: 10, remaining: 10, willExceed: false, percentage: 0 };
+
+    const futureUsed = usageLimits.uploads_used + selectedFiles.length;
+    const remaining = Math.max(0, usageLimits.uploads_limit - futureUsed);
+    const willExceed = futureUsed > usageLimits.uploads_limit;
+    const percentage = Math.min(100, (futureUsed / usageLimits.uploads_limit) * 100);
+
+    return {
+      used: futureUsed,
+      limit: usageLimits.uploads_limit,
+      remaining,
+      willExceed,
+      percentage,
+    };
+  };
+
+  // Render billing warning banner
+  const renderBillingWarning = () => {
+    if (!usageLimits || selectedFiles.length === 0) return null;
+
+    const usage = calculateUsageAfterUpload();
+
+    if (usage.willExceed) {
+      return (
+        <div className="mb-6 rounded-lg border-2 border-red-300 bg-red-50 p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-900 mb-1">Upload Limit Exceeded</h3>
+              <p className="text-sm text-red-800 mb-2">
+                This upload would use {usage.used} of your {usage.limit} monthly upload credits.
+                You need to upgrade your plan to upload {selectedFiles.length} document(s).
+              </p>
+              <p className="text-xs text-red-700">
+                Current usage: {usageLimits.uploads_used}/{usageLimits.uploads_limit} documents ({usageLimits.subscription_tier} plan)
+              </p>
+              <button
+                onClick={() => router.push(`/org/${orgId}/billing`)}
+                className="mt-3 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700"
+              >
+                Upgrade Plan
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (usage.percentage > 80) {
+      return (
+        <div className="mb-6 rounded-lg border-2 border-yellow-300 bg-yellow-50 p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">⚡</span>
+            <div className="flex-1">
+              <h3 className="font-semibold text-yellow-900 mb-1">Approaching Upload Limit</h3>
+              <p className="text-sm text-yellow-800 mb-2">
+                After this upload, you'll have used {usage.used} of {usage.limit} monthly uploads ({Math.round(usage.percentage)}%).
+                Only {usage.remaining} upload(s) remaining.
+              </p>
+              <p className="text-xs text-yellow-700">
+                Consider upgrading to avoid interruptions in your compliance workflow.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">💡</span>
+          <div className="flex-1">
+            <h3 className="font-semibold text-blue-900 mb-1">Upload Credits</h3>
+            <p className="text-sm text-blue-800">
+              This upload will use {selectedFiles.length} of your {usage.remaining} remaining upload credits.
+              After upload: {usage.used}/{usage.limit} used ({Math.round(usage.percentage)}%)
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderStepIndicator = () => {
     const steps = [
       { id: 'select', label: 'Select Files', icon: '📁' },
@@ -192,16 +314,22 @@ export default function DocumentUploadPage() {
     );
   };
 
-  const renderSelectStep = () => (
-    <div className="max-w-3xl mx-auto">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Documents</h2>
-        <p className="text-gray-600">
-          Choose the documents you want to upload for compliance checking
-        </p>
-      </div>
+  const renderSelectStep = () => {
+    const usage = calculateUsageAfterUpload();
 
-      {/* Drag & Drop Area */}
+    return (
+      <div className="max-w-3xl mx-auto">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Documents</h2>
+          <p className="text-gray-600">
+            Choose the documents you want to upload for compliance checking
+          </p>
+        </div>
+
+        {/* Billing Warning */}
+        {renderBillingWarning()}
+
+        {/* Drag & Drop Area */}
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
@@ -266,14 +394,18 @@ export default function DocumentUploadPage() {
             <Button variant="outline" onClick={() => router.back()}>
               Cancel
             </Button>
-            <Button onClick={() => setCurrentStep('metadata')}>
+            <Button
+              onClick={() => setCurrentStep('metadata')}
+              disabled={usage.willExceed}
+            >
               Continue →
             </Button>
           </div>
         </div>
       )}
-    </div>
-  );
+      </div>
+    );
+  };
 
   const renderMetadataStep = () => (
     <div className="max-w-3xl mx-auto">

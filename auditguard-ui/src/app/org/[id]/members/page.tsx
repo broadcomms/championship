@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { MultiLevelSidebar } from '@/components/sidebar/MultiLevelSidebar';
+import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Member {
   id: string;
@@ -27,7 +28,9 @@ interface Invitation {
 
 export default function OrganizationMembersPage() {
   const params = useParams();
+  const { user } = useAuth();
   const orgId = params.id as string;
+  const accountId = user?.userId;
 
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -43,15 +46,18 @@ export default function OrganizationMembersPage() {
 
   const fetchData = async () => {
     try {
-      const [membersRes, invitationsRes] = await Promise.all([
-        api.get(`/organizations/${orgId}/members`),
-        api.get(`/organizations/${orgId}/invitations`),
-      ]);
+      // Fetch members (this endpoint exists)
+      // Note: api.get() returns data directly, not wrapped in .data property
+      const members = await api.get(`/api/organizations/${orgId}/members`);
+      setMembers(Array.isArray(members) ? members : []);
 
-      setMembers(membersRes.data);
-      setInvitations(invitationsRes.data);
+      // Invitations at organization level not yet implemented
+      // TODO: Implement organization-level invitations or use workspace invitations
+      setInvitations([]);
     } catch (error) {
       console.error('Failed to fetch members:', error);
+      setMembers([]);
+      setInvitations([]);
     } finally {
       setLoading(false);
     }
@@ -62,7 +68,8 @@ export default function OrganizationMembersPage() {
     setInviting(true);
 
     try {
-      await api.post(`/organizations/${orgId}/invitations`, {
+      // Add member directly (organization-level invitations not yet implemented)
+      await api.post(`/api/organizations/${orgId}/members`, {
         email: inviteEmail,
         role: inviteRole,
       });
@@ -72,8 +79,8 @@ export default function OrganizationMembersPage() {
       setInviteRole('member');
       await fetchData();
     } catch (error) {
-      console.error('Failed to invite member:', error);
-      alert('Failed to send invitation. Please try again.');
+      console.error('Failed to add member:', error);
+      alert('Failed to add member. Please ensure the user has an account.');
     } finally {
       setInviting(false);
     }
@@ -85,7 +92,7 @@ export default function OrganizationMembersPage() {
     }
 
     try {
-      await api.delete(`/organizations/${orgId}/members/${memberId}`);
+      await api.delete(`/api/organizations/${orgId}/members/${memberId}`);
       await fetchData();
     } catch (error) {
       console.error('Failed to remove member:', error);
@@ -95,7 +102,7 @@ export default function OrganizationMembersPage() {
 
   const handleUpdateRole = async (memberId: string, newRole: 'admin' | 'member') => {
     try {
-      await api.patch(`/organizations/${orgId}/members/${memberId}`, {
+      await api.patch(`/api/organizations/${orgId}/members/${memberId}`, {
         role: newRole,
       });
       await fetchData();
@@ -128,20 +135,17 @@ export default function OrganizationMembersPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen">
-        <MultiLevelSidebar currentOrgId={orgId} />
-        <div className="flex-1 flex items-center justify-center">
+      <OrganizationLayout accountId={accountId} orgId={orgId}>
+        <div className="flex items-center justify-center py-12">
           <div className="text-gray-500">Loading...</div>
         </div>
-      </div>
+      </OrganizationLayout>
     );
   }
 
   return (
-    <div className="flex h-screen">
-      <MultiLevelSidebar currentOrgId={orgId} />
-      <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-5xl mx-auto p-8">
+    <OrganizationLayout accountId={accountId} orgId={orgId}>
+      <div className="p-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -153,7 +157,7 @@ export default function OrganizationMembersPage() {
               </p>
             </div>
             <Button onClick={() => setShowInviteModal(true)}>
-              + Invite Member
+              + Add Member
             </Button>
           </div>
 
@@ -293,7 +297,7 @@ export default function OrganizationMembersPage() {
               <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
                 <div className="px-6 py-4 border-b border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900">
-                    Invite Member
+                    Add Member
                   </h3>
                 </div>
 
@@ -339,7 +343,7 @@ export default function OrganizationMembersPage() {
                       Cancel
                     </Button>
                     <Button type="submit" disabled={inviting}>
-                      {inviting ? 'Sending...' : 'Send Invitation'}
+                      {inviting ? 'Adding...' : 'Add Member'}
                     </Button>
                   </div>
                 </form>
@@ -347,7 +351,6 @@ export default function OrganizationMembersPage() {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </OrganizationLayout>
   );
 }

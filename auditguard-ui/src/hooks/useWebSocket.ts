@@ -43,11 +43,24 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const subscribedChannelsRef = useRef<Set<string>>(new Set());
 
-  // Build WebSocket URL
+  // Build WebSocket URL - connect through API gateway
   const getWebSocketUrl = useCallback(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    return `${protocol}//${host}/api/realtime/${workspaceId}`;
+    // Get backend API URL from environment
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
+
+    if (!backendUrl) {
+      console.error('NEXT_PUBLIC_API_URL not configured');
+      return '';
+    }
+
+    // Convert HTTP(S) URL to WebSocket URL
+    const wsUrl = backendUrl.replace(/^https?:\/\//, (match) =>
+      match === 'https://' ? 'wss://' : 'ws://'
+    );
+
+    // API Gateway expects: /api/realtime/:workspaceId
+    // It will forward to realtime service at /ws/:workspaceId/realtime
+    return `${wsUrl}/api/realtime/${workspaceId}`;
   }, [workspaceId]);
 
   // Send message through WebSocket

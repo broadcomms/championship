@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { OrganizationWithRole } from '@/types/organization';
 import { cn } from '@/lib/utils';
-import { Building2, Users, Briefcase, Settings } from 'lucide-react';
+import { Building2, Users, Briefcase } from 'lucide-react';
 
 interface OrganizationCardProps {
   organization: OrganizationWithRole;
@@ -19,13 +19,15 @@ const roleColors = {
 export function OrganizationCard({ organization }: OrganizationCardProps) {
   const router = useRouter();
 
-  const handleNavigate = (path: string) => (e: React.MouseEvent) => {
-    e.stopPropagation();
-    router.push(path);
+  const handleCardClick = () => {
+    router.push(`/org/${organization.id}`);
   };
 
   return (
-    <div className="group rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-blue-300 hover:shadow-md">
+    <div
+      onClick={handleCardClick}
+      className="group cursor-pointer rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-blue-300 hover:shadow-md"
+    >
       {/* Organization Header */}
       <div className="mb-4 flex items-start justify-between">
         <div className="flex items-center">
@@ -51,7 +53,7 @@ export function OrganizationCard({ organization }: OrganizationCardProps) {
       </div>
 
       {/* Stats */}
-      <div className="mb-4 flex items-center gap-4 border-t border-gray-100 pt-4 text-sm text-gray-600">
+      <div className="flex items-center gap-4 border-t border-gray-100 pt-4 text-sm text-gray-600">
         <div className="flex items-center gap-1">
           <Users className="h-4 w-4" />
           <span>
@@ -64,24 +66,6 @@ export function OrganizationCard({ organization }: OrganizationCardProps) {
             {organization.workspace_count} workspace{organization.workspace_count !== 1 ? 's' : ''}
           </span>
         </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="flex gap-2 border-t border-gray-100 pt-4">
-        <button
-          onClick={handleNavigate(`/organizations/${organization.id}/settings`)}
-          className="flex flex-1 items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <Settings className="h-4 w-4" />
-          Settings
-        </button>
-        <button
-          onClick={handleNavigate(`/organizations/${organization.id}/members`)}
-          className="flex flex-1 items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <Users className="h-4 w-4" />
-          Members
-        </button>
       </div>
     </div>
   );

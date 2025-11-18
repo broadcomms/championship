@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { useAuth } from '@/contexts/AuthContext';
+import { AccountLayout } from '@/components/layout/AccountLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
 
@@ -38,6 +39,8 @@ const NOTIFICATION_TYPE_COLORS: Record<string, string> = {
 };
 
 export default function NotificationsPage() {
+  const { user } = useAuth();
+  const accountId = user?.userId;
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
@@ -51,19 +54,18 @@ export default function NotificationsPage() {
       const offset = reset ? 0 : notifications.length;
       const unreadOnly = filter === 'unread';
 
-      const response = await api.get(
+      // Note: api.get() returns data directly, not wrapped in .data property
+      const newNotifications = await api.get(
         `/notifications?unread=${unreadOnly}&limit=20&offset=${offset}`
       );
 
-      const newNotifications = response.data;
-
       if (reset) {
-        setNotifications(newNotifications);
+        setNotifications(Array.isArray(newNotifications) ? newNotifications : []);
       } else {
-        setNotifications(prev => [...prev, ...newNotifications]);
+        setNotifications(prev => [...prev, ...(Array.isArray(newNotifications) ? newNotifications : [])]);
       }
 
-      setHasMore(newNotifications.length === 20);
+      setHasMore((Array.isArray(newNotifications) ? newNotifications : []).length === 20);
     } catch (error) {
       console.error('Failed to load notifications:', error);
     } finally {
@@ -138,8 +140,8 @@ export default function NotificationsPage() {
   };
 
   return (
-    <AppLayout>
-      <div className="max-w-4xl mx-auto">
+    <AccountLayout accountId={accountId}>
+      <div className="px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Notifications</h1>
@@ -261,6 +263,6 @@ export default function NotificationsPage() {
           )}
         </div>
       </div>
-    </AppLayout>
+    </AccountLayout>
   );
 }

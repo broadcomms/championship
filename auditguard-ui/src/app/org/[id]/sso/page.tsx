@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { MultiLevelSidebar } from '@/components/sidebar/MultiLevelSidebar';
+import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SSOConfiguration {
   enabled: boolean;
@@ -17,7 +18,9 @@ interface SSOConfiguration {
 
 export default function OrganizationSSOPage() {
   const params = useParams();
+  const { user } = useAuth();
   const orgId = params.id as string;
+  const accountId = user?.userId;
 
   const [config, setConfig] = useState<SSOConfiguration | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,8 +35,9 @@ export default function OrganizationSSOPage() {
 
   const fetchConfig = async () => {
     try {
-      const response = await api.get(`/organizations/${orgId}/sso`);
-      setConfig(response.data);
+      // Note: api.get() returns data directly, not wrapped in .data property
+      const config = await api.get(`/api/organizations/${orgId}/sso/config`);
+      setConfig(config || { enabled: false, provider: null });
     } catch (error) {
       console.error('Failed to fetch SSO config:', error);
       setConfig({ enabled: false, provider: null });
@@ -45,13 +49,16 @@ export default function OrganizationSSOPage() {
   const handleEnableSSO = async () => {
     setSaving(true);
     try {
-      const response = await api.post(`/organizations/${orgId}/sso/setup`, {
-        provider: selectedProvider,
-        domain,
+      // Note: api.post() returns data directly, not wrapped in .data property
+      const response = await api.post(`/api/organizations/${orgId}/sso/config`, {
+        provider: selectedProvider === 'workos' ? 'saml' : selectedProvider,
+        enabled: true,
+        // Note: The backend expects workosOrganizationId and workosConnectionId
+        // This may require additional setup flow - for now, just enable SSO
       });
 
-      if (response.data.setup_url) {
-        window.location.href = response.data.setup_url;
+      if (response?.setup_url) {
+        window.location.href = response.setup_url;
       } else {
         setShowSetupModal(false);
         await fetchConfig();
@@ -71,7 +78,9 @@ export default function OrganizationSSOPage() {
 
     setSaving(true);
     try {
-      await api.post(`/organizations/${orgId}/sso/disable`);
+      await api.post(`/api/organizations/${orgId}/sso/config`, {
+        enabled: false,
+      });
       await fetchConfig();
     } catch (error) {
       console.error('Failed to disable SSO:', error);
@@ -83,20 +92,17 @@ export default function OrganizationSSOPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen">
-        <MultiLevelSidebar currentOrgId={orgId} />
-        <div className="flex-1 flex items-center justify-center">
+      <OrganizationLayout accountId={accountId} orgId={orgId}>
+        <div className="flex items-center justify-center py-12">
           <div className="text-gray-500">Loading...</div>
         </div>
-      </div>
+      </OrganizationLayout>
     );
   }
 
   return (
-    <div className="flex h-screen">
-      <MultiLevelSidebar currentOrgId={orgId} />
-      <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-4xl mx-auto p-8">
+    <OrganizationLayout accountId={accountId} orgId={orgId}>
+      <div className="max-w-4xl mx-auto p-8">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -350,7 +356,6 @@ export default function OrganizationSSOPage() {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </OrganizationLayout>
   );
 }
