@@ -660,6 +660,7 @@ export default class extends Service<Env> {
             'organizations.id',
             'organizations.name',
             'organization_members.role',
+            'organizations.created_at',
           ])
           .where('organization_members.user_id', '=', user.userId)
           .orderBy('organizations.created_at', 'desc')
@@ -729,7 +730,7 @@ export default class extends Service<Env> {
           })
         );
 
-        return new Response(JSON.stringify({ data: workspacesWithCounts }), {
+        return new Response(JSON.stringify(workspacesWithCounts), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
@@ -889,13 +890,13 @@ export default class extends Service<Env> {
         let checksCount = 0;
 
         if (workspaceIdsList.length > 0) {
-          // Use raw D1 queries to avoid Kysely typing issues with created_at
+          // Use raw D1 queries to avoid Kysely typing issues with timestamps
           const uploadsResult = await (this.env.AUDITGUARD_DB as any)
             .prepare(`
               SELECT COUNT(*) as count
               FROM documents
               WHERE workspace_id IN (${workspaceIdsList.map(() => '?').join(',')})
-              AND created_at >= ?
+              AND uploaded_at >= ?
             `)
             .bind(...workspaceIdsList, startOfMonth)
             .first();

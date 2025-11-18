@@ -11,10 +11,12 @@ type CheckStep = 'select_framework' | 'select_documents' | 'configure' | 'runnin
 
 interface Document {
   id: string;
-  name: string;
-  file_type: string;
-  status: 'ready' | 'processing' | 'error';
-  uploaded_at: number;
+  filename: string;
+  title: string | null;
+  fileSize: number;
+  contentType: string;
+  processingStatus: string;
+  uploadedAt: number;
 }
 
 interface CheckConfig {
@@ -26,11 +28,22 @@ interface CheckConfig {
 }
 
 interface ComplianceCheckResult {
-  id: string;
-  framework: string;
+  batchId: string;
   status: string;
-  score?: number;
-  issues_found: number;
+  total: number;
+  completed: number;
+  processing: number;
+  failed: number;
+  checks: Array<{
+    checkId: string;
+    documentId: string;
+    documentName: string;
+    status: string;
+    overallScore: number | null;
+    issuesFound: number;
+    createdAt: number;
+    completedAt: number | null;
+  }>;
 }
 
 interface UsageLimits {
@@ -142,10 +155,10 @@ export default function RunComplianceCheckPage() {
 
   const fetchDocuments = async () => {
     try {
-      const response = await api.get(`/workspaces/${wsId}/documents`);
-      // Filter to only show ready documents
-      const readyDocs = response.data.filter((doc: Document) => doc.status === 'ready');
-      setDocuments(readyDocs);
+      const response = await api.get(`/api/workspaces/${wsId}/documents`);
+      // Filter to only show completed documents
+      const completedDocs = response.documents.filter((doc: Document) => doc.processingStatus === 'completed');
+      setDocuments(completedDocs);
     } catch (error) {
       console.error('Failed to fetch documents:', error);
       setError('Failed to load documents. Please try again.');
@@ -262,24 +275,24 @@ export default function RunComplianceCheckPage() {
     setError(null);
 
     try {
-      const response = await api.post(`/workspaces/${wsId}/compliance-checks`, {
+      // Call the batch compliance check endpoint
+      const response = await api.post(`/api/workspaces/${wsId}/compliance/batch`, {
         framework: config.framework,
-        document_ids: config.document_ids,
-        auto_assign_issues: config.auto_assign_issues,
-        notify_on_complete: config.notify_on_complete,
-        severity_threshold: config.severity_threshold,
+        documentIds: config.document_ids, // Backend expects camelCase
       });
 
-      setCheckResult(response.data);
+      setCheckResult(response);
 
-      // Poll for completion
-      const checkId = response.data.id;
+      // Poll for completion using batch status endpoint
+      const batchId = response.batchId;
       const pollInterval = setInterval(async () => {
         try {
-          const statusResponse = await api.get(`/compliance-checks/${checkId}`);
-          if (statusResponse.data.status === 'completed' || statusResponse.data.status === 'failed') {
+          const statusResponse = await api.get(`/api/workspaces/${wsId}/compliance/batch/${batchId}`);
+
+          // Check if all checks in the batch are completed
+          if (statusResponse.completed + statusResponse.failed >= statusResponse.total) {
             clearInterval(pollInterval);
-            setCheckResult(statusResponse.data);
+            setCheckResult(statusResponse);
             setCurrentStep('complete');
           }
         } catch (error) {
@@ -426,9 +439,9 @@ export default function RunComplianceCheckPage() {
                   className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                 />
                 <div className="flex-1">
-                  <div className="font-medium text-gray-900">{doc.name}</div>
+                  <div className="font-medium text-gray-900">{doc.title || doc.filename}</div>
                   <div className="text-sm text-gray-500">
-                    Uploaded {new Date(doc.uploaded_at).toLocaleDateString()}
+                    Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
                   </div>
                 </div>
                 <span className="text-2xl">📄</span>
@@ -638,77 +651,88 @@ export default function RunComplianceCheckPage() {
     </div>
   );
 
-  const renderCompleteStep = () => (
-    <div className="max-w-2xl mx-auto text-center">
-      <div className="text-6xl mb-6">✅</div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">Check Complete!</h2>
-      <p className="text-gray-600 mb-8">
-        Your compliance check has finished successfully
-      </p>
+  const renderCompleteStep = () => {
+    // Calculate aggregate stats from batch results
+    const completedChecks = checkResult?.checks?.filter((c: any) => c.status === 'completed') || [];
+    const totalIssues = completedChecks.reduce((sum: number, check: any) => sum + (check.issuesFound || 0), 0);
+    const avgScore = completedChecks.length > 0
+      ? Math.round(completedChecks.reduce((sum: number, check: any) => sum + (check.overallScore || 0), 0) / completedChecks.length)
+      : 0;
 
-      {checkResult && (
-        <div className="bg-white rounded-lg border border-gray-200 p-8 mb-8">
-          <div className="mb-6">
-            <div
-              className={`text-5xl font-bold mb-2 ${
-                checkResult.score !== undefined && checkResult.score >= 80
-                  ? 'text-green-600'
-                  : checkResult.score !== undefined && checkResult.score >= 60
-                  ? 'text-yellow-600'
-                  : 'text-red-600'
-              }`}
-            >
-              {checkResult.score !== undefined ? `${checkResult.score}%` : 'Processing'}
-            </div>
-            <div className="text-gray-600">Compliance Score</div>
-          </div>
+    return (
+      <div className="max-w-2xl mx-auto text-center">
+        <div className="text-6xl mb-6">✅</div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Check Complete!</h2>
+        <p className="text-gray-600 mb-8">
+          Your compliance check has finished successfully
+        </p>
 
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="text-2xl font-bold text-gray-900">
-                {checkResult.issues_found}
-              </div>
-              <div className="text-gray-600">Issues Found</div>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="text-2xl font-bold text-gray-900">
-                {config.document_ids.length}
-              </div>
-              <div className="text-gray-600">Documents Checked</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-        <h3 className="font-semibold text-blue-900 mb-2">What's Next?</h3>
-        <ul className="text-sm text-blue-800 space-y-2 text-left">
-          <li>• Review the detailed compliance report</li>
-          <li>• Address any critical or high-severity issues</li>
-          <li>• Assign issues to team members for resolution</li>
-          <li>• Track progress on the Issues Kanban board</li>
-        </ul>
-      </div>
-
-      <div className="flex items-center justify-center gap-3">
-        <Button
-          variant="outline"
-          onClick={() => router.push(`/org/${orgId}/workspace/${wsId}/compliance`)}
-        >
-          View All Checks
-        </Button>
         {checkResult && (
+          <div className="bg-white rounded-lg border border-gray-200 p-8 mb-8">
+            <div className="mb-6">
+              <div
+                className={`text-5xl font-bold mb-2 ${
+                  avgScore >= 80
+                    ? 'text-green-600'
+                    : avgScore >= 60
+                    ? 'text-yellow-600'
+                    : 'text-red-600'
+                }`}
+              >
+                {avgScore}%
+              </div>
+              <div className="text-gray-600">Average Compliance Score</div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-2xl font-bold text-gray-900">
+                  {totalIssues}
+                </div>
+                <div className="text-gray-600">Total Issues</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-2xl font-bold text-gray-900">
+                  {checkResult.total || config.document_ids.length}
+                </div>
+                <div className="text-gray-600">Documents Checked</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-2xl font-bold text-green-900">
+                  {checkResult.completed || completedChecks.length}
+                </div>
+                <div className="text-gray-600">Completed</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
+          <h3 className="font-semibold text-blue-900 mb-2">What's Next?</h3>
+          <ul className="text-sm text-blue-800 space-y-2 text-left">
+            <li>• Review the detailed compliance reports for each document</li>
+            <li>• Address any critical or high-severity issues</li>
+            <li>• Assign issues to team members for resolution</li>
+            <li>• Track progress on the Issues Kanban board</li>
+          </ul>
+        </div>
+
+        <div className="flex items-center justify-center gap-3">
           <Button
-            onClick={() =>
-              router.push(`/org/${orgId}/workspace/${wsId}/compliance/${checkResult.id}`)
-            }
+            variant="outline"
+            onClick={() => router.push(`/org/${orgId}/workspace/${wsId}/compliance`)}
+          >
+            View All Checks
+          </Button>
+          <Button
+            onClick={() => router.push(`/org/${orgId}/workspace/${wsId}/compliance`)}
           >
             View Results
           </Button>
-        )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>

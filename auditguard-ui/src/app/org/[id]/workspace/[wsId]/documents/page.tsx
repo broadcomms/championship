@@ -59,7 +59,7 @@ export default function WorkspaceDocumentsPage() {
     }
 
     try {
-      await api.delete(`/api/documents/${documentId}`);
+      await api.delete(`/api/workspaces/${wsId}/documents/${documentId}`);
       setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
     } catch (error) {
       console.error('Failed to delete document:', error);

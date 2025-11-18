@@ -9,19 +9,14 @@ import { useAuth } from '@/contexts/AuthContext';
 
 interface ComplianceCheck {
   id: string;
+  documentId: string;
+  documentName: string;
   framework: string;
-  document_name: string;
-  document_id: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  score?: number;
-  issues_found: number;
-  critical_issues: number;
-  high_issues: number;
-  medium_issues: number;
-  low_issues: number;
-  run_by: string;
-  created_at: number;
-  completed_at?: number;
+  status: string;
+  overallScore: number | null;
+  issuesFound: number;
+  createdAt: number;
+  completedAt: number | null;
 }
 
 export default function WorkspaceCompliancePage() {
@@ -45,8 +40,8 @@ export default function WorkspaceCompliancePage() {
 
   const fetchChecks = async () => {
     try {
-      const response = await api.get(`/workspaces/${wsId}/compliance-checks`);
-      setChecks(response.data);
+      const response = await api.get(`/api/workspaces/${wsId}/compliance`);
+      setChecks(response.checks);
     } catch (error) {
       console.error('Failed to fetch compliance checks:', error);
     } finally {
@@ -109,8 +104,8 @@ export default function WorkspaceCompliancePage() {
   const stats = {
     total: checks.length,
     completed: checks.filter((c) => c.status === 'completed').length,
-    running: checks.filter((c) => c.status === 'running').length,
-    avgScore: checks.filter((c) => c.score !== undefined).reduce((sum, c) => sum + (c.score || 0), 0) / checks.filter((c) => c.score !== undefined).length || 0,
+    running: checks.filter((c) => c.status === 'processing').length,
+    avgScore: checks.filter((c) => c.overallScore !== null).reduce((sum, c) => sum + (c.overallScore || 0), 0) / checks.filter((c) => c.overallScore !== null).length || 0,
   };
 
   if (loading) {
@@ -259,14 +254,14 @@ export default function WorkspaceCompliancePage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <span>📄 {check.document_name}</span>
+                        <span>📄 {check.documentName}</span>
                       </div>
                     </div>
 
-                    {check.status === 'completed' && check.score !== undefined && (
+                    {check.status === 'completed' && check.overallScore !== null && (
                       <div className="text-right">
-                        <div className={`text-3xl font-bold ${getScoreColor(check.score)}`}>
-                          {check.score}%
+                        <div className={`text-3xl font-bold ${getScoreColor(check.overallScore)}`}>
+                          {check.overallScore}%
                         </div>
                         <div className="text-xs text-gray-500">Compliance Score</div>
                       </div>
@@ -275,30 +270,10 @@ export default function WorkspaceCompliancePage() {
 
                   {/* Issues Summary */}
                   {check.status === 'completed' && (
-                    <div className="grid grid-cols-4 gap-4 mb-4">
-                      <div className="text-center p-3 bg-red-50 rounded-lg">
-                        <div className="text-xl font-bold text-red-900">
-                          {check.critical_issues}
-                        </div>
-                        <div className="text-xs text-red-700">Critical</div>
-                      </div>
-                      <div className="text-center p-3 bg-orange-50 rounded-lg">
-                        <div className="text-xl font-bold text-orange-900">
-                          {check.high_issues}
-                        </div>
-                        <div className="text-xs text-orange-700">High</div>
-                      </div>
-                      <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                        <div className="text-xl font-bold text-yellow-900">
-                          {check.medium_issues}
-                        </div>
-                        <div className="text-xs text-yellow-700">Medium</div>
-                      </div>
-                      <div className="text-center p-3 bg-blue-50 rounded-lg">
-                        <div className="text-xl font-bold text-blue-900">
-                          {check.low_issues}
-                        </div>
-                        <div className="text-xs text-blue-700">Low</div>
+                    <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Total Issues Found:</span>
+                        <span className="text-lg font-bold text-gray-900">{check.issuesFound}</span>
                       </div>
                     </div>
                   )}
@@ -306,14 +281,13 @@ export default function WorkspaceCompliancePage() {
                   {/* Footer */}
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-gray-600">
-                      <div>Run by {check.run_by}</div>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span>{formatTimestamp(check.created_at)}</span>
-                        {check.completed_at && (
+                      <div className="flex items-center gap-3">
+                        <span>{formatTimestamp(check.createdAt)}</span>
+                        {check.completedAt && (
                           <>
                             <span>•</span>
                             <span>
-                              Duration: {getDuration(check.created_at, check.completed_at)}
+                              Duration: {getDuration(check.createdAt, check.completedAt)}
                             </span>
                           </>
                         )}
@@ -326,7 +300,7 @@ export default function WorkspaceCompliancePage() {
                       </Button>
                     )}
 
-                    {check.status === 'running' && (
+                    {check.status === 'processing' && (
                       <div className="flex items-center gap-2 text-blue-600">
                         <div className="animate-spin">⚙️</div>
                         <span className="text-sm font-medium">Processing...</span>

@@ -50,15 +50,32 @@ export default function OrganizationOverviewPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Note: api.get() returns data directly, not wrapped in .data property
-        const [orgRes, workspacesRes, statsRes] = await Promise.all([
-          api.get(`/api/organizations/${orgId}`),
-          api.get(`/api/organizations/${orgId}/workspaces`),
-          api.get(`/api/organizations/${orgId}/stats`),
-        ]);
+        // Fetch each endpoint separately to avoid one failure affecting others
+        const orgRes = await api.get(`/api/organizations/${orgId}`).catch(err => {
+          console.error('Failed to fetch organization:', err);
+          return null;
+        });
+
+        const workspacesRes = await api.get(`/api/organizations/${orgId}/workspaces`).catch(err => {
+          console.error('Failed to fetch workspaces:', err);
+          return [];
+        });
+
+        const statsRes = await api.get(`/api/organizations/${orgId}/stats`).catch(err => {
+          console.error('Failed to fetch stats:', err);
+          return null;
+        });
+
+        console.log('Organization data:', orgRes);
+        console.log('Workspaces response:', workspacesRes);
+        console.log('Workspaces is array?', Array.isArray(workspacesRes));
+        console.log('Workspaces wrapped in data?', workspacesRes?.data);
+        console.log('Stats data:', statsRes);
 
         setOrganization(orgRes || null);
-        setWorkspaces(Array.isArray(workspacesRes) ? workspacesRes : []);
+        // Check if workspaces is wrapped in a data property
+        const workspacesList = workspacesRes?.data || workspacesRes;
+        setWorkspaces(Array.isArray(workspacesList) ? workspacesList : []);
         setStats(statsRes || null);
       } catch (error) {
         console.error('Failed to fetch organization data:', error);
