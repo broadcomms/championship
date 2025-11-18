@@ -185,7 +185,7 @@ CREATE TABLE document_chunks (
     embedding_status TEXT DEFAULT 'pending',
 
     -- Legacy fields (kept for backward compatibility, but nullable)
-    content TEXT,
+    -- content TEXT, -- empty content is stored in chunk_text now
     chunk_size INTEGER,
 
     start_char INTEGER DEFAULT 0,

@@ -252,7 +252,7 @@ export default class extends Service<Env> {
       // Get document chunks if available
       const chunks = await db
         .selectFrom('document_chunks')
-        .select(['content'])
+        .select(['chunk_text'])
         .where('document_id', '=', documentId)
         .execute();
 
@@ -260,7 +260,7 @@ export default class extends Service<Env> {
         chunkCount: chunks.length,
       });
 
-      const documentText = chunks.length > 0 ? chunks.map((c) => c.content).join('\n\n') : content;
+      const documentText = chunks.length > 0 ? chunks.map((c) => c.chunk_text).join('\n\n') : content;
 
       // Run AI compliance analysis using SmartInference
       this.env.logger.info('🤖 Starting AI compliance analysis', {

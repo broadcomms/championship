@@ -206,6 +206,7 @@ export type document_chunks = {
     workspace_id: string;
     chunk_index: number;
     content: string;
+    chunk_text: string;  // The actual text content of the chunk
     chunk_size: number;
     created_at: number;
 };
