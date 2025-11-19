@@ -276,8 +276,71 @@ export default class extends Service<Env> {
       });
 
       // CRITICAL FIX: Only process genuine AI-found issues, not fallbacks
+      // But ALWAYS check for existing unresolved issues first!
+      
+      // Get existing unresolved issues for this document+framework
+      const existingIssues = await db
+        .selectFrom('compliance_issues')
+        .selectAll()
+        .where('document_id', '=', documentId)
+        .where('framework', '=', framework)
+        .where('is_active', '=', 1)
+        .where('status', 'in', ['open', 'in_progress', 'review'])
+        .execute();
+
+      this.env.logger.info('Existing unresolved issues check', {
+        checkId,
+        existingCount: existingIssues.length,
+        aiFoundIssues: issues.length,
+      });
+
       if (issues.length === 0) {
-        // No issues found - this is a valid result (100% compliant)
+        // AI found no issues, but check if existing issues still exist
+        if (existingIssues.length > 0) {
+          // Existing issues not detected by AI - mark them as updated (confirmed still exist)
+          this.env.logger.warn('⚠️ AI found 0 issues, but existing unresolved issues exist', {
+            checkId,
+            existingCount: existingIssues.length,
+          });
+          
+          // Update existing issues as "still present" (not resolved)
+          for (const existingIssue of existingIssues) {
+            await db
+              .updateTable('compliance_issues')
+              .set({
+                last_confirmed_check_id: checkId,
+                updated_at: Date.now(),
+              } as any)
+              .where('id', '=', existingIssue.id)
+              .execute();
+          }
+
+          // Update check with existing issue count
+          const severityWeights = { critical: 20, high: 10, medium: 5, low: 2, info: 1 };
+          const totalDeduction = existingIssues.reduce((sum, issue) => 
+            sum + (severityWeights[issue.severity as keyof typeof severityWeights] || 0), 0);
+          const overallScore = Math.max(0, 100 - totalDeduction);
+
+          await db
+            .updateTable('compliance_checks')
+            .set({
+              status: 'completed',
+              overall_score: overallScore,
+              issues_found: existingIssues.length,
+              completed_at: Date.now(),
+            })
+            .where('id', '=', checkId)
+            .execute();
+          
+          this.env.logger.info('✅ Check completed with existing issues confirmed', { 
+            checkId,
+            issuesFound: existingIssues.length,
+            overallScore,
+          });
+          return;
+        }
+
+        // No AI issues AND no existing issues - truly compliant
         await db
           .updateTable('compliance_checks')
           .set({
@@ -290,7 +353,7 @@ export default class extends Service<Env> {
           .execute();
         
         this.env.logger.info('✅ Document is 100% compliant - no issues found', { checkId });
-        return; // Exit early - no issues to process
+        return;
       }
 
       // Filter out any fallback/generic issues to ensure only genuine AI results
@@ -301,7 +364,45 @@ export default class extends Service<Env> {
       );
 
       if (genuineIssues.length === 0) {
-        // AI returned only fallback issues - treat as no issues found
+        // AI returned only fallback issues - check existing issues
+        if (existingIssues.length > 0) {
+          // Keep existing issues
+          this.env.logger.warn('⚠️ Only fallback issues from AI, but existing issues remain', {
+            checkId,
+            existingCount: existingIssues.length,
+          });
+
+          for (const existingIssue of existingIssues) {
+            await db
+              .updateTable('compliance_issues')
+              .set({
+                last_confirmed_check_id: checkId,
+                updated_at: Date.now(),
+              } as any)
+              .where('id', '=', existingIssue.id)
+              .execute();
+          }
+
+          const severityWeights = { critical: 20, high: 10, medium: 5, low: 2, info: 1 };
+          const totalDeduction = existingIssues.reduce((sum, issue) => 
+            sum + (severityWeights[issue.severity as keyof typeof severityWeights] || 0), 0);
+          const overallScore = Math.max(0, 100 - totalDeduction);
+
+          await db
+            .updateTable('compliance_checks')
+            .set({
+              status: 'completed',
+              overall_score: overallScore,
+              issues_found: existingIssues.length,
+              completed_at: Date.now(),
+            })
+            .where('id', '=', checkId)
+            .execute();
+          
+          return;
+        }
+
+        // No genuine AI issues and no existing issues
         await db
           .updateTable('compliance_checks')
           .set({
@@ -314,7 +415,7 @@ export default class extends Service<Env> {
           .execute();
         
         this.env.logger.info('✅ Only fallback issues found - treating as compliant', { checkId });
-        return; // Exit early
+        return;
       }
 
       this.env.logger.info('Processing genuine AI-found issues', {

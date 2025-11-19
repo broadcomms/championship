@@ -336,10 +336,17 @@ CREATE TABLE compliance_issues (
     risk_score INTEGER,
     section_ref TEXT,
     chunk_ids TEXT,
+    issue_fingerprint TEXT,
+    is_active INTEGER DEFAULT 1,
+    superseded_by TEXT,
+    first_detected_check_id TEXT,
+    last_confirmed_check_id TEXT,
     remediation_steps TEXT,
     full_excerpt TEXT,
     resolution_notes TEXT,
     updated_at INTEGER,
+    due_date INTEGER,
+    assigned_at INTEGER,
     severity TEXT NOT NULL CHECK(severity IN ('critical', 'high', 'medium', 'low', 'info')),
     category TEXT NOT NULL,
     title TEXT NOT NULL,
@@ -347,6 +354,7 @@ CREATE TABLE compliance_issues (
     recommendation TEXT,
     confidence INTEGER DEFAULT 70 CHECK(confidence >= 0 AND confidence <= 100),
     priority INTEGER DEFAULT 50 CHECK(priority >= 0 AND priority <= 100),
+    priority_level TEXT CHECK(priority_level IN ('P1', 'P2', 'P3', 'P4')),
     location TEXT,
     status TEXT DEFAULT 'open' CHECK(status IN ('open', 'in_progress', 'resolved', 'dismissed')),
     assigned_to TEXT REFERENCES users(id),
@@ -359,20 +367,7 @@ CREATE TABLE compliance_issues (
     FOREIGN KEY (resolved_by) REFERENCES users(id)
 );
 
--- Add fingerprinting columns to compliance_issues table
-ALTER TABLE compliance_issues ADD COLUMN issue_fingerprint TEXT;
-ALTER TABLE compliance_issues ADD COLUMN is_active INTEGER DEFAULT 1;
-ALTER TABLE compliance_issues ADD COLUMN superseded_by TEXT;
-ALTER TABLE compliance_issues ADD COLUMN first_detected_check_id TEXT;
-ALTER TABLE compliance_issues ADD COLUMN last_confirmed_check_id TEXT;
 
--- Create index for fingerprint-based lookups
-CREATE INDEX idx_compliance_issues_fingerprint 
-ON compliance_issues(document_id, framework, issue_fingerprint, is_active);
-
--- Create index for active issues
-CREATE INDEX idx_compliance_issues_active 
-ON compliance_issues(is_active, workspace_id);
 
 
 -- Workspace compliance scores (historical tracking)
@@ -665,6 +660,22 @@ CREATE INDEX idx_documents_framework
 
 CREATE INDEX idx_documents_vector_status ON documents(vector_indexing_status);
 CREATE INDEX idx_documents_smartbucket_status ON documents(smartbucket_indexing_status);
+
+-- Create index for fingerprint-based lookups
+CREATE INDEX idx_compliance_issues_fingerprint 
+ON compliance_issues(document_id, framework, issue_fingerprint, is_active);
+
+-- Create index for active issues
+CREATE INDEX idx_compliance_issues_active 
+ON compliance_issues(is_active, workspace_id);
+
+
+-- Add indexes for the new fields
+CREATE INDEX IF NOT EXISTS idx_compliance_issues_due_date ON compliance_issues(due_date) WHERE due_date IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_compliance_issues_assigned_at ON compliance_issues(assigned_at) WHERE assigned_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_compliance_issues_priority_level ON compliance_issues(priority_level) WHERE priority_level IS NOT NULL;
+
+
 
 
 
