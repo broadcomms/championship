@@ -322,40 +322,56 @@ export default class extends Service<Env> {
         genuineIssues: genuineIssues.length,
       });
 
-      // PHASE 1.1.3: Calculate priority and store issues in database
+      // PHASE 1.1.3: Calculate priority and store issues with deduplication
+      const issueResults: Array<{isNew: boolean, status: string}> = [];
+      
       for (const issue of genuineIssues) {
-        const issueId = `iss_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
         // Calculate priority score for this issue
         const priority = this.calculateIssuePriority(issue, framework, {
           industryRisk: 'medium', // Default; could be fetched from workspace settings
           documentType: 'other', // Default; could be inferred from document metadata
         });
 
-        // PHASE 1.1.3: Type assertion needed until types regenerate from migration
-        await db
-          .insertInto('compliance_issues')
-          .values({
-            id: issueId,
-            check_id: checkId,
-            document_id: documentId,
-            workspace_id: workspaceId, // CRITICAL FIX: Add workspace_id for filtering
-            severity: issue.severity,
-            category: issue.category,
-            title: issue.title,
-            description: issue.description,
-            recommendation: issue.recommendation,
-            location: issue.location || null,
-            status: 'open', // Migration 0002 adds status column
-            confidence: issue.confidence || 70, // Migration 0002 adds confidence column
-            priority, // Migration 0002 adds priority column
-            created_at: Date.now(),
-          } as any)
-          .execute();
+        // Process issue with deduplication logic
+        const { processIssueWithDeduplication } = await import('./issue-deduplication');
+        const result = await processIssueWithDeduplication(
+          db,
+          issue,
+          checkId,
+          documentId,
+          workspaceId,
+          framework,
+          priority
+        );
+
+        issueResults.push({ isNew: result.isNew, status: result.status });
+
+        // Log deduplication events
+        if (!result.isNew) {
+          this.env.logger.info('Issue deduplicated', {
+            issueId: result.issueId,
+            status: result.status,
+            previousStatus: result.previousStatus,
+            checkId,
+          });
+        }
 
         // Small delay to avoid ID collision
         await new Promise((resolve) => setTimeout(resolve, 5));
       }
+
+      // Log deduplication summary
+      const newIssuesCount = issueResults.filter(r => r.isNew).length;
+      const updatedIssuesCount = issueResults.filter(r => !r.isNew).length;
+      const reopenedIssuesCount = issueResults.filter(r => r.status === 'reopened').length;
+      
+      this.env.logger.info('Issue processing summary', {
+        total: genuineIssues.length,
+        new: newIssuesCount,
+        updated: updatedIssuesCount,
+        reopened: reopenedIssuesCount,
+        checkId,
+      });
 
       // Calculate overall score (100 - issues weighted by severity) using genuine issues only
       const severityWeights = { critical: 20, high: 10, medium: 5, low: 2, info: 1 };

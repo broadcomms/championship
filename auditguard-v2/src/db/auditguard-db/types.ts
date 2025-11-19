@@ -201,6 +201,12 @@ export type compliance_issues = {
     resolved_at: number | null;
     resolved_by: string | null;
     created_at: number;
+    // Issue fingerprinting for deduplication
+    issue_fingerprint: string | null;
+    is_active: number | null; // SQLite BOOLEAN (1 = true, 0 = false)
+    superseded_by: string | null;
+    first_detected_check_id: string | null;
+    last_confirmed_check_id: string | null;
 };
 
 export type issue_comments = {
