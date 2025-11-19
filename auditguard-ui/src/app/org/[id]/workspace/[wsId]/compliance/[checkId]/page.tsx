@@ -27,6 +27,11 @@ interface ComplianceIssue {
   recommendation: string | null;
   location: string | null;
   createdAt: number;
+  status?: string;
+  firstDetectedCheckId?: string;
+  lastConfirmedCheckId?: string;
+  issueFingerprint?: string;
+  isActive?: boolean;
 }
 
 export default function ComplianceCheckDetailPage() {
@@ -81,6 +86,49 @@ export default function ComplianceCheckDetailPage() {
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
+  };
+
+  const getIssueStatusBadge = (issue: ComplianceIssue) => {
+    // Determine if issue is new, reopened, or updated based on deduplication metadata
+    const isNew = issue.firstDetectedCheckId === checkId;
+    const wasReopened = issue.status === 'reopened';
+    const wasDismissed = issue.status === 'dismissed';
+    
+    if (wasDismissed) {
+      return (
+        <span className="px-2 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-800 border border-gray-200">
+          ❌ DISMISSED
+        </span>
+      );
+    }
+    
+    if (wasReopened) {
+      return (
+        <span className="px-2 py-1 rounded-md text-xs font-semibold bg-orange-100 text-orange-800 border border-orange-200">
+          🔄 REOPENED
+        </span>
+      );
+    }
+    
+    if (isNew) {
+      return (
+        <span className="px-2 py-1 rounded-md text-xs font-semibold bg-green-100 text-green-800 border border-green-200">
+          🆕 NEW
+        </span>
+      );
+    }
+    
+    // Issue exists but was updated (confirmed again in this check)
+    if (issue.lastConfirmedCheckId === checkId && issue.firstDetectedCheckId !== checkId) {
+      return (
+        <span className="px-2 py-1 rounded-md text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+          📝 UPDATED
+        </span>
+      );
+    }
+    
+    // Default: no badge (issue from previous check, not confirmed in this one)
+    return null;
   };
 
   const getScoreColor = (score: number | null) => {
@@ -203,6 +251,7 @@ export default function ComplianceCheckDetailPage() {
                         {issue.severity.charAt(0).toUpperCase() + issue.severity.slice(1)}
                       </span>
                       <span className="text-sm text-gray-600">{issue.category}</span>
+                      {getIssueStatusBadge(issue)}
                     </div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">{issue.title}</h3>
                     <p className="text-gray-700 mb-4">{issue.description}</p>

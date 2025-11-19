@@ -824,6 +824,12 @@ Return JSON with issues array. If fully compliant, return empty array:
       recommendation: string | null;
       location: string | null;
       createdAt: number;
+      status: string;
+      firstDetectedCheckId: string | null;
+      lastConfirmedCheckId: string | null;
+      confidence: number | null;
+      isNew: boolean;
+      wasReopened: boolean;
     }>;
   }> {
     const db = this.getDb();
@@ -852,7 +858,7 @@ Return JSON with issues array. If fully compliant, return empty array:
       throw new Error('Compliance check not found');
     }
 
-    // Get issues
+    // Get issues with deduplication metadata
     const issues = await db
       .selectFrom('compliance_issues')
       .select([
@@ -864,6 +870,10 @@ Return JSON with issues array. If fully compliant, return empty array:
         'recommendation',
         'location',
         'created_at',
+        'status',
+        'first_detected_check_id',
+        'last_confirmed_check_id',
+        'confidence',
       ])
       .where('check_id', '=', checkId)
       .orderBy('created_at', 'desc')
@@ -879,6 +889,14 @@ Return JSON with issues array. If fully compliant, return empty array:
         recommendation: issue.recommendation,
         location: issue.location,
         createdAt: issue.created_at,
+        status: issue.status,
+        firstDetectedCheckId: issue.first_detected_check_id,
+        lastConfirmedCheckId: issue.last_confirmed_check_id,
+        confidence: issue.confidence,
+        // An issue is "new" if it was first detected in this check
+        isNew: issue.first_detected_check_id === checkId,
+        // An issue was "reopened" if it's in reopened status and last confirmed in this check
+        wasReopened: issue.status === 'reopened' && issue.last_confirmed_check_id === checkId,
       })),
     };
   }

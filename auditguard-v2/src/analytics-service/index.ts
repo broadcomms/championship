@@ -699,6 +699,7 @@ export default class extends Service<Env> {
     this.env.logger.info('✅ Workspace access verified', { role: membership.role });
 
     // CRITICAL FIX: Query directly from compliance_issues with workspace_id
+    // Include deduplication metadata fields for frontend status badges
     let query = db
       .selectFrom('compliance_issues')
       .select([
@@ -715,6 +716,10 @@ export default class extends Service<Env> {
         'compliance_issues.assigned_to',
         'compliance_issues.created_at',
         'compliance_issues.resolved_at',
+        'compliance_issues.issue_fingerprint',
+        'compliance_issues.is_active',
+        'compliance_issues.first_detected_check_id',
+        'compliance_issues.last_confirmed_check_id',
       ])
       .where('compliance_issues.workspace_id', '=', workspaceId);
 
@@ -752,6 +757,10 @@ export default class extends Service<Env> {
         assignedTo: issue.assigned_to,
         createdAt: issue.created_at,
         resolvedAt: issue.resolved_at,
+        issueFingerprint: issue.issue_fingerprint,
+        isActive: issue.is_active,
+        firstDetectedCheckId: issue.first_detected_check_id,
+        lastConfirmedCheckId: issue.last_confirmed_check_id,
       })),
     };
   }

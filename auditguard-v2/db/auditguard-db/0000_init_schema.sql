@@ -359,6 +359,21 @@ CREATE TABLE compliance_issues (
     FOREIGN KEY (resolved_by) REFERENCES users(id)
 );
 
+-- Add fingerprinting columns to compliance_issues table
+ALTER TABLE compliance_issues ADD COLUMN issue_fingerprint TEXT;
+ALTER TABLE compliance_issues ADD COLUMN is_active INTEGER DEFAULT 1;
+ALTER TABLE compliance_issues ADD COLUMN superseded_by TEXT;
+ALTER TABLE compliance_issues ADD COLUMN first_detected_check_id TEXT;
+ALTER TABLE compliance_issues ADD COLUMN last_confirmed_check_id TEXT;
+
+-- Create index for fingerprint-based lookups
+CREATE INDEX idx_compliance_issues_fingerprint 
+ON compliance_issues(document_id, framework, issue_fingerprint, is_active);
+
+-- Create index for active issues
+CREATE INDEX idx_compliance_issues_active 
+ON compliance_issues(is_active, workspace_id);
+
 
 -- Workspace compliance scores (historical tracking)
 CREATE TABLE workspace_scores (
