@@ -474,4 +474,254 @@ export default class extends Service<Env> {
       // Don't fail the whole operation if realtime fails
     }
   }
+
+  /**
+   * Event Subscriber: Handle issue.assigned events
+   */
+  async onIssueAssigned(event: {
+    issueId: string;
+    workspaceId: string;
+    assignedTo: string;
+    assignedBy: string;
+    issueTitle: string;
+    issueSeverity: string;
+    issueFramework: string;
+    workspaceName: string;
+    dueDate?: number;
+    priorityLevel?: string;
+    notes?: string;
+    timestamp: number;
+  }): Promise<void> {
+    this.env.logger.info('Handling issue.assigned event', {
+      issueId: event.issueId,
+      assignedTo: event.assignedTo,
+    });
+
+    // Get assigner name
+    const db = this.getDb();
+    const assigner = await db
+      .selectFrom('users')
+      .select('email')
+      .where('id', '=', event.assignedBy)
+      .executeTakeFirst();
+
+    const assignerName = assigner ? assigner.email.split('@')[0] : 'Team Member';
+
+    // Severity emoji mapping
+    const severityEmoji: Record<string, string> = {
+      critical: '🚨',
+      high: '⚠️',
+      medium: '📍',
+      low: 'ℹ️',
+    };
+
+    const emoji = severityEmoji[event.issueSeverity] || '📋';
+    
+    const dueDateText = event.dueDate 
+      ? `\nDue Date: ${new Date(event.dueDate).toLocaleDateString()}`
+      : '';
+    
+    const priorityText = event.priorityLevel 
+      ? ` (Priority: ${event.priorityLevel})`
+      : '';
+
+    // Create notification
+    await this.createNotification({
+      user_id: event.assignedTo,
+      type: 'issue_assigned',
+      title: `${emoji} Issue Assigned: ${event.issueTitle}${priorityText}`,
+      message: `You've been assigned a new ${event.issueSeverity} priority issue in ${event.workspaceName}${dueDateText}${event.notes ? '\n\nNote: ' + event.notes : ''}`,
+      action_url: `/org/${event.workspaceId}/workspace/${event.workspaceId}/issues/${event.issueId}`,
+      metadata: {
+        issueId: event.issueId,
+        severity: event.issueSeverity,
+        framework: event.issueFramework,
+        assignedBy: assignerName,
+        dueDate: event.dueDate,
+        priorityLevel: event.priorityLevel,
+      },
+      send_email: true,
+      send_realtime: true,
+    });
+  }
+
+  /**
+   * Event Subscriber: Handle issue.status_changed events
+   */
+  async onIssueStatusChanged(event: {
+    issueId: string;
+    workspaceId: string;
+    issueTitle: string;
+    assignedTo?: string;
+    oldStatus: string;
+    newStatus: string;
+    changedBy: string;
+    notes?: string;
+    timestamp: number;
+  }): Promise<void> {
+    this.env.logger.info('Handling issue.status_changed event', {
+      issueId: event.issueId,
+      oldStatus: event.oldStatus,
+      newStatus: event.newStatus,
+    });
+
+    // Only notify if issue is assigned to someone
+    if (!event.assignedTo) {
+      return;
+    }
+
+    // Get changer name
+    const db = this.getDb();
+    const changer = await db
+      .selectFrom('users')
+      .select('email')
+      .where('id', '=', event.changedBy)
+      .executeTakeFirst();
+
+    const changerName = changer ? changer.email.split('@')[0] : 'Team Member';
+
+    // Status emoji mapping
+    const statusEmoji: Record<string, string> = {
+      open: '🔓',
+      in_progress: '⏳',
+      resolved: '✅',
+      dismissed: '❌',
+    };
+
+    const emoji = statusEmoji[event.newStatus] || '📋';
+
+    // Create notification for the assigned user
+    await this.createNotification({
+      user_id: event.assignedTo,
+      type: 'status_change',
+      title: `${emoji} Issue Status Updated: ${event.issueTitle}`,
+      message: `${changerName} changed the status from "${event.oldStatus}" to "${event.newStatus}"${event.notes ? '\n\nNote: ' + event.notes : ''}`,
+      action_url: `/org/${event.workspaceId}/workspace/${event.workspaceId}/issues/${event.issueId}`,
+      metadata: {
+        issueId: event.issueId,
+        oldStatus: event.oldStatus,
+        newStatus: event.newStatus,
+        changedBy: changerName,
+      },
+      send_email: true,
+      send_realtime: true,
+    });
+  }
+
+  /**
+   * Event Subscriber: Handle issue.commented events
+   */
+  async onIssueCommented(event: {
+    issueId: string;
+    workspaceId: string;
+    commentId: string;
+    userId: string;
+    commentText: string;
+    issueTitle: string;
+    assignedTo?: string;
+    timestamp: number;
+  }): Promise<void> {
+    this.env.logger.info('Handling issue.commented event', {
+      issueId: event.issueId,
+      commentId: event.commentId,
+    });
+
+    // Only notify if issue is assigned to someone other than the commenter
+    if (!event.assignedTo || event.assignedTo === event.userId) {
+      return;
+    }
+
+    // Get commenter name
+    const db = this.getDb();
+    const commenter = await db
+      .selectFrom('users')
+      .select('email')
+      .where('id', '=', event.userId)
+      .executeTakeFirst();
+
+    const commenterName = commenter ? commenter.email.split('@')[0] : 'Team Member';
+
+    // Truncate comment for notification
+    const previewText = event.commentText.length > 100 
+      ? event.commentText.substring(0, 100) + '...'
+      : event.commentText;
+
+    // Create notification for the assigned user
+    await this.createNotification({
+      user_id: event.assignedTo,
+      type: 'comment',
+      title: `💬 New Comment on: ${event.issueTitle}`,
+      message: `${commenterName} commented: "${previewText}"`,
+      action_url: `/org/${event.workspaceId}/workspace/${event.workspaceId}/issues/${event.issueId}`,
+      metadata: {
+        issueId: event.issueId,
+        commentId: event.commentId,
+        commentedBy: commenterName,
+      },
+      send_email: true,
+      send_realtime: true,
+    });
+  }
+
+  /**
+   * Event Subscriber: Handle compliance.check_complete events
+   * Notify workspace admins if critical issues found
+   */
+  async onComplianceCheckComplete(event: {
+    checkId: string;
+    documentId: string;
+    workspaceId: string;
+    framework: string;
+    issuesFound: number;
+    criticalIssues: number;
+    timestamp: number;
+  }): Promise<void> {
+    this.env.logger.info('Handling compliance.check_complete event', {
+      checkId: event.checkId,
+      criticalIssues: event.criticalIssues,
+    });
+
+    // Only notify if critical issues found
+    if (event.criticalIssues === 0) {
+      return;
+    }
+
+    // Get workspace admins
+    const db = this.getDb();
+    const admins = await db
+      .selectFrom('workspace_members')
+      .select('user_id')
+      .where('workspace_id', '=', event.workspaceId)
+      .where('role', 'in', ['owner', 'admin'])
+      .execute();
+
+    // Get document name
+    const document = await db
+      .selectFrom('documents')
+      .select('filename')
+      .where('id', '=', event.documentId)
+      .executeTakeFirst();
+
+    const documentName = document?.filename || 'Unknown Document';
+
+    // Create notification for each admin
+    for (const admin of admins) {
+      await this.createNotification({
+        user_id: admin.user_id,
+        type: 'status_change',
+        title: `🚨 Compliance Check Complete: ${event.criticalIssues} Critical Issues Found`,
+        message: `A compliance check for "${documentName}" (${event.framework}) found ${event.criticalIssues} critical issues that require immediate attention.`,
+        action_url: `/org/${event.workspaceId}/workspace/${event.workspaceId}/compliance/${event.checkId}`,
+        metadata: {
+          checkId: event.checkId,
+          documentId: event.documentId,
+          framework: event.framework,
+          criticalIssues: event.criticalIssues,
+        },
+        send_email: true,
+        send_realtime: true,
+      });
+    }
+  }
 }
+

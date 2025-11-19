@@ -4,7 +4,7 @@
  * filtering, search, and bulk operations.
  */
 
-import { Service } from '@liquidmetal-ai/raindrop-framework';
+import { Service, Context } from '@liquidmetal-ai/raindrop-framework';
 import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
@@ -498,6 +498,7 @@ export default class extends Service<Env> {
           })
           .execute();
 
+
         updated++;
       } catch (error) {
         failed++;
@@ -507,4 +508,109 @@ export default class extends Service<Env> {
 
     return { updated, failed };
   }
+
+  /**
+   * Update issue status with event publishing
+   */
+  async updateIssueStatus(input: {
+    issueId: string;
+    workspaceId: string;
+    userId: string;
+    newStatus: IssueStatus;
+    notes?: string;
+  }, context: Context<Env>): Promise<{ success: boolean; error?: string }> {
+    const db = this.getDb();
+
+    try {
+      // Verify workspace access
+      const membership = await db
+        .selectFrom('workspace_members')
+        .select('role')
+        .where('workspace_id', '=', input.workspaceId)
+        .where('user_id', '=', input.userId)
+        .executeTakeFirst();
+
+      if (!membership) {
+        return { success: false, error: 'Access denied: Not a workspace member' };
+      }
+
+      const now = Date.now();
+
+      // Get current issue
+      const issue = await db
+        .selectFrom('compliance_issues')
+        .select(['id', 'status', 'title', 'assigned_to'])
+        .where('id', '=', input.issueId)
+        .where('workspace_id', '=', input.workspaceId)
+        .executeTakeFirst();
+
+      if (!issue) {
+        return { success: false, error: 'Issue not found' };
+      }
+
+      const oldStatus = issue.status;
+
+      // Update issue
+      const updateData: any = {
+        status: input.newStatus,
+        updated_at: now,
+      };
+
+      if (input.newStatus === 'resolved') {
+        updateData.resolved_at = now;
+        updateData.resolved_by = input.userId;
+        updateData.resolution_notes = input.notes || null;
+      }
+
+      await db
+        .updateTable('compliance_issues')
+        .set(updateData)
+        .where('id', '=', input.issueId)
+        .execute();
+
+      // Record status change in history
+      const historyId = `hist_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      await db
+        .insertInto('issue_status_history')
+        .values({
+          id: historyId,
+          issue_id: input.issueId,
+          workspace_id: input.workspaceId,
+          old_status: oldStatus,
+          new_status: input.newStatus,
+          changed_by: input.userId,
+          changed_at: now,
+          notes: input.notes || null,
+        })
+        .execute();
+
+      // Publish event for notifications
+      await context.publishEvent('issue.status_changed', {
+        issueId: input.issueId,
+        workspaceId: input.workspaceId,
+        issueTitle: issue.title,
+        assignedTo: issue.assigned_to,
+        oldStatus,
+        newStatus: input.newStatus,
+        changedBy: input.userId,
+        notes: input.notes,
+        timestamp: now,
+      });
+
+      this.env.logger.info('Issue status updated', {
+        issueId: input.issueId,
+        oldStatus,
+        newStatus: input.newStatus,
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      this.env.logger.error('Failed to update issue status', {
+        error: error.message,
+        issueId: input.issueId,
+      });
+      return { success: false, error: error.message };
+    }
+  }
 }
+

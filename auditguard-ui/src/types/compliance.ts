@@ -6,7 +6,8 @@
 import { ComplianceFramework } from './index';
 
 export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
-export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'dismissed';
+export type IssueStatus = 'open' | 'in_progress' | 'review' | 'resolved' | 'dismissed';
+export type PriorityLevel = 'P1' | 'P2' | 'P3' | 'P4';
 export type ComplianceCheckStatus = 'pending' | 'running' | 'processing' | 'completed' | 'failed';
 
 export interface ComplianceIssue {
@@ -23,6 +24,9 @@ export interface ComplianceIssue {
   sectionRef: string | null;
   status: IssueStatus;
   assignedTo: string | null;
+  assignedAt: string | null; // ISO 8601 timestamp
+  dueDate: string | null; // ISO 8601 date
+  priorityLevel: PriorityLevel | null;
   resolvedAt: number | null;
   resolvedBy: string | null;
   createdAt: number;
@@ -97,6 +101,45 @@ export interface IssueAssignmentHistory {
   notes: string | null;
 }
 
+// ==================
+// Issue Comments & Activity (Phase 4)
+// ==================
+
+export type CommentType = 'comment' | 'status_change' | 'assignment' | 'resolution' | 'system';
+
+export interface IssueComment {
+  id: string;
+  issueId: string;
+  workspaceId: string;
+  userId: string;
+  userName: string | null;
+  userEmail: string | null;
+  commentText: string;
+  commentType: CommentType;
+  metadata: string | null; // JSON string with additional data
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
+export interface IssueCommentsResponse {
+  comments: IssueComment[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface WorkspaceMember {
+  userId: string;
+  name: string | null;
+  email: string;
+  role: string;
+}
+
+export interface MemberSearchResponse {
+  members: WorkspaceMember[];
+  total: number;
+}
+
 // Badge colors for severity levels
 export const SEVERITY_COLORS: Record<IssueSeverity, string> = {
   critical: 'bg-red-100 text-red-800 border-red-300',
@@ -110,6 +153,7 @@ export const SEVERITY_COLORS: Record<IssueSeverity, string> = {
 export const STATUS_COLORS: Record<IssueStatus, string> = {
   open: 'bg-red-100 text-red-800 border-red-300',
   in_progress: 'bg-blue-100 text-blue-800 border-blue-300',
+  review: 'bg-yellow-100 text-yellow-800 border-yellow-300',
   resolved: 'bg-green-100 text-green-800 border-green-300',
   dismissed: 'bg-gray-100 text-gray-800 border-gray-300',
 };
@@ -118,8 +162,25 @@ export const STATUS_COLORS: Record<IssueStatus, string> = {
 export const STATUS_LABELS: Record<IssueStatus, string> = {
   open: 'Open',
   in_progress: 'In Progress',
+  review: 'Review',
   resolved: 'Resolved',
   dismissed: 'Dismissed',
+};
+
+// Priority colors
+export const PRIORITY_COLORS: Record<PriorityLevel, string> = {
+  P1: 'bg-red-500 text-white',
+  P2: 'bg-orange-500 text-white',
+  P3: 'bg-yellow-500 text-white',
+  P4: 'bg-gray-400 text-white',
+};
+
+// Priority labels
+export const PRIORITY_LABELS: Record<PriorityLevel, string> = {
+  P1: 'P1 - Critical',
+  P2: 'P2 - High',
+  P3: 'P3 - Medium',
+  P4: 'P4 - Low',
 };
 
 // Severity labels

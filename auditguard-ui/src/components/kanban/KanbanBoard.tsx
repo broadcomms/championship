@@ -2,23 +2,23 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCorners,
+  useDroppable,
+  useDraggable,
+} from '@dnd-kit/core';
 import { api } from '@/lib/api';
-
-interface Issue {
-  id: string;
-  title: string;
-  description: string;
-  status: 'open' | 'in_progress' | 'review' | 'resolved';
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  assignee_email?: string;
-  framework?: string;
-  document_name?: string;
-  created_at: number;
-  updated_at: number;
-}
+import { ComplianceIssue, IssueStatus, SEVERITY_COLORS, PRIORITY_COLORS, PriorityLevel } from '@/types/compliance';
 
 interface KanbanColumn {
-  id: 'open' | 'in_progress' | 'review' | 'resolved';
+  id: IssueStatus;
   title: string;
   color: string;
   icon: string;
@@ -36,18 +36,19 @@ const COLUMNS: KanbanColumn[] = [
   { id: 'resolved', title: 'Resolved', color: 'bg-green-50 border-green-200', icon: '🟢' },
 ];
 
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'bg-red-100 text-red-800 border-red-300',
-  high: 'bg-orange-100 text-orange-800 border-orange-300',
-  medium: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-  low: 'bg-blue-100 text-blue-800 border-blue-300',
-};
-
 export function KanbanBoard({ workspaceId, orgId }: KanbanBoardProps) {
   const router = useRouter();
-  const [issues, setIssues] = useState<Issue[]>([]);
+  const [issues, setIssues] = useState<ComplianceIssue[]>([]);
   const [loading, setLoading] = useState(true);
-  const [draggedIssue, setDraggedIssue] = useState<Issue | null>(null);
+  const [activeIssue, setActiveIssue] = useState<ComplianceIssue | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px movement required before drag starts
+      },
+    })
+  );
 
   useEffect(() => {
     fetchIssues();
@@ -71,51 +72,77 @@ export function KanbanBoard({ workspaceId, orgId }: KanbanBoardProps) {
     }
   };
 
-  const handleDragStart = (issue: Issue) => {
-    setDraggedIssue(issue);
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const issue = issues.find((i) => i.id === active.id);
+    if (issue) {
+      setActiveIssue(issue);
+    }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveIssue(null);
 
-  const handleDrop = async (
-    e: React.DragEvent,
-    newStatus: 'open' | 'in_progress' | 'review' | 'resolved'
-  ) => {
-    e.preventDefault();
-
-    if (!draggedIssue || draggedIssue.status === newStatus) {
-      setDraggedIssue(null);
+    if (!over) {
       return;
     }
 
+    const issueId = active.id as string;
+    const newStatus = over.id as IssueStatus;
+    const issue = issues.find((i) => i.id === issueId);
+
+    if (!issue || issue.status === newStatus) {
+      return;
+    }
+
+    // Optimistic update
+    setIssues((prev) =>
+      prev.map((i) =>
+        i.id === issueId
+          ? { ...i, status: newStatus, updatedAt: Date.now() }
+          : i
+      )
+    );
+
     try {
-      await api.patch(`/issues/${draggedIssue.id}/status`, {
+      await api.patch(`/api/workspaces/${workspaceId}/issues/${issueId}/status`, {
         status: newStatus,
       });
-
-      setIssues((prev) =>
-        prev.map((issue) =>
-          issue.id === draggedIssue.id
-            ? { ...issue, status: newStatus, updated_at: Date.now() }
-            : issue
-        )
-      );
+      console.log(`✅ Issue ${issueId} moved to ${newStatus}`);
     } catch (error) {
       console.error('Failed to update issue status:', error);
+      // Revert on error
+      setIssues((prev) =>
+        prev.map((i) =>
+          i.id === issueId
+            ? { ...i, status: issue.status }
+            : i
+        )
+      );
       alert('Failed to move issue. Please try again.');
-    } finally {
-      setDraggedIssue(null);
     }
   };
 
-  const getIssuesByStatus = (status: string) => {
+  const getIssuesByStatus = (status: IssueStatus) => {
     return (issues || []).filter((issue) => issue.status === status);
   };
 
   const handleIssueClick = (issueId: string) => {
     router.push(`/org/${orgId}/workspace/${workspaceId}/issues/${issueId}`);
+  };
+
+  const formatDueDate = (dueDate: string | null): string => {
+    if (!dueDate) return '';
+    const date = new Date(dueDate);
+    const now = new Date();
+    const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return '🔴 Overdue';
+    if (diffDays === 0) return '⚠️ Today';
+    if (diffDays === 1) return '📅 Tomorrow';
+    if (diffDays <= 7) return `📅 ${diffDays}d`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   if (loading) {
@@ -127,109 +154,204 @@ export function KanbanBoard({ workspaceId, orgId }: KanbanBoardProps) {
   }
 
   return (
-    <div className="grid grid-cols-4 gap-4 w-full">
-      {COLUMNS.map((column) => {
-        const columnIssues = getIssuesByStatus(column.id);
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="grid grid-cols-4 gap-4 w-full">
+        {COLUMNS.map((column) => {
+          const columnIssues = getIssuesByStatus(column.id);
 
-        return (
-          <div
-            key={column.id}
-            className="flex flex-col min-w-0"
-            onDragOver={handleDragOver}
-            onDrop={(e) => handleDrop(e, column.id)}
-          >
-            {/* Column Header */}
-            <div className={`rounded-lg border-2 p-4 mb-4 ${column.color}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">{column.icon}</span>
-                  <h3 className="font-semibold text-gray-900">{column.title}</h3>
-                </div>
-                <span className="bg-white px-2 py-1 rounded-full text-xs font-semibold text-gray-700">
-                  {columnIssues.length}
-                </span>
-              </div>
-            </div>
+          return (
+            <KanbanColumn
+              key={column.id}
+              column={column}
+              issues={columnIssues}
+              onIssueClick={handleIssueClick}
+              formatDueDate={formatDueDate}
+            />
+          );
+        })}
+      </div>
 
-            {/* Cards */}
-            <div className="space-y-3 min-h-[200px]">
-              {columnIssues.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm">
-                  No issues
-                </div>
-              ) : (
-                columnIssues.map((issue) => (
-                  <div
-                    key={issue.id}
-                    draggable
-                    onDragStart={() => handleDragStart(issue)}
-                    onClick={() => handleIssueClick(issue.id)}
-                    className={`bg-white rounded-lg border-2 p-4 cursor-move hover:shadow-lg transition ${
-                      draggedIssue?.id === issue.id ? 'opacity-50' : ''
-                    }`}
-                  >
-                    {/* Severity Badge */}
-                    <div className="flex items-center justify-between mb-2">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-semibold uppercase border ${
-                          SEVERITY_COLORS[issue.severity]
-                        }`}
-                      >
-                        {issue.severity}
-                      </span>
-                      {issue.framework && (
-                        <span className="text-xs text-gray-500">
-                          {issue.framework}
-                        </span>
-                      )}
-                    </div>
+      <DragOverlay>
+        {activeIssue ? (
+          <IssueCard
+            issue={activeIssue}
+            onClick={() => {}}
+            formatDueDate={formatDueDate}
+            isDragging
+            isDragOverlay
+          />
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  );
+}
 
-                    {/* Title */}
-                    <h4 className="font-medium text-gray-900 mb-2 line-clamp-2">
-                      {issue.title}
-                    </h4>
+interface KanbanColumnProps {
+  column: KanbanColumn;
+  issues: ComplianceIssue[];
+  onIssueClick: (issueId: string) => void;
+  formatDueDate: (date: string | null) => string;
+}
 
-                    {/* Description */}
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                      {issue.description}
-                    </p>
+function KanbanColumn({ column, issues, onIssueClick, formatDueDate }: KanbanColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: column.id,
+  });
 
-                    {/* Document */}
-                    {issue.document_name && (
-                      <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
-                        <span>📄</span>
-                        <span className="truncate">{issue.document_name}</span>
-                      </div>
-                    )}
-
-                    {/* Footer */}
-                    <div className="flex items-center justify-between text-xs">
-                      {issue.assignee_email ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-semibold">
-                            {issue.assignee_email[0].toUpperCase()}
-                          </div>
-                          <span className="text-gray-600 truncate max-w-[120px]">
-                            {issue.assignee_email.split('@')[0]}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">Unassigned</span>
-                      )}
-                      <span className="text-gray-400">
-                        {new Date(issue.created_at).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+  return (
+    <div className="flex flex-col min-w-0">
+      {/* Column Header */}
+      <div className={`rounded-lg border-2 p-4 mb-4 ${column.color}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{column.icon}</span>
+            <h3 className="font-semibold text-gray-900">{column.title}</h3>
           </div>
-        );
-      })}
+          <span className="bg-white px-2 py-1 rounded-full text-xs font-semibold text-gray-700">
+            {issues.length}
+          </span>
+        </div>
+      </div>
+
+      {/* Drop Zone */}
+      <div
+        ref={setNodeRef}
+        className={`space-y-3 min-h-[200px] flex-1 rounded-lg transition-colors ${
+          isOver ? 'bg-blue-50 border-2 border-dashed border-blue-300' : ''
+        }`}
+      >
+        {issues.length === 0 ? (
+          <div className="text-center py-8 text-gray-400 text-sm">
+            No issues
+          </div>
+        ) : (
+          issues.map((issue) => (
+            <DraggableIssueCard
+              key={issue.id}
+              issue={issue}
+              onClick={() => onIssueClick(issue.id)}
+              formatDueDate={formatDueDate}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface DraggableIssueCardProps {
+  issue: ComplianceIssue;
+  onClick: () => void;
+  formatDueDate: (date: string | null) => string;
+}
+
+function DraggableIssueCard({ issue, onClick, formatDueDate }: DraggableIssueCardProps) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: issue.id,
+  });
+
+  const style = transform
+    ? {
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+      }
+    : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+    >
+      <IssueCard
+        issue={issue}
+        onClick={onClick}
+        formatDueDate={formatDueDate}
+        isDragging={isDragging}
+      />
+    </div>
+  );
+}
+
+interface IssueCardProps {
+  issue: ComplianceIssue;
+  onClick: () => void;
+  formatDueDate: (date: string | null) => string;
+  isDragging?: boolean;
+  isDragOverlay?: boolean;
+}
+
+function IssueCard({ issue, onClick, formatDueDate, isDragging = false, isDragOverlay = false }: IssueCardProps) {
+  return (
+    <div
+      onClick={!isDragOverlay ? onClick : undefined}
+      className={`bg-white rounded-lg border-2 p-4 cursor-pointer hover:shadow-lg transition ${
+        isDragging ? 'opacity-40' : ''
+      } ${isDragOverlay ? 'shadow-2xl rotate-3 scale-105' : ''}`}
+    >
+      {/* Header: Severity & Priority */}
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <span
+          className={`px-2 py-1 rounded text-xs font-semibold uppercase border ${
+            SEVERITY_COLORS[issue.severity]
+          }`}
+        >
+          {issue.severity}
+        </span>
+        {issue.priorityLevel && (
+          <span
+            className={`px-2 py-1 rounded text-xs font-bold ${
+              PRIORITY_COLORS[issue.priorityLevel]
+            }`}
+          >
+            {issue.priorityLevel}
+          </span>
+        )}
+      </div>
+
+      {/* Title */}
+      <h4 className="font-medium text-gray-900 mb-2 line-clamp-2">
+        {issue.title}
+      </h4>
+
+      {/* Description */}
+      <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+        {issue.description}
+      </p>
+
+      {/* Due Date */}
+      {issue.dueDate && (
+        <div className="mb-3 text-xs font-medium">
+          {formatDueDate(issue.dueDate)}
+        </div>
+      )}
+
+      {/* Footer: Assignee & Date */}
+      <div className="flex items-center justify-between text-xs">
+        {issue.assignedTo ? (
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-semibold">
+              {issue.assignedTo[0]?.toUpperCase() || 'A'}
+            </div>
+            <span className="text-gray-600 truncate max-w-[120px]">
+              {issue.assignedTo.split('@')[0] || 'Assigned'}
+            </span>
+          </div>
+        ) : (
+          <span className="text-gray-400">Unassigned</span>
+        )}
+        <span className="text-gray-400">
+          {new Date(issue.createdAt).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          })}
+        </span>
+      </div>
     </div>
   );
 }

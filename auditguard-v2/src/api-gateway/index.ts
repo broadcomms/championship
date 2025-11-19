@@ -2967,6 +2967,217 @@ export default class extends Service<Env> {
         });
       }
 
+      // ====== PHASE 4: NEW ISSUE ENDPOINTS ======
+      
+      // POST /api/workspaces/:id/issues/:issueId/comments - Add comment to issue
+      const addCommentMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/([^\/]+)\/comments$/);
+      if (addCommentMatch && addCommentMatch[1] && addCommentMatch[2] && request.method === 'POST') {
+        const workspaceId = addCommentMatch[1];
+        const issueId = addCommentMatch[2];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          commentText: string;
+          commentType?: 'comment' | 'status_change' | 'assignment' | 'resolution' | 'system';
+          metadata?: Record<string, any>;
+        }>(request, ['commentText']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        const result = await this.env.ISSUE_COMMENT_SERVICE.addComment({
+          issueId,
+          workspaceId,
+          userId: user.userId,
+          commentText: body.commentText,
+          commentType: body.commentType,
+          metadata: body.metadata,
+        }, this);
+
+        return new Response(JSON.stringify(result), {
+          status: result.success ? 201 : 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/workspaces/:id/issues/:issueId/comments - Get comments for issue
+      const getCommentsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/([^\/]+)\/comments$/);
+      if (getCommentsMatch && getCommentsMatch[1] && getCommentsMatch[2] && request.method === 'GET') {
+        const workspaceId = getCommentsMatch[1];
+        const issueId = getCommentsMatch[2];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+        const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+        const result = await this.env.ISSUE_COMMENT_SERVICE.getComments({
+          issueId,
+          workspaceId,
+          userId: user.userId,
+          limit,
+          offset,
+        });
+
+        return new Response(JSON.stringify(result), {
+          status: result.success ? 200 : 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // DELETE /api/workspaces/:id/issues/:issueId/comments/:commentId - Delete comment
+      const deleteCommentMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/([^\/]+)\/comments\/([^\/]+)$/);
+      if (deleteCommentMatch && deleteCommentMatch[1] && deleteCommentMatch[2] && deleteCommentMatch[3] && request.method === 'DELETE') {
+        const workspaceId = deleteCommentMatch[1];
+        const commentId = deleteCommentMatch[3];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.ISSUE_COMMENT_SERVICE.deleteComment({
+          commentId,
+          workspaceId,
+          userId: user.userId,
+        });
+
+        return new Response(JSON.stringify(result), {
+          status: result.success ? 200 : 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // PATCH /api/workspaces/:id/issues/:issueId/status - Update issue status (with event publishing)
+      const updateStatusMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/([^\/]+)\/status$/);
+      if (updateStatusMatch && updateStatusMatch[1] && updateStatusMatch[2] && request.method === 'PATCH') {
+        const workspaceId = updateStatusMatch[1];
+        const issueId = updateStatusMatch[2];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          status: 'open' | 'in_progress' | 'resolved' | 'dismissed';
+          notes?: string;
+        }>(request, ['status']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        const result = await this.env.ISSUE_MANAGEMENT_SERVICE.updateIssueStatus({
+          issueId,
+          workspaceId,
+          userId: user.userId,
+          newStatus: body.status,
+          notes: body.notes,
+        }, this);
+
+        return new Response(JSON.stringify(result), {
+          status: result.success ? 200 : 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // POST /api/workspaces/:id/issues/:issueId/assign-with-details - Enhanced assign with due date and priority
+      const assignWithDetailsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/([^\/]+)\/assign-with-details$/);
+      if (assignWithDetailsMatch && assignWithDetailsMatch[1] && assignWithDetailsMatch[2] && request.method === 'POST') {
+        const workspaceId = assignWithDetailsMatch[1];
+        const issueId = assignWithDetailsMatch[2];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          assignedTo: string;
+          dueDate?: number;
+          priorityLevel?: 'P1' | 'P2' | 'P3' | 'P4';
+          notes?: string;
+        }>(request, ['assignedTo']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        await this.env.ISSUE_ASSIGNMENT_SERVICE.assignIssue({
+          issueId,
+          workspaceId,
+          assignedTo: body.assignedTo,
+          assignedBy: user.userId,
+          dueDate: body.dueDate,
+          priorityLevel: body.priorityLevel,
+          notes: body.notes,
+        }, this);
+
+        return new Response(JSON.stringify({ success: true }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/workspaces/:id/members/search - Search workspace members for assignment
+      const searchMembersMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/members\/search$/);
+      if (searchMembersMatch && searchMembersMatch[1] && request.method === 'GET') {
+        const workspaceId = searchMembersMatch[1];
+        const user = await this.validateSession(request);
+
+        // Verify workspace access
+        const db = this.getDb();
+        const membership = await db
+          .selectFrom('workspace_members')
+          .select('role')
+          .where('workspace_id', '=', workspaceId)
+          .where('user_id', '=', user.userId)
+          .executeTakeFirst();
+
+        if (!membership) {
+          return new Response(JSON.stringify({ error: 'Access denied' }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const url = new URL(request.url);
+        const query = url.searchParams.get('q') || '';
+        const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+
+        // Search members
+        let membersQuery = db
+          .selectFrom('workspace_members')
+          .innerJoin('users', 'workspace_members.user_id', 'users.id')
+          .select([
+            'users.id',
+            'users.email',
+            'workspace_members.role',
+            'workspace_members.added_at',
+          ])
+          .where('workspace_members.workspace_id', '=', workspaceId);
+
+        if (query) {
+          membersQuery = membersQuery.where('users.email', 'like', `%${query}%`);
+        }
+
+        const members = await membersQuery
+          .orderBy('users.email', 'asc')
+          .limit(limit)
+          .execute();
+
+        return new Response(JSON.stringify({
+          success: true,
+          members: members.map(m => ({
+            id: m.id,
+            email: m.email,
+            role: m.role,
+            addedAt: m.added_at,
+          })),
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // ====== ANALYTICS ENDPOINTS ======
       // Match /api/workspaces/:id/analytics/calculate
       const calculateMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/analytics\/calculate$/);

@@ -5,35 +5,25 @@ import { useParams, useRouter } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
-
-interface Issue {
-  id: string;
-  checkId: string;
-  documentId: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  category: string;
-  title: string;
-  description: string;
-  recommendation: string | null;
-  location: string | null;
-  status: 'open' | 'in_progress' | 'review' | 'resolved';
-  assignedTo: string | null;
-  createdAt: number;
-  resolvedAt: number | null;
-}
-
-const severityColors = {
-  critical: 'bg-red-100 text-red-800 border-red-300',
-  high: 'bg-orange-100 text-orange-800 border-orange-300',
-  medium: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-  low: 'bg-blue-100 text-blue-800 border-blue-300',
-};
+import { AssignmentModal } from '@/components/issues/AssignmentModal';
+import { 
+  ComplianceIssue, 
+  IssueComment, 
+  IssueStatus, 
+  SEVERITY_COLORS,
+  STATUS_COLORS,
+  STATUS_LABELS,
+  PRIORITY_COLORS,
+  PRIORITY_LABELS,
+  PriorityLevel 
+} from '@/types/compliance';
 
 const statusColors = {
   open: 'bg-red-100 text-red-800',
   in_progress: 'bg-blue-100 text-blue-800',
   review: 'bg-yellow-100 text-yellow-800',
   resolved: 'bg-green-100 text-green-800',
+  dismissed: 'bg-gray-100 text-gray-800',
 };
 
 export default function IssueDetailsPage() {
@@ -43,21 +33,25 @@ export default function IssueDetailsPage() {
   const { user } = useAuth();
   const accountId = user?.userId;
 
-  const [issue, setIssue] = useState<Issue | null>(null);
+  const [issue, setIssue] = useState<ComplianceIssue | null>(null);
+  const [comments, setComments] = useState<IssueComment[]>([]);
+  const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [submittingComment, setSubmittingComment] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAssignModal, setShowAssignModal] = useState(false);
 
   useEffect(() => {
     fetchIssueDetails();
+    fetchComments();
   }, [issueId]);
 
   const fetchIssueDetails = async () => {
     try {
       const response = await api.get(`/api/workspaces/${workspaceId}/issues/${issueId}`);
       console.log('📥 Issue Details Response:', response);
-      // API returns issue directly, not wrapped in data
       const issueData = response.data || response;
-      console.log('📋 Issue data:', issueData);
       setIssue(issueData);
     } catch (error) {
       console.error('Failed to fetch issue details:', error);
@@ -67,31 +61,92 @@ export default function IssueDetailsPage() {
     }
   };
 
-  const handleStatusChange = async (newStatus: string) => {
+  const fetchComments = async () => {
+    setLoadingComments(true);
+    try {
+      const response = await api.get(
+        `/api/workspaces/${workspaceId}/issues/${issueId}/comments?limit=100&offset=0`
+      );
+      const data = response.data || response;
+      setComments(data.comments || []);
+    } catch (error) {
+      console.error('Failed to fetch comments:', error);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return;
+
+    setSubmittingComment(true);
+    try {
+      const response = await api.post(
+        `/api/workspaces/${workspaceId}/issues/${issueId}/comments`,
+        {
+          commentText: newComment,
+          commentType: 'comment',
+        }
+      );
+      setNewComment('');
+      fetchComments(); // Refresh comments
+    } catch (error) {
+      console.error('Failed to add comment:', error);
+      alert('Failed to add comment. Please try again.');
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: IssueStatus) => {
     try {
       await api.patch(`/api/workspaces/${workspaceId}/issues/${issueId}/status`, {
         status: newStatus,
       });
       if (issue) {
-        setIssue({ ...issue, status: newStatus as Issue['status'] });
+        setIssue({ ...issue, status: newStatus });
       }
+      fetchComments(); // Refresh to show status change comment
     } catch (error) {
       console.error('Failed to update issue status:', error);
       alert('Failed to update status. Please try again.');
     }
   };
 
-  const handleResolve = async () => {
-    try {
-      await api.post(`/api/workspaces/${workspaceId}/issues/${issueId}/resolve`, {
-        resolution: 'Issue resolved by user',
-      });
-      if (issue) {
-        setIssue({ ...issue, status: 'resolved', resolvedAt: Date.now() });
-      }
-    } catch (error) {
-      console.error('Failed to resolve issue:', error);
-      alert('Failed to resolve issue. Please try again.');
+  const formatDate = (dateString: string | number | null): string => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  const formatRelativeTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return formatDate(dateString);
+  };
+
+  const getCommentIcon = (type: string): string => {
+    switch (type) {
+      case 'status_change': return '🔄';
+      case 'assignment': return '👤';
+      case 'resolution': return '✅';
+      case 'system': return '⚙️';
+      default: return '💬';
     }
   };
 
@@ -112,130 +167,224 @@ export default function IssueDetailsPage() {
           </button>
         </div>
       ) : (
-        <div className="p-8 max-w-5xl mx-auto">
-      {/* Back Button */}
-      <button
-        onClick={() => router.back()}
-        className="mb-4 text-blue-600 hover:text-blue-800 flex items-center gap-2"
-      >
-        ← Back to Issues
-      </button>
-
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-3">
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${severityColors[issue.severity]}`}>
-                {issue.severity.toUpperCase()}
-              </span>
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[issue.status]}`}>
-                {issue.status.replace('_', ' ').toUpperCase()}
-              </span>
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900">{issue.title}</h1>
-            <p className="text-sm text-gray-500 mt-2">
-              Category: {issue.category} • Created: {new Date(issue.createdAt).toLocaleString()}
-            </p>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-3">
-          <select
-            value={issue.status}
-            onChange={(e) => handleStatusChange(e.target.value)}
-            className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <div className="p-8 max-w-6xl mx-auto">
+          {/* Back Button */}
+          <button
+            onClick={() => router.back()}
+            className="mb-4 text-blue-600 hover:text-blue-800 flex items-center gap-2 font-medium"
           >
-            <option value="open">Open</option>
-            <option value="in_progress">In Progress</option>
-            <option value="review">Review</option>
-            <option value="resolved">Resolved</option>
-          </select>
+            ← Back to Issues
+          </button>
 
-          {issue.status !== 'resolved' && (
-            <button
-              onClick={handleResolve}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-            >
-              Mark as Resolved
-            </button>
-          )}
-        </div>
-      </div>
+          <div className="grid grid-cols-3 gap-6">
+            {/* Main Content - 2 columns */}
+            <div className="col-span-2 space-y-6">
+              {/* Header */}
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className={`px-3 py-1 rounded text-sm font-semibold uppercase border ${
+                    SEVERITY_COLORS[issue.severity]
+                  }`}>
+                    {issue.severity}
+                  </span>
+                  <span className={`px-3 py-1 rounded text-sm font-medium ${
+                    statusColors[issue.status]
+                  }`}>
+                    {STATUS_LABELS[issue.status]}
+                  </span>
+                  {issue.priorityLevel && (
+                    <span className={`px-3 py-1 rounded text-sm font-bold ${
+                      PRIORITY_COLORS[issue.priorityLevel]
+                    }`}>
+                      {issue.priorityLevel}
+                    </span>
+                  )}
+                </div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">{issue.title}</h1>
+                <p className="text-sm text-gray-500">
+                  Category: {issue.category} • Created: {formatDate(issue.createdAt)}
+                </p>
+              </div>
 
-      {/* Issue Details */}
-      <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Issue Details</h2>
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-sm font-medium text-gray-500">Description</h3>
-            <p className="mt-1 text-gray-900">{issue.description}</p>
-          </div>
+              {/* Description & Details */}
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h2 className="text-xl font-semibold mb-4">Description</h2>
+                <p className="text-gray-700 mb-6 whitespace-pre-wrap">{issue.description}</p>
 
-          {issue.location && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Location</h3>
-              <p className="mt-1 text-gray-900">{issue.location}</p>
-            </div>
-          )}
+                {issue.recommendation && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-blue-900 mb-2">💡 Recommendation</h3>
+                    <p className="text-sm text-blue-800">{issue.recommendation}</p>
+                  </div>
+                )}
+              </div>
 
-          {issue.recommendation && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Recommendation</h3>
-              <p className="mt-1 text-gray-900">{issue.recommendation}</p>
-            </div>
-          )}
+              {/* Comments & Activity */}
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h2 className="text-xl font-semibold mb-4">Activity Timeline</h2>
+                
+                {/* Comments List */}
+                <div className="space-y-4 mb-6">
+                  {loadingComments ? (
+                    <div className="text-center py-8 text-gray-500">Loading activity...</div>
+                  ) : comments.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400">No activity yet</div>
+                  ) : (
+                    comments.map((comment) => (
+                      <div key={comment.id} className="flex gap-3 border-l-2 border-gray-200 pl-4">
+                        <div className="flex-shrink-0">
+                          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                            {comment.userEmail?.[0]?.toUpperCase() || '?'}
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium text-gray-900">
+                              {comment.userName || comment.userEmail || 'Unknown User'}
+                            </span>
+                            <span className="text-sm text-gray-500">
+                              {getCommentIcon(comment.commentType)} {comment.commentType.replace('_', ' ')}
+                            </span>
+                            <span className="text-sm text-gray-400">
+                              {formatRelativeTime(comment.createdAt)}
+                            </span>
+                          </div>
+                          <p className="text-gray-700 whitespace-pre-wrap">{comment.commentText}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Document ID</h3>
-              <p className="mt-1 text-gray-900 font-mono text-sm">{issue.documentId}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Check ID</h3>
-              <p className="mt-1 text-gray-900 font-mono text-sm">{issue.checkId}</p>
-            </div>
-          </div>
-
-          {issue.assignedTo && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Assigned To</h3>
-              <p className="mt-1 text-gray-900">{issue.assignedTo}</p>
-            </div>
-          )}
-
-          {issue.resolvedAt && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Resolved At</h3>
-              <p className="mt-1 text-gray-900">{new Date(issue.resolvedAt).toLocaleString()}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Activity Timeline (Placeholder) */}
-      <div className="bg-white rounded-lg shadow-sm border p-6">
-        <h2 className="text-xl font-semibold mb-4">Activity Timeline</h2>
-        <div className="space-y-4">
-          <div className="flex gap-3">
-            <div className="w-2 h-2 mt-2 rounded-full bg-blue-500" />
-            <div>
-              <p className="text-sm text-gray-900">Issue created</p>
-              <p className="text-xs text-gray-500">{new Date(issue.createdAt).toLocaleString()}</p>
-            </div>
-          </div>
-          {issue.resolvedAt && (
-            <div className="flex gap-3">
-              <div className="w-2 h-2 mt-2 rounded-full bg-green-500" />
-              <div>
-                <p className="text-sm text-gray-900">Issue resolved</p>
-                <p className="text-xs text-gray-500">{new Date(issue.resolvedAt).toLocaleString()}</p>
+                {/* Add Comment */}
+                <div className="border-t pt-4">
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="Add a comment..."
+                    className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
+                  />
+                  <div className="flex justify-end mt-3">
+                    <button
+                      onClick={handleAddComment}
+                      disabled={!newComment.trim() || submittingComment}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    >
+                      {submittingComment ? 'Posting...' : 'Post Comment'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-          )}
-        </div>
-      </div>
+
+            {/* Sidebar - 1 column */}
+            <div className="space-y-6">
+              {/* Status Workflow */}
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h3 className="font-semibold mb-4">Status</h3>
+                <select
+                  value={issue.status}
+                  onChange={(e) => handleStatusChange(e.target.value as IssueStatus)}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="open">🔴 Open</option>
+                  <option value="in_progress">🔵 In Progress</option>
+                  <option value="review">🟡 Review</option>
+                  <option value="resolved">🟢 Resolved</option>
+                  <option value="dismissed">⚫ Dismissed</option>
+                </select>
+              </div>
+
+              {/* Assignment */}
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h3 className="font-semibold mb-4">Assignment</h3>
+                {issue.assignedTo ? (
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                      {issue.assignedTo[0]?.toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{issue.assignedTo}</p>
+                      <p className="text-sm text-gray-500">
+                        Assigned {issue.assignedAt ? formatRelativeTime(issue.assignedAt) : 'recently'}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 mb-4">Unassigned</p>
+                )}
+                <button
+                  onClick={() => setShowAssignModal(true)}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  {issue.assignedTo ? 'Reassign' : 'Assign'}
+                </button>
+              </div>
+
+              {/* Due Date */}
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h3 className="font-semibold mb-4">Due Date</h3>
+                {issue.dueDate ? (
+                  <div className="text-gray-900">
+                    <p className="text-lg font-medium">
+                      {new Date(issue.dueDate).toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {Math.ceil((new Date(issue.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days remaining
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-gray-500">No due date set</p>
+                )}
+              </div>
+
+              {/* Metadata */}
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h3 className="font-semibold mb-4">Details</h3>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <span className="text-gray-500">Risk Score:</span>
+                    <span className="ml-2 font-medium">{issue.riskScore || 'N/A'}</span>
+                  </div>
+                  {issue.sectionRef && (
+                    <div>
+                      <span className="text-gray-500">Section:</span>
+                      <span className="ml-2 font-medium">{issue.sectionRef}</span>
+                    </div>
+                  )}
+                  {issue.regulationCitation && (
+                    <div>
+                      <span className="text-gray-500">Citation:</span>
+                      <p className="mt-1 text-gray-700 text-xs">{issue.regulationCitation}</p>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-gray-500">Updated:</span>
+                    <span className="ml-2">{formatDate(issue.updatedAt)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Assignment Modal Placeholder */}
+          <AssignmentModal
+            isOpen={showAssignModal}
+            onClose={() => setShowAssignModal(false)}
+            workspaceId={workspaceId as string}
+            issueId={issueId as string}
+            currentAssignee={issue.assignedTo}
+            currentDueDate={issue.dueDate}
+            currentPriority={issue.priorityLevel}
+            onAssigned={() => {
+              fetchIssueDetails();
+              fetchComments();
+            }}
+          />
         </div>
       )}
     </OrganizationLayout>

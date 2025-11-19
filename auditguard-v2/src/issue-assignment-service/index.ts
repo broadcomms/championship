@@ -3,7 +3,7 @@
  * Handles assignment and unassignment of compliance issues to team members.
  */
 
-import { Service } from '@liquidmetal-ai/raindrop-framework';
+import { Service, Context } from '@liquidmetal-ai/raindrop-framework';
 import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
@@ -31,7 +31,9 @@ export default class extends Service<Env> {
     assignedTo: string;
     assignedBy: string;
     notes?: string;
-  }): Promise<void> {
+    dueDate?: number;
+    priorityLevel?: string;
+  }, context: Context<Env>): Promise<void> {
     const db = this.getDb();
 
     // Verify assignedBy has workspace access
@@ -85,12 +87,23 @@ export default class extends Service<Env> {
     }
 
     // Update issue with new assignment
+    const updateData: any = {
+      assigned_to: input.assignedTo,
+      assigned_at: now,
+      updated_at: now,
+    };
+    
+    if (input.dueDate) {
+      updateData.due_date = input.dueDate;
+    }
+    
+    if (input.priorityLevel) {
+      updateData.priority_level = input.priorityLevel;
+    }
+    
     await db
       .updateTable('compliance_issues')
-      .set({
-        assigned_to: input.assignedTo,
-        updated_at: now,
-      })
+      .set(updateData)
       .where('id', '=', input.issueId)
       .execute();
 
@@ -111,6 +124,43 @@ export default class extends Service<Env> {
       })
       .execute();
 
+    // Fetch complete issue details for event
+    const issueDetails = await db
+      .selectFrom('compliance_issues')
+      .select(['title', 'severity', 'framework', 'status'])
+      .where('id', '=', input.issueId)
+      .executeTakeFirst();
+
+    // Fetch workspace name
+    const workspace = await db
+      .selectFrom('workspaces')
+      .select('name')
+      .where('id', '=', input.workspaceId)
+      .executeTakeFirst();
+
+    // Publish event for notification service to handle
+    await context.publishEvent('issue.assigned', {
+      issueId: input.issueId,
+      workspaceId: input.workspaceId,
+      assignmentId,
+      assignedTo: input.assignedTo,
+      assignedBy: input.assignedBy,
+      issueTitle: issueDetails?.title || 'Untitled Issue',
+      issueSeverity: issueDetails?.severity || 'medium',
+      issueFramework: issueDetails?.framework || 'General',
+      workspaceName: workspace?.name || 'Unknown Workspace',
+      dueDate: input.dueDate,
+      priorityLevel: input.priorityLevel,
+      notes: input.notes,
+      timestamp: now,
+    });
+
+    this.env.logger.info('Issue assigned', {
+      assignmentId,
+      issueId: input.issueId,
+      assignedTo: input.assignedTo,
+    });
+
     // Send email notification to assignee
     try {
       // Fetch assignee email
@@ -125,20 +175,6 @@ export default class extends Service<Env> {
         .selectFrom('users')
         .select('email')
         .where('id', '=', input.assignedBy)
-        .executeTakeFirst();
-
-      // Fetch complete issue details
-      const issueDetails = await db
-        .selectFrom('compliance_issues')
-        .select(['title', 'severity', 'framework'])
-        .where('id', '=', input.issueId)
-        .executeTakeFirst();
-
-      // Fetch workspace name
-      const workspace = await db
-        .selectFrom('workspaces')
-        .select('name')
-        .where('id', '=', input.workspaceId)
         .executeTakeFirst();
 
       if (assignee && issueDetails && workspace) {
@@ -159,6 +195,8 @@ export default class extends Service<Env> {
             framework: issueDetails.framework || 'General',
             issueUrl: `https://app.auditguardx.com/workspaces/${input.workspaceId}/issues/${input.issueId}`,
             notes: input.notes || '',
+            dueDate: input.dueDate,
+            priorityLevel: input.priorityLevel,
           },
         });
 

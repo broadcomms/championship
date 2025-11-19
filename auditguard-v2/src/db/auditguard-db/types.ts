@@ -192,12 +192,27 @@ export type compliance_issues = {
     recommendation: string | null;
     confidence: number;
     priority: number;
+    priority_level: string | null; // P1, P2, P3, P4
     location: string | null;
     status: string;
     assigned_to: string | null;
+    assigned_at: number | null;
+    due_date: number | null;
     resolved_at: number | null;
     resolved_by: string | null;
     created_at: number;
+};
+
+export type issue_comments = {
+    id: string;
+    issue_id: string;
+    workspace_id: string;
+    user_id: string;
+    comment_text: string;
+    comment_type: 'comment' | 'status_change' | 'assignment' | 'resolution' | 'system';
+    metadata: string | null; // JSON
+    created_at: number;
+    updated_at: number;
 };
 
 export type document_chunks = {
@@ -481,6 +496,7 @@ export type DB = {
     compliance_checks: compliance_checks;
     compliance_frameworks: compliance_frameworks;
     compliance_issues: compliance_issues;
+    issue_comments: issue_comments;
     compliance_reports: compliance_reports;
     knowledge_base: knowledge_base;
     document_chunks: document_chunks;
