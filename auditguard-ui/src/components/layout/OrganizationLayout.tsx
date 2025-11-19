@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { TopNavBar } from '@/components/navigation/TopNavBar';
 import { MultiLevelSidebar } from '@/components/sidebar/MultiLevelSidebar';
 import { Breadcrumb } from '@/components/navigation/Breadcrumb';
+import { AIChatWidget } from '@/components/assistant/AIChatWidget';
 
 interface OrganizationLayoutProps {
   children: React.ReactNode;
@@ -63,6 +64,9 @@ export function OrganizationLayout({
             </div>
           </main>
         </div>
+
+        {/* AI Assistant Chat Widget - Available on all workspace pages */}
+        {workspaceId && <AIChatWidget workspaceId={workspaceId} />}
       </div>
     </ProtectedRoute>
   );

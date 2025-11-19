@@ -42,14 +42,23 @@ export function AssignmentModal({
 
   useEffect(() => {
     if (isOpen) {
-      searchMembers('');
+      // Reset state when modal opens
+      setSelectedMember(null);
+      setSearchTerm('');
+      setMembers([]);
+      setDueDate(currentDueDate ? new Date(currentDueDate) : null);
+      setPriorityLevel(currentPriority || 'P3');
+      // Don't auto-search, wait for user input
     }
-  }, [isOpen]);
+  }, [isOpen, currentDueDate, currentPriority]);
 
   useEffect(() => {
     const debounce = setTimeout(() => {
-      if (searchTerm) {
+      if (searchTerm.trim()) {
         searchMembers(searchTerm);
+      } else {
+        // Clear members when search is empty
+        setMembers([]);
       }
     }, 300);
     return () => clearTimeout(debounce);
@@ -63,9 +72,12 @@ export function AssignmentModal({
       );
       const data = response.data || response;
       setMembers(data.members || []);
+      // Clear selection when new search results arrive
+      setSelectedMember(null);
     } catch (error) {
       console.error('Failed to search members:', error);
       setMembers([]);
+      setSelectedMember(null);
     } finally {
       setSearching(false);
     }
@@ -126,38 +138,50 @@ export function AssignmentModal({
           />
 
           {/* Members List */}
-          <div className="mt-3 space-y-2 max-h-[200px] overflow-y-auto">
+          <div className="mt-3 space-y-2 max-h-[200px] overflow-y-auto border rounded-lg p-2">
             {searching ? (
               <div className="text-center py-4 text-gray-500">Searching...</div>
             ) : members.length === 0 ? (
               <div className="text-center py-4 text-gray-400">
-                {searchTerm ? 'No members found' : 'Start typing to search...'}
+                {searchTerm.trim() ? 'No members found' : 'Start typing to search members...'}
               </div>
             ) : (
-              members.map((member) => (
-                <button
-                  key={member.userId}
-                  onClick={() => setSelectedMember(member)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition ${
-                    selectedMember?.userId === member.userId
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
-                    {member.email[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 text-left min-w-0">
-                    <p className="font-medium text-gray-900 truncate">
-                      {member.name || member.email}
-                    </p>
-                    <p className="text-sm text-gray-500 truncate">{member.email}</p>
-                  </div>
-                  {selectedMember?.userId === member.userId && (
-                    <span className="text-blue-600 text-xl">✓</span>
-                  )}
-                </button>
-              ))
+              members.map((member) => {
+                const isSelected = selectedMember?.userId === member.userId;
+                return (
+                  <button
+                    key={member.userId}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      // Toggle selection - if already selected, deselect; otherwise select
+                      if (isSelected) {
+                        setSelectedMember(null);
+                      } else {
+                        setSelectedMember(member);
+                      }
+                    }}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                    }`}
+                  >
+                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                      {member.email[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                      <p className="font-medium text-gray-900 truncate">
+                        {member.name || member.email}
+                      </p>
+                      <p className="text-sm text-gray-500 truncate">{member.email}</p>
+                    </div>
+                    {isSelected && (
+                      <span className="text-blue-600 text-xl font-bold">✓</span>
+                    )}
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
@@ -186,7 +210,11 @@ export function AssignmentModal({
             {(['P1', 'P2', 'P3', 'P4'] as PriorityLevel[]).map((priority) => (
               <button
                 key={priority}
-                onClick={() => setPriorityLevel(priority)}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setPriorityLevel(priority);
+                }}
                 className={`px-4 py-3 rounded-lg border-2 font-medium transition ${
                   priorityLevel === priority
                     ? 'border-blue-500 bg-blue-50 text-blue-700'
