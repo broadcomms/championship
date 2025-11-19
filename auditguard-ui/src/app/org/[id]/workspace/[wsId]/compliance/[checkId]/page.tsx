@@ -195,7 +195,7 @@ export default function ComplianceCheckDetailPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Compliance Issues</h2>
             
             {issues.map((issue) => (
-              <div key={issue.id} className="bg-white rounded-lg border border-gray-200 p-6">
+              <div key={issue.id} className="bg-white rounded-lg border border-gray-200 p-6 hover:border-gray-300 transition-colors">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
@@ -215,10 +215,20 @@ export default function ComplianceCheckDetailPage() {
                     )}
                     
                     {issue.location && (
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-gray-600 mb-4">
                         <span className="font-medium">Location:</span> {issue.location}
                       </div>
                     )}
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => router.push(`/org/${orgId}/workspace/${wsId}/issues/${issue.id}`)}
+                      >
+                        View Details →
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>

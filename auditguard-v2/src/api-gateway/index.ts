@@ -1555,6 +1555,8 @@ export default class extends Service<Env> {
             const filename = (formData.get('filename') as string) || file?.name || 'unnamed';
             const category = formData.get('category') as 'policy' | 'procedure' | 'evidence' | 'other' | undefined;
             const frameworkId = formData.get('frameworkId') ? parseInt(formData.get('frameworkId') as string, 10) : undefined;
+            const runComplianceCheck = formData.get('runComplianceCheck') === 'true';
+            const framework = formData.get('framework') as string | undefined;
 
             if (!file) {
               return new Response(JSON.stringify({ error: 'No file provided' }), {
@@ -1573,6 +1575,8 @@ export default class extends Service<Env> {
               contentType: file.type || 'application/octet-stream',
               category,
               frameworkId,  // Phase 4: Framework support
+              runComplianceCheck,  // New: Optional compliance check flag
+              framework,  // New: Optional framework for compliance check
             });
 
             return new Response(JSON.stringify(result), {
@@ -1588,6 +1592,8 @@ export default class extends Service<Env> {
               contentType: string;
               category?: 'policy' | 'procedure' | 'evidence' | 'other';
               frameworkId?: number;
+              runComplianceCheck?: boolean;
+              framework?: string;
             }>(request, ['file', 'filename', 'contentType']);
             if (!parseResult.success) {
               return new Response(JSON.stringify({ error: (parseResult as any).error }), {
@@ -1608,6 +1614,8 @@ export default class extends Service<Env> {
               contentType: body.contentType,
               category: body.category,
               frameworkId: body.frameworkId,  // Phase 4: Framework support
+              runComplianceCheck: body.runComplianceCheck,  // New: Optional compliance check flag
+              framework: body.framework,  // New: Optional framework for compliance check
             });
 
             return new Response(JSON.stringify(result), {

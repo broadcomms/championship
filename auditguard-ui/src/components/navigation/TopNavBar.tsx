@@ -125,7 +125,7 @@ export function TopNavBar({ currentOrgId, showOrgSwitcher = true }: TopNavBarPro
 
   return (
     <nav className="border-b border-gray-200 bg-white sticky top-0 z-50">
-      <div className="mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto px-2 pr-6 sm:px-2 sm:pr-4 lg:px-2n lg:pr-4">
         <div className="flex h-16 items-center justify-between">
           {/* Left side - Logo & Org Switcher */}
           <div className="flex items-center gap-4">

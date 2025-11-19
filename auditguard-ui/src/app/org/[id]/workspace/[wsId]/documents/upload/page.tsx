@@ -2,9 +2,10 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MultiLevelSidebar } from '@/components/sidebar/MultiLevelSidebar';
+import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 type UploadStep = 'select' | 'metadata' | 'uploading' | 'complete';
 
@@ -17,6 +18,7 @@ interface UploadMetadata {
   tags: string[];
   description: string;
   framework?: string;
+  runComplianceCheck?: boolean;
 }
 
 interface UsageLimits {
@@ -28,8 +30,10 @@ interface UsageLimits {
 export default function DocumentUploadPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   const orgId = params.id as string;
   const wsId = params.wsId as string;
+  const accountId = user?.userId;
 
   const [currentStep, setCurrentStep] = useState<UploadStep>('select');
   const [selectedFiles, setSelectedFiles] = useState<UploadedFile[]>([]);
@@ -37,6 +41,7 @@ export default function DocumentUploadPage() {
     tags: [],
     description: '',
     framework: undefined,
+    runComplianceCheck: false,
   });
   const [tagInput, setTagInput] = useState('');
   const [uploadProgress, setUploadProgress] = useState<number>(0);
@@ -74,14 +79,15 @@ export default function DocumentUploadPage() {
   }, [orgId]);
 
   const frameworks = [
-    'SOC 2',
-    'ISO 27001',
-    'HIPAA',
-    'GDPR',
-    'PCI DSS',
-    'NIST CSF',
-    'FISMA',
-    'FedRAMP',
+    { value: 'auto', label: 'Auto-detect (Recommended)' },
+    { value: 'SOC2', label: 'SOC 2' },
+    { value: 'ISO_27001', label: 'ISO 27001' },
+    { value: 'HIPAA', label: 'HIPAA' },
+    { value: 'GDPR', label: 'GDPR' },
+    { value: 'PCI_DSS', label: 'PCI DSS' },
+    { value: 'NIST_CSF', label: 'NIST CSF' },
+    { value: 'FISMA', label: 'FISMA' },
+    { value: 'FedRAMP', label: 'FedRAMP' },
   ];
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,9 +161,14 @@ export default function DocumentUploadPage() {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('filename', file.name);
-        // Note: description and tags are not supported by the current API endpoint
-        // The API expects: file, filename, category (optional), frameworkId (optional)
-        // TODO: Add support for description and tags in the API or remove from UI
+        
+        // Add compliance check parameters if enabled
+        if (metadata.runComplianceCheck) {
+          formData.append('runComplianceCheck', 'true');
+          if (metadata.framework && metadata.framework !== 'auto') {
+            formData.append('framework', metadata.framework);
+          }
+        }
 
         // Use the correct API endpoint with workspace ID in the path
         const response = await fetch(`/api/workspaces/${wsId}/documents`, {
@@ -339,7 +350,7 @@ export default function DocumentUploadPage() {
         {renderBillingWarning()}
 
         {/* Drag & Drop Area */}
-      <div
+        <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-blue-500 transition bg-white"
@@ -426,83 +437,130 @@ export default function DocumentUploadPage() {
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 p-8 space-y-6">
-        {/* Framework Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Compliance Framework (Optional)
-          </label>
-          <select
-            value={metadata.framework || ''}
-            onChange={(e) =>
-              setMetadata((prev) => ({
-                ...prev,
-                framework: e.target.value || undefined,
-              }))
-            }
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">None selected</option>
-            {frameworks.map((framework) => (
-              <option key={framework} value={framework}>
-                {framework}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-gray-500 mt-1">
-            Select a framework if these documents relate to specific compliance requirements
-          </p>
-        </div>
-
-        {/* Description */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Description (Optional)
-          </label>
-          <textarea
-            value={metadata.description}
-            onChange={(e) =>
-              setMetadata((prev) => ({ ...prev, description: e.target.value }))
-            }
-            rows={4}
-            placeholder="Enter a description for these documents..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        {/* Tags */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Tags (Optional)</label>
-          <div className="flex gap-2 mb-3">
+        {/* Compliance Check Section */}
+        <div className="border-l-4 border-blue-500 bg-blue-50 p-4 rounded-r-lg">
+          <div className="flex items-start gap-3">
             <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-              placeholder="Add a tag..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="checkbox"
+              id="runComplianceCheck"
+              checked={metadata.runComplianceCheck || false}
+              onChange={(e) =>
+                setMetadata((prev) => ({
+                  ...prev,
+                  runComplianceCheck: e.target.checked,
+                  framework: e.target.checked ? 'auto' : undefined,
+                }))
+              }
+              className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
             />
-            <Button variant="outline" onClick={addTag}>
-              Add Tag
-            </Button>
-          </div>
-          {metadata.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {metadata.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm flex items-center gap-2"
-                >
-                  {tag}
-                  <button
-                    onClick={() => removeTag(tag)}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
+            <div className="flex-1">
+              <label htmlFor="runComplianceCheck" className="font-medium text-gray-900 cursor-pointer">
+                Run compliance check after upload
+              </label>
+              <p className="text-sm text-gray-600 mt-1">
+                Automatically analyze documents for compliance issues after upload completes.
+              </p>
+              <p className="text-xs text-blue-800 mt-2">
+                ⚠️ <strong>Billing Notice:</strong> Compliance checks are billed separately from document uploads.
+                Each check will consume compliance credits from your plan.
+              </p>
             </div>
-          )}
+          </div>
+        </div>
+
+        {/* Framework Selection - Only visible when compliance check is enabled */}
+        {metadata.runComplianceCheck && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Compliance Framework
+            </label>
+            <select
+              value={metadata.framework || 'auto'}
+              onChange={(e) =>
+                setMetadata((prev) => ({
+                  ...prev,
+                  framework: e.target.value || undefined,
+                }))
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {frameworks.map((framework) => (
+                <option key={framework.value} value={framework.value}>
+                  {framework.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Choose a specific framework or let the system auto-detect based on document content
+            </p>
+          </div>
+        )}
+
+        {/* Framework Info - Only visible when specific framework is selected */}
+        {!metadata.runComplianceCheck && (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <p className="text-sm text-gray-600">
+              💡 <strong>Tip:</strong> You can also run compliance checks later from the document detail page
+              or use the batch compliance check feature to analyze multiple documents at once.
+            </p>
+          </div>
+        )}
+
+        {/* Description Section (moved below compliance) */}
+        <div className="pt-4 border-t border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Additional Information (Optional)</h3>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description
+            </label>
+            <textarea
+              value={metadata.description}
+              onChange={(e) =>
+                setMetadata((prev) => ({ ...prev, description: e.target.value }))
+              }
+              rows={4}
+              placeholder="Enter a description for these documents..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                placeholder="Add a tag..."
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <Button variant="outline" onClick={addTag}>
+                Add Tag
+              </Button>
+            </div>
+            {metadata.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {metadata.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {tag}
+                    <button
+                      onClick={() => removeTag(tag)}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {error && (
@@ -605,28 +663,25 @@ export default function DocumentUploadPage() {
   );
 
   return (
-    <div className="flex h-screen">
-      <MultiLevelSidebar currentOrgId={orgId} currentWorkspaceId={wsId} />
-      <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-6xl mx-auto p-8">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Upload Documents</h1>
-            <p className="text-gray-600">
-              Upload documents to your workspace for compliance checking and analysis
-            </p>
-          </div>
-
-          {/* Step Indicator */}
-          {renderStepIndicator()}
-
-          {/* Step Content */}
-          {currentStep === 'select' && renderSelectStep()}
-          {currentStep === 'metadata' && renderMetadataStep()}
-          {currentStep === 'uploading' && renderUploadingStep()}
-          {currentStep === 'complete' && renderCompleteStep()}
+    <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
+      <div className="p-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Upload Documents</h1>
+          <p className="text-gray-600">
+            Upload documents to your workspace for compliance checking and analysis
+          </p>
         </div>
+
+        {/* Step Indicator */}
+        {renderStepIndicator()}
+
+        {/* Step Content */}
+        {currentStep === 'select' && renderSelectStep()}
+        {currentStep === 'metadata' && renderMetadataStep()}
+        {currentStep === 'uploading' && renderUploadingStep()}
+        {currentStep === 'complete' && renderCompleteStep()}
       </div>
-    </div>
+    </OrganizationLayout>
   );
 }

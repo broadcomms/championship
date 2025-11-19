@@ -16,6 +16,8 @@ export interface Body {
   storageKey?: string;  // OLD: SmartBucket key for legacy documents
   action?: string;  // NEW: 'extract_and_index' or undefined (legacy)
   frameworkId?: number;  // Phase 4: Compliance framework for auto-tagging
+  runComplianceCheck?: boolean;  // NEW: Optional flag to run compliance check after indexing
+  framework?: string;  // NEW: Optional framework name (e.g., 'SOC2', 'HIPAA', 'auto')
 
   // Embedding generation fields
   type?: string;  // 'generate_embedding' for individual chunk processing
@@ -544,28 +546,89 @@ export default class extends Each<Body, Env> {
           frameworkId: enrichmentResult.complianceFrameworkId,
         });
 
-        // PHASE 2.2: Automatic compliance analysis if framework detected
-        if (enrichmentResult.complianceFrameworkId) {
-          try {
-            await stepTracker.startStep(documentId, 'compliance_analysis');
+        // PHASE 2.2: CONDITIONAL compliance analysis - Only run if explicitly requested
+        const shouldRunComplianceCheck = message.body.runComplianceCheck === true;
+        
+        if (shouldRunComplianceCheck) {
+          // User explicitly requested compliance check at upload time
+          const requestedFramework = message.body.framework;
+          const detectedFrameworkId = enrichmentResult.complianceFrameworkId;
+          
+          this.env.logger.info('🔍 User requested compliance check at upload', {
+            documentId,
+            requestedFramework,
+            detectedFrameworkId,
+          });
 
-            this.env.logger.info('🔍 Starting automatic compliance analysis', {
-              documentId,
-              frameworkId: enrichmentResult.complianceFrameworkId,
-            });
+          let frameworkToUse: string | null = null;
+          let frameworkIdToUse: number | null = null;
 
-            // Get framework name from database
+          // Determine which framework to use
+          if (requestedFramework && requestedFramework !== 'auto') {
+            // User specified a framework - use it
+            frameworkToUse = requestedFramework;
+            
+            // Get framework ID from database
             const frameworkResult = await (this.env.AUDITGUARD_DB as any).prepare(
-              `SELECT name FROM compliance_frameworks WHERE id = ?`
-            ).bind(enrichmentResult.complianceFrameworkId).first();
+              `SELECT id, name FROM compliance_frameworks WHERE name = ?`
+            ).bind(requestedFramework).first();
 
-            if (frameworkResult && frameworkResult.name) {
-              const frameworkName = frameworkResult.name;
-
-              this.env.logger.info('🎯 Framework identified for compliance check', {
+            if (frameworkResult) {
+              frameworkIdToUse = frameworkResult.id;
+              this.env.logger.info('📋 Using user-specified framework', {
                 documentId,
-                framework: frameworkName,
-                frameworkId: enrichmentResult.complianceFrameworkId,
+                framework: requestedFramework,
+                frameworkId: frameworkIdToUse,
+              });
+            } else {
+              this.env.logger.warn('⚠️ User-specified framework not found, falling back to auto-detect', {
+                documentId,
+                requestedFramework,
+              });
+              // Fall back to auto-detected framework
+              if (detectedFrameworkId) {
+                const detectedFrameworkResult = await (this.env.AUDITGUARD_DB as any).prepare(
+                  `SELECT name FROM compliance_frameworks WHERE id = ?`
+                ).bind(detectedFrameworkId).first();
+                if (detectedFrameworkResult) {
+                  frameworkToUse = detectedFrameworkResult.name;
+                  frameworkIdToUse = detectedFrameworkId;
+                }
+              }
+            }
+          } else {
+            // User selected 'auto' or didn't specify - use AI-detected framework
+            if (detectedFrameworkId) {
+              const frameworkResult = await (this.env.AUDITGUARD_DB as any).prepare(
+                `SELECT name FROM compliance_frameworks WHERE id = ?`
+              ).bind(detectedFrameworkId).first();
+
+              if (frameworkResult) {
+                frameworkToUse = frameworkResult.name;
+                frameworkIdToUse = detectedFrameworkId;
+                this.env.logger.info('🤖 Using AI-detected framework', {
+                  documentId,
+                  framework: frameworkToUse,
+                  frameworkId: frameworkIdToUse,
+                });
+              }
+            } else {
+              this.env.logger.warn('⚠️ Auto-detect failed: No framework detected by AI', {
+                documentId,
+              });
+            }
+          }
+
+          // Run compliance check if we have a framework
+          if (frameworkToUse && frameworkIdToUse) {
+            try {
+              await stepTracker.startStep(documentId, 'compliance_analysis');
+
+              this.env.logger.info('🔍 Starting compliance analysis', {
+                documentId,
+                framework: frameworkToUse,
+                frameworkId: frameworkIdToUse,
+                source: requestedFramework && requestedFramework !== 'auto' ? 'user-specified' : 'auto-detected',
               });
 
               // Trigger compliance analysis
@@ -573,52 +636,50 @@ export default class extends Each<Body, Env> {
                 documentId,
                 workspaceId,
                 userId,
-                framework: frameworkName as any,
+                framework: frameworkToUse as any,
               });
 
               await stepTracker.completeStep(documentId, 'compliance_analysis', {
-                framework: frameworkName,
+                framework: frameworkToUse,
                 checkId: complianceResult.checkId,
                 status: complianceResult.status,
               });
 
-              this.env.logger.info('✅ Automatic compliance analysis completed', {
+              this.env.logger.info('✅ Compliance analysis completed', {
                 documentId,
-                framework: frameworkName,
+                framework: frameworkToUse,
                 checkId: complianceResult.checkId,
                 status: complianceResult.status,
               });
-            } else {
-              this.env.logger.warn('⚠️ Framework ID found but framework not in database', {
+            } catch (complianceError) {
+              this.env.logger.error('❌ Compliance analysis failed', {
                 documentId,
-                frameworkId: enrichmentResult.complianceFrameworkId,
+                framework: frameworkToUse,
+                error: complianceError instanceof Error ? complianceError.message : String(complianceError),
+                stack: complianceError instanceof Error ? complianceError.stack : undefined,
               });
+
               await stepTracker.failStep(
                 documentId,
                 'compliance_analysis',
-                'Framework not found in database'
+                complianceError instanceof Error ? complianceError.message : String(complianceError)
               );
+
+              // Don't fail the entire pipeline - compliance is non-critical
+              // Continue processing normally
             }
-          } catch (complianceError) {
-            this.env.logger.error('❌ Automatic compliance analysis failed', {
+          } else {
+            this.env.logger.warn('⚠️ Cannot run compliance check: No framework available', {
               documentId,
-              frameworkId: enrichmentResult.complianceFrameworkId,
-              error: complianceError instanceof Error ? complianceError.message : String(complianceError),
-              stack: complianceError instanceof Error ? complianceError.stack : undefined,
+              requestedFramework,
+              detectedFrameworkId,
             });
-
-            await stepTracker.failStep(
-              documentId,
-              'compliance_analysis',
-              complianceError instanceof Error ? complianceError.message : String(complianceError)
-            );
-
-            // Don't fail the entire pipeline - compliance is non-critical
-            // Continue processing normally
           }
         } else {
-          this.env.logger.info('ℹ️ No compliance framework detected, skipping automatic analysis', {
+          // User did NOT request compliance check - skip it entirely
+          this.env.logger.info('ℹ️ Compliance check not requested by user, skipping', {
             documentId,
+            runComplianceCheck: message.body.runComplianceCheck,
           });
         }
 

@@ -19,6 +19,8 @@ interface UploadDocumentInput {
   contentType: string;
   category?: 'policy' | 'procedure' | 'evidence' | 'other';
   frameworkId?: number;
+  runComplianceCheck?: boolean;  // New: Optional flag to run compliance check after upload
+  framework?: string;  // New: Optional framework name (e.g., 'SOC2', 'HIPAA', 'auto')
 }
 
 interface UpdateMetadataInput {
@@ -184,6 +186,8 @@ export default class extends Service<Env> {
         vultrKey: vultrKey,
         action: 'extract_and_index',  // NEW: Indicates full extraction flow
         frameworkId: input.frameworkId,  // Phase 4: Pass framework for auto-tagging
+        runComplianceCheck: input.runComplianceCheck,  // NEW: Optional compliance check flag
+        framework: input.framework,  // NEW: Optional framework name for compliance check
       });
 
       this.env.logger.info('✅ MESSAGE SENT TO QUEUE SUCCESSFULLY', {
