@@ -2996,7 +2996,7 @@ export default class extends Service<Env> {
           commentText: body.commentText,
           commentType: body.commentType,
           metadata: body.metadata,
-        }, this);
+        });
 
         return new Response(JSON.stringify(result), {
           status: result.success ? 201 : 400,
@@ -3073,7 +3073,7 @@ export default class extends Service<Env> {
           userId: user.userId,
           newStatus: body.status,
           notes: body.notes,
-        }, this);
+        });
 
         return new Response(JSON.stringify(result), {
           status: result.success ? 200 : 400,
@@ -3110,7 +3110,7 @@ export default class extends Service<Env> {
           dueDate: body.dueDate,
           priorityLevel: body.priorityLevel,
           notes: body.notes,
-        }, this);
+        });
 
         return new Response(JSON.stringify({ success: true }), {
           status: 201,

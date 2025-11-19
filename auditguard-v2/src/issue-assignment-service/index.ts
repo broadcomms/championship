@@ -3,7 +3,7 @@
  * Handles assignment and unassignment of compliance issues to team members.
  */
 
-import { Service, Context } from '@liquidmetal-ai/raindrop-framework';
+import { Service } from '@liquidmetal-ai/raindrop-framework';
 import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
@@ -33,7 +33,7 @@ export default class extends Service<Env> {
     notes?: string;
     dueDate?: number;
     priorityLevel?: string;
-  }, context: Context<Env>): Promise<void> {
+  }): Promise<void> {
     const db = this.getDb();
 
     // Verify assignedBy has workspace access
@@ -138,21 +138,26 @@ export default class extends Service<Env> {
       .where('id', '=', input.workspaceId)
       .executeTakeFirst();
 
-    // Publish event for notification service to handle
-    await context.publishEvent('issue.assigned', {
-      issueId: input.issueId,
-      workspaceId: input.workspaceId,
-      assignmentId,
-      assignedTo: input.assignedTo,
-      assignedBy: input.assignedBy,
-      issueTitle: issueDetails?.title || 'Untitled Issue',
-      issueSeverity: issueDetails?.severity || 'medium',
-      issueFramework: issueDetails?.framework || 'General',
-      workspaceName: workspace?.name || 'Unknown Workspace',
-      dueDate: input.dueDate,
-      priorityLevel: input.priorityLevel,
-      notes: input.notes,
-      timestamp: now,
+    // Notify via internal webhook (fire-and-forget)
+    fetch('http://notification-service/internal/webhook/issue-assigned', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        issueId: input.issueId,
+        workspaceId: input.workspaceId,
+        assignedTo: input.assignedTo,
+        assignedBy: input.assignedBy,
+        issueTitle: issueDetails?.title || 'Untitled Issue',
+        issueSeverity: issueDetails?.severity || 'medium',
+        issueFramework: issueDetails?.framework || 'General',
+        workspaceName: workspace?.name || 'Unknown Workspace',
+        dueDate: input.dueDate,
+        priorityLevel: input.priorityLevel,
+        notes: input.notes,
+        timestamp: now,
+      })
+    }).catch(err => {
+      this.env.logger.error('Failed to send assignment notification', { error: err });
     });
 
     this.env.logger.info('Issue assigned', {

@@ -3,7 +3,7 @@
  * Handles comments and activity timeline for compliance issues
  */
 
-import { Service, Context } from '@liquidmetal-ai/raindrop-framework';
+import { Service } from '@liquidmetal-ai/raindrop-framework';
 import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
@@ -41,7 +41,7 @@ export default class extends Service<Env> {
   /**
    * Add a comment to an issue
    */
-  async addComment(input: AddCommentInput, context: Context<Env>): Promise<{
+  async addComment(input: AddCommentInput): Promise<{
     success: boolean;
     commentId?: string;
     error?: string;
@@ -91,16 +91,22 @@ export default class extends Service<Env> {
         })
         .execute();
 
-      // Publish event for notifications
-      await context.publishEvent('issue.commented', {
-        issueId: input.issueId,
-        workspaceId: input.workspaceId,
-        commentId,
-        userId: input.userId,
-        commentText: input.commentText,
-        issueTitle: issue.title,
-        assignedTo: issue.assigned_to,
-        timestamp: now,
+      // Notify via internal webhook (fire-and-forget)
+      fetch('http://notification-service/internal/webhook/issue-commented', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          issueId: input.issueId,
+          workspaceId: input.workspaceId,
+          commentId,
+          userId: input.userId,
+          commentText: input.commentText,
+          issueTitle: issue.title,
+          assignedTo: issue.assigned_to,
+          timestamp: now,
+        })
+      }).catch(err => {
+        this.env.logger.error('Failed to send comment notification', { error: err });
       });
 
       return { success: true, commentId };

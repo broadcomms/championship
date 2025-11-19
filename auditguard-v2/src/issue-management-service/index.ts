@@ -4,7 +4,7 @@
  * filtering, search, and bulk operations.
  */
 
-import { Service, Context } from '@liquidmetal-ai/raindrop-framework';
+import { Service } from '@liquidmetal-ai/raindrop-framework';
 import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
@@ -268,74 +268,6 @@ export default class extends Service<Env> {
   }
 
   /**
-   * Update issue status with history tracking
-   */
-  async updateIssueStatus(input: {
-    issueId: string;
-    workspaceId: string;
-    userId: string;
-    newStatus: IssueStatus;
-    notes?: string;
-  }): Promise<void> {
-    const db = this.getDb();
-
-    // Verify workspace access
-    const membership = await db
-      .selectFrom('workspace_members')
-      .select('role')
-      .where('workspace_id', '=', input.workspaceId)
-      .where('user_id', '=', input.userId)
-      .executeTakeFirst();
-
-    if (!membership) {
-      throw new Error('Access denied: You are not a member of this workspace');
-    }
-
-    // Get current issue status
-    const issue = await db
-      .selectFrom('compliance_issues')
-      .select(['id', 'status', 'workspace_id'])
-      .where('id', '=', input.issueId)
-      .where('workspace_id', '=', input.workspaceId)
-      .executeTakeFirst();
-
-    if (!issue) {
-      throw new Error('Issue not found');
-    }
-
-    const now = Date.now();
-    const oldStatus = issue.status;
-
-    // Update issue status
-    await db
-      .updateTable('compliance_issues')
-      .set({
-        status: input.newStatus,
-        updated_at: now,
-      })
-      .where('id', '=', input.issueId)
-      .execute();
-
-    // Record status change in history
-    const historyId = `hist_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    await db
-      .insertInto('issue_status_history')
-      .values({
-        id: historyId,
-        issue_id: input.issueId,
-        workspace_id: input.workspaceId,
-        old_status: oldStatus,
-        new_status: input.newStatus,
-        changed_by: input.userId,
-        changed_at: now,
-        notes: input.notes || null,
-      })
-      .execute();
-
-    // Log would go here if needed
-  }
-
-  /**
    * Mark issue as resolved
    */
   async resolveIssue(input: {
@@ -518,7 +450,7 @@ export default class extends Service<Env> {
     userId: string;
     newStatus: IssueStatus;
     notes?: string;
-  }, context: Context<Env>): Promise<{ success: boolean; error?: string }> {
+  }): Promise<{ success: boolean; error?: string }> {
     const db = this.getDb();
 
     try {
@@ -584,17 +516,23 @@ export default class extends Service<Env> {
         })
         .execute();
 
-      // Publish event for notifications
-      await context.publishEvent('issue.status_changed', {
-        issueId: input.issueId,
-        workspaceId: input.workspaceId,
-        issueTitle: issue.title,
-        assignedTo: issue.assigned_to,
-        oldStatus,
-        newStatus: input.newStatus,
-        changedBy: input.userId,
-        notes: input.notes,
-        timestamp: now,
+      // Notify via internal webhook (fire-and-forget)
+      fetch('http://notification-service/internal/webhook/issue-status-changed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          issueId: input.issueId,
+          workspaceId: input.workspaceId,
+          issueTitle: issue.title,
+          assignedTo: issue.assigned_to,
+          oldStatus,
+          newStatus: input.newStatus,
+          changedBy: input.userId,
+          notes: input.notes,
+          timestamp: now,
+        })
+      }).catch(err => {
+        this.env.logger.error('Failed to send status change notification', { error: err });
       });
 
       this.env.logger.info('Issue status updated', {

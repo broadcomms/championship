@@ -96,6 +96,47 @@ export default class extends Service<Env> {
         return await this.updatePreferences(userId, body);
       }
 
+      // Internal webhook endpoints for notifications
+      // POST /internal/webhook/issue-assigned
+      if (path === '/internal/webhook/issue-assigned' && request.method === 'POST') {
+        const body = await request.json();
+        await this.handleIssueAssigned(body as any);
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // POST /internal/webhook/issue-status-changed
+      if (path === '/internal/webhook/issue-status-changed' && request.method === 'POST') {
+        const body = await request.json();
+        await this.handleIssueStatusChanged(body as any);
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // POST /internal/webhook/issue-commented
+      if (path === '/internal/webhook/issue-commented' && request.method === 'POST') {
+        const body = await request.json();
+        await this.handleIssueCommented(body as any);
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // POST /internal/webhook/compliance-check-complete
+      if (path === '/internal/webhook/compliance-check-complete' && request.method === 'POST') {
+        const body = await request.json();
+        await this.handleComplianceCheckComplete(body as any);
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
       return new Response(JSON.stringify({ error: 'Not found' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
@@ -476,9 +517,9 @@ export default class extends Service<Env> {
   }
 
   /**
-   * Event Subscriber: Handle issue.assigned events
+   * Handle issue assigned webhook (internal)
    */
-  async onIssueAssigned(event: {
+  private async handleIssueAssigned(event: {
     issueId: string;
     workspaceId: string;
     assignedTo: string;
@@ -546,9 +587,9 @@ export default class extends Service<Env> {
   }
 
   /**
-   * Event Subscriber: Handle issue.status_changed events
+   * Handle issue status changed webhook (internal)
    */
-  async onIssueStatusChanged(event: {
+  private async handleIssueStatusChanged(event: {
     issueId: string;
     workspaceId: string;
     issueTitle: string;
@@ -609,9 +650,9 @@ export default class extends Service<Env> {
   }
 
   /**
-   * Event Subscriber: Handle issue.commented events
+   * Handle issue commented webhook (internal)
    */
-  async onIssueCommented(event: {
+  private async handleIssueCommented(event: {
     issueId: string;
     workspaceId: string;
     commentId: string;
@@ -664,10 +705,10 @@ export default class extends Service<Env> {
   }
 
   /**
-   * Event Subscriber: Handle compliance.check_complete events
+   * Handle compliance check complete webhook (internal)
    * Notify workspace admins if critical issues found
    */
-  async onComplianceCheckComplete(event: {
+  private async handleComplianceCheckComplete(event: {
     checkId: string;
     documentId: string;
     workspaceId: string;
