@@ -629,7 +629,10 @@ Return JSON with issues array. If fully compliant, return empty array:
           { role: 'user', content: prompt }
         ],
         max_tokens: 1500,
-        temperature: 0.3,
+        temperature: 0.1,
+        top_p: 0.9,
+        frequency_penalty: 0.0,
+        presence_penalty: 0.0
       });
       
 
