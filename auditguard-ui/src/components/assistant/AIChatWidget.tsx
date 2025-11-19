@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, Send, X, Minimize2, Maximize2, ExternalLink, Download } from 'lucide-react';
+import { Bot, Send, X, Minimize2, Maximize2, ExternalLink, Download, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -242,7 +242,7 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
             className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white rounded-full p-4 shadow-lg hover:bg-blue-700 transition-colors"
             aria-label="Open AI Assistant"
           >
-            <Bot className="w-6 h-6" />
+            <Shield className="w-6 h-6" />
           </motion.button>
         )}
       </AnimatePresence>
@@ -254,13 +254,13 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-6 right-6 z-50 w-96 h-[760px] bg-white rounded-lg shadow-2xl flex flex-col"
+            className="fixed bottom-6 right-6 z-50 w-96 h-[600px] bg-white rounded-lg shadow-2xl flex flex-col"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b bg-blue-600 text-white rounded-t-lg">
               <div className="flex items-center space-x-2">
-                <Bot className="w-5 h-5" />
-                <span className="font-semibold">AuditGuard AI</span>
+                <Shield className="w-5 h-5" />
+                <span className="font-semibold">AuditGuardX AI</span>
                 {sessionId && (
                   <span className="text-xs opacity-70">• Active Session</span>
                 )}

@@ -59,11 +59,13 @@ export function MultiLevelSidebar({ currentOrgId, currentWorkspaceId }: SidebarP
   const workspaceNavItems = (currentOrgId && currentWorkspaceId) ? [
     { label: 'Dashboard', href: `/org/${currentOrgId}/workspace/${currentWorkspaceId}`, icon: '📈', exact: true },
     { label: 'Documents', href: `/org/${currentOrgId}/workspace/${currentWorkspaceId}/documents`, icon: '📄' },
-    { label: 'Compliance', href: `/org/${currentOrgId}/workspace/${currentWorkspaceId}/compliance`, icon: '✓' },
+    { label: 'Compliance', href: `/org/${currentOrgId}/workspace/${currentWorkspaceId}/compliance`, icon: '🎯' },
     { label: 'Issues', href: `/org/${currentOrgId}/workspace/${currentWorkspaceId}/issues`, icon: '📋' },
-    { label: 'Analytics', href: `/org/${currentOrgId}/workspace/${currentWorkspaceId}/analytics`, icon: '📊' },
-    { label: 'Assistant', href: `/org/${currentOrgId}/workspace/${currentWorkspaceId}/assistant`, icon: '🤖' },
+
+    { label: 'Assistant', href: `/org/${currentOrgId}/workspace/${currentWorkspaceId}/assistant`, icon: '🛡️' },
+
     { label: 'Members', href: `/org/${currentOrgId}/workspace/${currentWorkspaceId}/members`, icon: '👤' },
+        { label: 'Analytics', href: `/org/${currentOrgId}/workspace/${currentWorkspaceId}/analytics`, icon: '📊' },
     { label: 'Settings', href: `/org/${currentOrgId}/workspace/${currentWorkspaceId}/settings`, icon: '⚙️' },
   ] : [];
 
