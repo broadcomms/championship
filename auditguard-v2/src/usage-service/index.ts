@@ -338,11 +338,11 @@ export default class extends Service<Env> {
   }
 
   async getWorkspaceStats(workspaceId: string, userId: string): Promise<{
-    totalDocuments: number;
-    totalChecks: number;
-    totalIssues: number;
-    averageScore: number;
-    storageUsed: number;
+    total_documents: number;
+    recent_uploads: number;
+    compliance_checks: number;
+    open_issues: number;
+    completion_rate: number;
   }> {
     const db = this.getDb();
 
@@ -358,50 +358,212 @@ export default class extends Service<Env> {
       throw new Error('Access denied');
     }
 
-    // Get stats
-    const [docCount, checkCount, issueCount, latestScore] = await Promise.all([
+    // Calculate timestamp for "this week" (last 7 days)
+    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+    // Get comprehensive stats
+    const [docCount, recentDocCount, checkCount, openIssueCount, resolvedIssueCount] = await Promise.all([
+      // Total documents
       db
         .selectFrom('documents')
         .select(({ fn }) => fn.count<number>('id').as('count'))
         .where('workspace_id', '=', workspaceId)
         .executeTakeFirst(),
 
+      // Recent uploads (last 7 days)
+      db
+        .selectFrom('documents')
+        .select(({ fn }) => fn.count<number>('id').as('count'))
+        .where('workspace_id', '=', workspaceId)
+        .where('uploaded_at', '>=', oneWeekAgo)
+        .executeTakeFirst(),
+
+      // Total compliance checks
       db
         .selectFrom('compliance_checks')
         .select(({ fn }) => fn.count<number>('id').as('count'))
         .where('workspace_id', '=', workspaceId)
         .executeTakeFirst(),
 
+      // Open issues (includes in_progress and review)
       db
         .selectFrom('compliance_issues')
-        .innerJoin('compliance_checks', 'compliance_issues.check_id', 'compliance_checks.id')
-        .select(({ fn }) => fn.count<number>('compliance_issues.id').as('count'))
-        .where('compliance_checks.workspace_id', '=', workspaceId)
-        .where('compliance_issues.status', '=', 'open')
+        .select(({ fn }) => fn.count<number>('id').as('count'))
+        .where('workspace_id', '=', workspaceId)
+        .where('status', 'in', ['open', 'in_progress', 'review'])
         .executeTakeFirst(),
 
+      // Resolved issues
       db
-        .selectFrom('workspace_scores')
-        .select('overall_score')
+        .selectFrom('compliance_issues')
+        .select(({ fn }) => fn.count<number>('id').as('count'))
         .where('workspace_id', '=', workspaceId)
-        .orderBy('calculated_at', 'desc')
-        .limit(1)
+        .where('status', '=', 'resolved')
         .executeTakeFirst(),
     ]);
 
-    // Calculate storage (sum of all document file sizes)
-    const storageResult = await db
-      .selectFrom('documents')
-      .select(({ fn }) => fn.sum<number>('file_size').as('total'))
-      .where('workspace_id', '=', workspaceId)
-      .executeTakeFirst();
+    // Calculate completion rate (resolved / total issues * 100)
+    const totalIssues = (openIssueCount?.count || 0) + (resolvedIssueCount?.count || 0);
+    const completionRate = totalIssues > 0 
+      ? Math.round((resolvedIssueCount?.count || 0) / totalIssues * 100)
+      : 0;
 
     return {
-      totalDocuments: docCount?.count || 0,
-      totalChecks: checkCount?.count || 0,
-      totalIssues: issueCount?.count || 0,
-      averageScore: latestScore?.overall_score || 0,
-      storageUsed: storageResult?.total || 0,
+      total_documents: docCount?.count || 0,
+      recent_uploads: recentDocCount?.count || 0,
+      compliance_checks: checkCount?.count || 0,
+      open_issues: openIssueCount?.count || 0,
+      completion_rate: completionRate,
     };
+  }
+
+  async getWorkspaceActivity(workspaceId: string, userId: string, limit: number = 10): Promise<Array<{
+    id: string;
+    type: 'document' | 'compliance' | 'issue' | 'comment';
+    title: string;
+    description: string;
+    user_email: string;
+    timestamp: number;
+  }>> {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied');
+    }
+
+    // Gather activity from multiple sources
+    const activities: Array<{
+      id: string;
+      type: 'document' | 'compliance' | 'issue' | 'comment';
+      title: string;
+      description: string;
+      user_email: string;
+      timestamp: number;
+    }> = [];
+
+    // Recent document uploads
+    const recentDocs = await db
+      .selectFrom('documents')
+      .innerJoin('users', 'documents.uploaded_by', 'users.id')
+      .select([
+        'documents.id',
+        'documents.filename',
+        'documents.uploaded_at',
+        'users.email',
+      ])
+      .where('documents.workspace_id', '=', workspaceId)
+      .orderBy('documents.uploaded_at', 'desc')
+      .limit(limit)
+      .execute();
+
+    recentDocs.forEach(doc => {
+      activities.push({
+        id: doc.id,
+        type: 'document',
+        title: 'Document uploaded',
+        description: doc.filename,
+        user_email: doc.email,
+        timestamp: doc.uploaded_at,
+      });
+    });
+
+    // Recent compliance checks
+    const recentChecks = await db
+      .selectFrom('compliance_checks')
+      .innerJoin('documents', 'compliance_checks.document_id', 'documents.id')
+      .innerJoin('users', 'compliance_checks.created_by', 'users.id')
+      .select([
+        'compliance_checks.id',
+        'compliance_checks.framework',
+        'compliance_checks.created_at',
+        'documents.filename',
+        'users.email',
+      ])
+      .where('compliance_checks.workspace_id', '=', workspaceId)
+      .where('compliance_checks.status', '=', 'completed')
+      .orderBy('compliance_checks.created_at', 'desc')
+      .limit(limit)
+      .execute();
+
+    recentChecks.forEach(check => {
+      activities.push({
+        id: check.id,
+        type: 'compliance',
+        title: `${check.framework} check completed`,
+        description: check.filename,
+        user_email: check.email,
+        timestamp: check.created_at,
+      });
+    });
+
+    // Recent issue status changes
+    const recentIssueChanges = await db
+      .selectFrom('issue_status_history')
+      .innerJoin('compliance_issues', 'issue_status_history.issue_id', 'compliance_issues.id')
+      .innerJoin('users', 'issue_status_history.changed_by', 'users.id')
+      .select([
+        'issue_status_history.id',
+        'issue_status_history.new_status',
+        'issue_status_history.changed_at',
+        'compliance_issues.title as issue_title',
+        'users.email',
+      ])
+      .where('compliance_issues.workspace_id', '=', workspaceId)
+      .orderBy('issue_status_history.changed_at', 'desc')
+      .limit(limit)
+      .execute();
+
+    recentIssueChanges.forEach(change => {
+      activities.push({
+        id: change.id,
+        type: 'issue',
+        title: `Issue ${change.new_status}`,
+        description: change.issue_title,
+        user_email: change.email,
+        timestamp: change.changed_at,
+      });
+    });
+
+    // Recent comments
+    const recentComments = await db
+      .selectFrom('issue_comments')
+      .innerJoin('compliance_issues', 'issue_comments.issue_id', 'compliance_issues.id')
+      .innerJoin('users', 'issue_comments.user_id', 'users.id')
+      .select([
+        'issue_comments.id',
+        'issue_comments.comment_text',
+        'issue_comments.created_at',
+        'compliance_issues.title as issue_title',
+        'users.email',
+      ])
+      .where('issue_comments.workspace_id', '=', workspaceId)
+      .where('issue_comments.comment_type', '=', 'comment')
+      .orderBy('issue_comments.created_at', 'desc')
+      .limit(limit)
+      .execute();
+
+    recentComments.forEach(comment => {
+      activities.push({
+        id: comment.id,
+        type: 'comment',
+        title: 'New comment',
+        description: `${comment.issue_title}: ${comment.comment_text.substring(0, 100)}...`,
+        user_email: comment.email,
+        timestamp: comment.created_at,
+      });
+    });
+
+    // Sort all activities by timestamp (most recent first) and limit
+    return activities
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, limit);
   }
 }

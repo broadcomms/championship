@@ -73,10 +73,11 @@ export default function WorkspaceDashboardPage() {
       try {
         const activityRes = await api.get(`/api/workspaces/${wsId}/activity?limit=10`);
         setActivity(Array.isArray(activityRes) ? activityRes : []);
-      } catch (activityError) {
+      } catch (activityError: any) {
         // Activity endpoint not implemented yet - gracefully degrade
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('Activity endpoint not available:', activityError);
+        // Silently handle 404 errors for optional features
+        if (activityError?.status !== 404) {
+          console.warn('Activity endpoint error:', activityError);
         }
         setActivity([]);
       }

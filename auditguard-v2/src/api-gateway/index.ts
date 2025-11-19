@@ -3991,6 +3991,22 @@ export default class extends Service<Env> {
         });
       }
 
+      // Match /api/workspaces/:id/activity
+      const activityMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/activity$/);
+      if (activityMatch && activityMatch[1] && request.method === 'GET') {
+        const workspaceId = activityMatch[1];
+        const user = await this.validateSession(request);
+
+        // Parse query parameters
+        const url = new URL(request.url);
+        const limit = parseInt(url.searchParams.get('limit') || '10', 10);
+
+        const result = await this.env.USAGE_SERVICE.getWorkspaceActivity(workspaceId, user.userId, limit);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // GET /api/workspaces/:id/value-metrics
       // Phase 4.3: Get ROI metrics and time savings for workspace
       const valueMetricsMatch = path.match(/^\/api\/workspaces\/([^/]+)\/value-metrics$/);
