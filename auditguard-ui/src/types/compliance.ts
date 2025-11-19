@@ -13,15 +13,22 @@ export type ComplianceCheckStatus = 'pending' | 'running' | 'processing' | 'comp
 export interface ComplianceIssue {
   id: string;
   checkId: string;
+  documentId: string;
+  workspaceId: string;
+  framework: string | null;
   severity: IssueSeverity;
   category: string;
   title: string;
   description: string;
   recommendation: string | null;
   excerpt: string | null;
+  fullExcerpt: string | null;
   regulationCitation: string | null;
   riskScore: number | null;
   sectionRef: string | null;
+  chunkIds: string | null; // JSON string array
+  remediationSteps: string | null; // Can be JSON string or plain text
+  confidence: number | null; // 0-100 confidence score
   status: IssueStatus;
   assignedTo: string | null;
   assignedAt: string | null; // ISO 8601 timestamp
@@ -29,18 +36,16 @@ export interface ComplianceIssue {
   priorityLevel: PriorityLevel | null;
   resolvedAt: number | null;
   resolvedBy: string | null;
+  resolutionNotes: string | null;
   createdAt: number;
   updatedAt: number | null;
+  // Populated fields (from joins)
+  documentName?: string;
 }
 
 export interface ComplianceIssueDetails extends ComplianceIssue {
-  documentId: string;
-  documentName: string;
-  framework: string;
-  fullExcerpt: string | null;
-  remediationSteps: string[] | null;
-  chunkIds: string[] | null;
-  resolutionNotes: string | null;
+  // Already included in ComplianceIssue now, so this interface is for backward compatibility
+  // or for future additional enriched fields
 }
 
 export interface ComplianceCheck {

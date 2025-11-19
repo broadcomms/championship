@@ -162,6 +162,7 @@ export default class extends Service<Env> {
     id: string;
     checkId: string;
     documentId: string;
+    workspaceId: string;
     documentName: string;
     framework: string;
     severity: string;
@@ -176,8 +177,12 @@ export default class extends Service<Env> {
     riskScore: number | null;
     sectionRef: string | null;
     chunkIds: string[] | null;
+    confidence: number | null;
     status: string;
     assignedTo: string | null;
+    assignedAt: number | null;
+    dueDate: number | null;
+    priorityLevel: string | null;
     resolvedAt: number | null;
     resolvedBy: string | null;
     resolutionNotes: string | null;
@@ -207,6 +212,7 @@ export default class extends Service<Env> {
         'ci.id',
         'ci.check_id',
         'ci.document_id',
+        'ci.workspace_id',
         'd.filename as document_name',
         'ci.framework',
         'ci.severity',
@@ -221,8 +227,12 @@ export default class extends Service<Env> {
         'ci.risk_score',
         'ci.section_ref',
         'ci.chunk_ids',
+        'ci.confidence',
         'ci.status',
         'ci.assigned_to',
+        'ci.assigned_at',
+        'ci.due_date',
+        'ci.priority_level',
         'ci.resolved_at',
         'ci.resolved_by',
         'ci.resolution_notes',
@@ -241,6 +251,7 @@ export default class extends Service<Env> {
       id: issue.id,
       checkId: issue.check_id,
       documentId: issue.document_id,
+      workspaceId: issue.workspace_id || input.workspaceId,
       documentName: issue.document_name,
       framework: issue.framework || '',
       severity: issue.severity,
@@ -257,8 +268,12 @@ export default class extends Service<Env> {
       riskScore: issue.risk_score || null,
       sectionRef: issue.section_ref || null,
       chunkIds: issue.chunk_ids ? JSON.parse(issue.chunk_ids) : null,
+      confidence: issue.confidence || null,
       status: issue.status,
       assignedTo: issue.assigned_to,
+      assignedAt: issue.assigned_at || null,
+      dueDate: issue.due_date || null,
+      priorityLevel: issue.priority_level || null,
       resolvedAt: issue.resolved_at,
       resolvedBy: issue.resolved_by,
       resolutionNotes: issue.resolution_notes || null,

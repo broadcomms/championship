@@ -206,15 +206,117 @@ export default function IssueDetailsPage() {
                 </p>
               </div>
 
+              {/* Document Reference */}
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                  📄 Document Reference
+                </h2>
+                <div className="space-y-4">
+                  {/* Document Info */}
+                  <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
+                    <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <span className="text-2xl">📄</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1">
+                        <h3 className="font-semibold text-gray-900">
+                          {issue.documentName || 'Document'}
+                        </h3>
+                        {issue.framework && (
+                          <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded">
+                            {issue.framework}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 mb-2">
+                        {issue.documentId || 'No document ID'}
+                      </p>
+                      {issue.sectionRef && (
+                        <p className="text-xs text-gray-500">
+                          📍 Location: {issue.sectionRef}
+                        </p>
+                      )}
+                      <button
+                        onClick={() => router.push(`/org/${orgId}/workspace/${workspaceId}/documents/${issue.documentId}`)}
+                        className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                      >
+                        View Document →
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Affected Excerpt */}
+                  {(issue.excerpt || issue.fullExcerpt) && (
+                    <div className="border-l-4 border-orange-400 bg-orange-50 p-4 rounded-r-lg">
+                      <h3 className="text-sm font-semibold text-orange-900 mb-2 flex items-center gap-2">
+                        ⚠️ Affected Text from Document
+                      </h3>
+                      <div className="bg-white rounded p-3 border border-orange-200">
+                        <p className="text-sm text-gray-800 font-mono whitespace-pre-wrap leading-relaxed">
+                          {issue.fullExcerpt || issue.excerpt}
+                        </p>
+                      </div>
+                      {issue.sectionRef && (
+                        <p className="text-xs text-orange-700 mt-2">
+                          Found in: {issue.sectionRef}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Suggested Correction */}
+                  {issue.remediationSteps && (
+                    <div className="border-l-4 border-green-400 bg-green-50 p-4 rounded-r-lg">
+                      <h3 className="text-sm font-semibold text-green-900 mb-2 flex items-center gap-2">
+                        ✅ Suggested Correction
+                      </h3>
+                      <div className="bg-white rounded p-3 border border-green-200">
+                        <p className="text-sm text-gray-800 font-mono whitespace-pre-wrap leading-relaxed">
+                          {issue.remediationSteps}
+                        </p>
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <button 
+                          className="px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 font-medium"
+                          onClick={() => {
+                            navigator.clipboard.writeText(issue.remediationSteps || '');
+                            alert('Copied to clipboard!');
+                          }}
+                        >
+                          📋 Copy Correction
+                        </button>
+                        <button 
+                          className="px-3 py-1.5 text-xs bg-white text-green-700 border border-green-300 rounded hover:bg-green-50 font-medium"
+                          disabled
+                          title="Auto-fix feature coming soon"
+                        >
+                          🔧 Apply to Document (Coming Soon)
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Regulation Citation */}
+                  {issue.regulationCitation && (
+                    <div className="border-l-4 border-blue-400 bg-blue-50 p-4 rounded-r-lg">
+                      <h3 className="text-sm font-semibold text-blue-900 mb-2">
+                        📖 Regulation Citation
+                      </h3>
+                      <p className="text-sm text-blue-800">{issue.regulationCitation}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Description & Details */}
               <div className="bg-white rounded-lg shadow-sm border p-6">
-                <h2 className="text-xl font-semibold mb-4">Description</h2>
+                <h2 className="text-xl font-semibold mb-4">Issue Description</h2>
                 <p className="text-gray-700 mb-6 whitespace-pre-wrap">{issue.description}</p>
 
                 {issue.recommendation && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <h3 className="text-sm font-semibold text-blue-900 mb-2">💡 Recommendation</h3>
-                    <p className="text-sm text-blue-800">{issue.recommendation}</p>
+                    <p className="text-sm text-blue-800 whitespace-pre-wrap">{issue.recommendation}</p>
                   </div>
                 )}
               </div>
@@ -347,21 +449,17 @@ export default function IssueDetailsPage() {
                 <h3 className="font-semibold mb-4">Details</h3>
                 <div className="space-y-3 text-sm">
                   <div>
+                    <span className="text-gray-500">Confidence:</span>
+                    <span className="ml-2 font-medium">{issue.confidence || 'N/A'}%</span>
+                  </div>
+                  <div>
                     <span className="text-gray-500">Risk Score:</span>
                     <span className="ml-2 font-medium">{issue.riskScore || 'N/A'}</span>
                   </div>
-                  {issue.sectionRef && (
-                    <div>
-                      <span className="text-gray-500">Section:</span>
-                      <span className="ml-2 font-medium">{issue.sectionRef}</span>
-                    </div>
-                  )}
-                  {issue.regulationCitation && (
-                    <div>
-                      <span className="text-gray-500">Citation:</span>
-                      <p className="mt-1 text-gray-700 text-xs">{issue.regulationCitation}</p>
-                    </div>
-                  )}
+                  <div>
+                    <span className="text-gray-500">Created:</span>
+                    <span className="ml-2">{formatDate(issue.createdAt)}</span>
+                  </div>
                   <div>
                     <span className="text-gray-500">Updated:</span>
                     <span className="ml-2">{formatDate(issue.updatedAt)}</span>
