@@ -619,7 +619,7 @@ Return JSON with issues array. If fully compliant, return empty array:
         promptPreview: prompt.substring(0, 300) + '...'
       });
 
-      const model = 'llama-3.1-70b-instruct';
+      const model = 'llama-3.3-70b-instruct-fp8';
       this.env.logger.info('🤖 Calling AI model', { model, framework });
 
       // AI CALL
@@ -628,11 +628,8 @@ Return JSON with issues array. If fully compliant, return empty array:
           { role: 'system', content: `You are a ${framework} compliance auditor. Return JSON only.` },
           { role: 'user', content: prompt }
         ],
-        max_tokens: 1500,
+        max_tokens: 2000,
         temperature: 0.1,
-        top_p: 0.9,
-        frequency_penalty: 0.0,
-        presence_penalty: 0.0
       });
       
 
