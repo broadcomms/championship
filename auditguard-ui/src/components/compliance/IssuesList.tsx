@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { IssueSeverity, IssueStatus } from '@/types';
-import { ComplianceIssue } from '@/types/compliance';
+import { IssueSeverity, IssueStatus, ComplianceIssue } from '@/types/compliance';
 
 interface IssuesListProps {
   checkId: string;
@@ -21,6 +20,7 @@ const SEVERITY_COLORS: Record<IssueSeverity, { bg: string; text: string; border:
 const STATUS_COLORS: Record<IssueStatus, { bg: string; text: string }> = {
   open: { bg: 'bg-red-100', text: 'text-red-800' },
   in_progress: { bg: 'bg-yellow-100', text: 'text-yellow-800' },
+  review: { bg: 'bg-purple-100', text: 'text-purple-800' },
   resolved: { bg: 'bg-green-100', text: 'text-green-800' },
   dismissed: { bg: 'bg-gray-100', text: 'text-gray-800' },
 };

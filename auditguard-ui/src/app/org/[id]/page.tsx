@@ -91,7 +91,7 @@ export default function OrganizationOverviewPage() {
     return (
       <OrganizationLayout accountId={accountId} orgId={orgId}>
         <div className="flex items-center justify-center py-12">
-          <div className="text-gray-500">Loading...</div>
+          <div className="text-gray-500 justify-center">Loading...</div>
         </div>
       </OrganizationLayout>
     );

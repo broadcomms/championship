@@ -108,6 +108,7 @@ export function ComplianceIssuesList({
     const styles = {
       open: 'bg-gray-100 text-gray-800',
       in_progress: 'bg-blue-100 text-blue-800',
+      review: 'bg-purple-100 text-purple-800',
       resolved: 'bg-green-100 text-green-800',
       dismissed: 'bg-gray-100 text-gray-500',
     };

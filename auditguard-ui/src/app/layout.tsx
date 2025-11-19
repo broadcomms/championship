@@ -6,7 +6,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AuditGuard - Compliance Management Platform",
+  title: "AuditGuardX - Compliance Management Platform",
   description: "AI-powered compliance management and document analysis platform",
 };
 
