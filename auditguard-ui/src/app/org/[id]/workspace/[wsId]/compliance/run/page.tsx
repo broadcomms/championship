@@ -725,7 +725,15 @@ export default function RunComplianceCheckPage() {
             View All Checks
           </Button>
           <Button
-            onClick={() => router.push(`/org/${orgId}/workspace/${wsId}/compliance`)}
+            onClick={() => {
+              // Navigate to the first completed check's results page
+              const firstCheck = checkResult?.checks?.find((c: any) => c.status === 'completed');
+              if (firstCheck) {
+                router.push(`/org/${orgId}/workspace/${wsId}/compliance/${firstCheck.checkId}`);
+              } else {
+                router.push(`/org/${orgId}/workspace/${wsId}/compliance`);
+              }
+            }}
           >
             View Results
           </Button>

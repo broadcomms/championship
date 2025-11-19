@@ -145,7 +145,7 @@ export default function DocumentDetailPage() {
               variant="outline"
               onClick={() => router.push(`/org/${orgId}/workspace/${wsId}/documents`)}
             >
-              Back to Documents
+              Close
             </Button>
             <Button
               variant="outline"

@@ -284,7 +284,7 @@ export default function WorkspaceDocumentsPage() {
                         }
                         className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition"
                       >
-                        View
+                        Open
                       </button>
                       <button
                         onClick={() => handleDelete(doc.id)}
