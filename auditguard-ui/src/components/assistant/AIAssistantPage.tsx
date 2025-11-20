@@ -9,6 +9,11 @@ import NotificationCenter from './NotificationCenter';
 import NotificationSettingsPanel from './NotificationSettingsPanel';
 import { MessageSquare, BarChart3, Settings } from 'lucide-react';
 import type { Conversation, Message, FilterOptions } from '@/types/assistant';
+import { useKeyboardShortcuts } from '@/lib/keyboard';
+import { announceToScreenReader } from '@/lib/focus';
+import { useDeviceType, useViewportHeight } from '@/lib/mobile';
+import { SkeletonFullPage } from '@/components/common/Skeleton';
+import { TRANSITIONS, PAGE_TRANSITION } from '@/lib/animations';
 
 interface AIAssistantPageProps {
   workspaceId: string;
@@ -24,16 +29,63 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
   const [messages, setMessages] = useState<Message[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('chat');
   const [hasLoadedInitialConversation, setHasLoadedInitialConversation] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Mobile and accessibility hooks
+  const deviceType = useDeviceType();
+  useViewportHeight();
+  
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      key: '1',
+      ctrl: true,
+      description: 'Switch to Chat',
+      handler: () => {
+        setViewMode('chat');
+        announceToScreenReader('Switched to Chat view');
+      },
+    },
+    {
+      key: '2',
+      ctrl: true,
+      description: 'Switch to Analytics',
+      handler: () => {
+        setViewMode('analytics');
+        announceToScreenReader('Switched to Analytics view');
+      },
+    },
+    {
+      key: '3',
+      ctrl: true,
+      description: 'Switch to Settings',
+      handler: () => {
+        setViewMode('settings');
+        announceToScreenReader('Switched to Settings view');
+      },
+    },
+    {
+      key: 'n',
+      ctrl: true,
+      description: 'New Conversation',
+      handler: () => {
+        handleNewConversation();
+        announceToScreenReader('Started new conversation');
+      },
+    },
+  ]);
 
   const handleConversationSelect = (conversationId: string) => {
     setCurrentConversationId(conversationId);
     setViewMode('chat');
+    announceToScreenReader('Loading conversation');
     // Load conversation messages from API
     loadConversationMessages(conversationId);
   };
 
   const loadConversationMessages = async (conversationId: string) => {
     try {
+      setIsLoading(true);
       const response = await fetch(`/api/assistant/conversations/${conversationId}/messages`, {
         credentials: 'include',
       });
@@ -41,9 +93,13 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
         const data = await response.json();
         setMessages(data.messages);
         setSessionId(data.sessionId);
+        announceToScreenReader(`Loaded conversation with ${data.messages.length} messages`);
       }
     } catch (error) {
       console.error('Failed to load conversation messages:', error);
+      announceToScreenReader('Failed to load conversation', 'assertive');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -70,6 +126,7 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
 
   const loadMostRecentConversation = async () => {
     try {
+      setIsLoading(true);
       const response = await fetch(`/api/assistant/conversations?workspaceId=${workspaceId}&limit=1`, {
         credentials: 'include',
       });
@@ -87,6 +144,7 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
       console.error('Failed to load most recent conversation:', error);
     } finally {
       setHasLoadedInitialConversation(true);
+      setIsLoading(false);
     }
   };
 
@@ -100,6 +158,11 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
     }
   };
 
+  // Show loading skeleton
+  if (isLoading && !hasLoadedInitialConversation) {
+    return <SkeletonFullPage />;
+  }
+
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header with Navigation and Notifications */}
@@ -109,10 +172,13 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
             <h1 className="text-xl font-semibold text-gray-900">AI Compliance Assistant</h1>
             
             {/* View Mode Tabs */}
-            <div className="flex items-center gap-1 ml-8">
+            <div className="flex items-center gap-1 ml-8" role="tablist" aria-label="View modes">
               <button
                 onClick={() => setViewMode('chat')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                role="tab"
+                aria-selected={viewMode === 'chat'}
+                aria-controls="chat-panel"
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${TRANSITIONS.all} ${
                   viewMode === 'chat'
                     ? 'bg-blue-100 text-blue-700 font-medium'
                     : 'text-gray-600 hover:bg-gray-100'
@@ -123,7 +189,10 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
               </button>
               <button
                 onClick={() => setViewMode('analytics')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                role="tab"
+                aria-selected={viewMode === 'analytics'}
+                aria-controls="analytics-panel"
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${TRANSITIONS.all} ${
                   viewMode === 'analytics'
                     ? 'bg-blue-100 text-blue-700 font-medium'
                     : 'text-gray-600 hover:bg-gray-100'
@@ -134,7 +203,10 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
               </button>
               <button
                 onClick={() => setViewMode('settings')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                role="tab"
+                aria-selected={viewMode === 'settings'}
+                aria-controls="settings-panel"
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${TRANSITIONS.all} ${
                   viewMode === 'settings'
                     ? 'bg-blue-100 text-blue-700 font-medium'
                     : 'text-gray-600 hover:bg-gray-100'
@@ -158,9 +230,9 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {viewMode === 'chat' && (
-          <>
+          <div id="chat-panel" role="tabpanel" className="flex w-full animate-fadeIn">
             {/* Left Panel - Conversation Management */}
-            <div className="w-[280px] bg-white border-r border-gray-200 flex-shrink-0">
+            <div className="w-[280px] bg-white border-r border-gray-200 flex-shrink-0 hidden md:block">
               <ConversationSidebar
                 workspaceId={workspaceId}
                 currentId={currentConversationId}
@@ -181,24 +253,24 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
             </div>
 
             {/* Right Panel - Details & Actions */}
-            <div className="w-[320px] bg-white border-l border-gray-200 flex-shrink-0">
+            <div className="w-[320px] bg-white border-l border-gray-200 flex-shrink-0 hidden lg:block">
               <DetailsSidebar
                 sessionId={sessionId}
                 conversationId={currentConversationId}
                 workspaceId={workspaceId}
               />
             </div>
-          </>
+          </div>
         )}
 
         {viewMode === 'analytics' && (
-          <div className="flex-1 overflow-y-auto p-6">
+          <div id="analytics-panel" role="tabpanel" className="flex-1 overflow-y-auto p-6 animate-fadeIn">
             <AnalyticsDashboard workspaceId={workspaceId} />
           </div>
         )}
 
         {viewMode === 'settings' && (
-          <div className="flex-1 overflow-y-auto p-6">
+          <div id="settings-panel" role="tabpanel" className="flex-1 overflow-y-auto p-6 animate-fadeIn">
             <NotificationSettingsPanel workspaceId={workspaceId} />
           </div>
         )}
