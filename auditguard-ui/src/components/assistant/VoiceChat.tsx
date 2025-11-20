@@ -85,10 +85,11 @@ export function VoiceChat({ onTranscription, onSendMessage, lastAssistantMessage
     return (
       <button
         onClick={handleToggleVoiceMode}
-        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+        className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 rounded-xl transition-all shadow-md hover:shadow-lg"
         title="Enable voice mode"
+        aria-label="Enable voice mode"
       >
-        <Mic className="w-5 h-5 text-gray-600" />
+        <Mic className="w-6 h-6 text-white" />
       </button>
     );
   }
