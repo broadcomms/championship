@@ -49,7 +49,7 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
 
   // Convert text to speech using ElevenLabs API
   const synthesizeSpeech = useCallback(
-    async (text: string): Promise<Blob> => {
+    async (text: string): Promise<Blob | null> => {
       try {
         // TODO: Replace with actual ElevenLabs API endpoint
         const response = await fetch('/api/assistant/synthesize', {
@@ -67,6 +67,12 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
           }),
         });
 
+        // If server TTS not implemented (501), fall back to browser TTS
+        if (response.status === 501) {
+          console.log('Server TTS not available, falling back to browser TTS');
+          return null; // Signal to use browser fallback
+        }
+
         if (!response.ok) {
           throw new Error('Speech synthesis failed');
         }
@@ -74,7 +80,8 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
         const audioBlob = await response.blob();
         return audioBlob;
       } catch (error) {
-        throw error instanceof Error ? error : new Error('Unknown synthesis error');
+        console.warn('Server TTS error, will try browser fallback:', error);
+        return null; // Signal to use browser fallback
       }
     },
     [voiceSettings]
@@ -148,6 +155,32 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
 
       try {
         const audioBlob = await synthesizeSpeech(text);
+        
+        // If server TTS returned null, use browser TTS fallback
+        if (!audioBlob) {
+          console.log('Using browser TTS fallback');
+          // Use browser speech synthesis
+          if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = voiceSettings.speed;
+            utterance.onstart = () => {
+              setState((prev) => ({ ...prev, isSpeaking: true, isLoading: false }));
+              onStart?.();
+            };
+            utterance.onend = () => {
+              setState((prev) => ({ ...prev, isSpeaking: false, currentText: null }));
+              onEnd?.();
+            };
+            utterance.onerror = (error) => {
+              setState((prev) => ({ ...prev, isSpeaking: false, isLoading: false, error: 'Browser TTS failed' }));
+              onError?.(new Error('Browser TTS failed'));
+            };
+            window.speechSynthesis.speak(utterance);
+          } else {
+            throw new Error('Speech synthesis not supported');
+          }
+          return;
+        }
         
         if (voiceSettings.autoPlay) {
           await playAudio(audioBlob);

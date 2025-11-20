@@ -222,14 +222,23 @@ export function ChatInterface({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200 bg-white">
-        <h1 className="text-xl font-semibold text-gray-900">
-          AI Compliance Assistant
-        </h1>
-        {sessionId && (
-          <p className="text-sm text-gray-500 mt-1">
-            Session active • {messages.length} messages
-          </p>
-        )}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">
+              AI Compliance Assistant
+            </h1>
+            {sessionId && (
+              <p className="text-sm text-gray-500 mt-1">
+                Session active • {messages.length} messages
+              </p>
+            )}
+          </div>
+          <VoiceChat
+            onTranscription={handleVoiceTranscription}
+            onSendMessage={handleVoiceSendMessage}
+            lastAssistantMessage={lastAssistantMessage}
+          />
+        </div>
       </div>
 
       {/* Messages */}
@@ -339,24 +348,15 @@ export function ChatInterface({
 
       {/* Input Area */}
       <div className="px-6 py-4 border-t border-gray-200 bg-white">
-        <div className="flex gap-2 items-end">
-          <div className="flex-1">
-            <EnhancedInput
-              value={input}
-              onChange={setInput}
-              onSend={() => sendMessage()}
-              onFileAttach={handleFileAttach}
-              disabled={isLoading}
-              placeholder="Ask me anything about compliance..."
-              maxLength={4000}
-            />
-          </div>
-          <VoiceChat
-            onTranscription={handleVoiceTranscription}
-            onSendMessage={handleVoiceSendMessage}
-            lastAssistantMessage={lastAssistantMessage}
-          />
-        </div>
+        <EnhancedInput
+          value={input}
+          onChange={setInput}
+          onSend={() => sendMessage()}
+          onFileAttach={handleFileAttach}
+          disabled={isLoading}
+          placeholder="Ask me anything about compliance..."
+          maxLength={4000}
+        />
       </div>
     </div>
   );

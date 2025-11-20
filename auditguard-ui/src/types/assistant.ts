@@ -40,6 +40,7 @@ export interface Conversation {
   status: 'active' | 'complete' | 'in-progress' | 'requires-action';
   isPinned: boolean;
   isArchived: boolean;
+  isUnread?: boolean;
   tags?: string[];
   frameworks?: string[];
   completionPercentage?: number;
@@ -86,11 +87,17 @@ export interface RelatedDocument {
 }
 
 export interface FilterOptions {
-  dateRange?: 'today' | 'week' | 'month' | 'year' | 'custom';
-  categories?: string[];
-  frameworks?: string[];
-  status?: string[];
-  tags?: string[];
+  search: string;
+  dateRange: {
+    start: Date | null;
+    end: Date | null;
+  };
+  categories: string[];
+  frameworks: string[];
+  status: string[];
+  tags: string[];
+  showArchived: boolean;
+  showPinned: boolean;
 }
 
 export interface VoiceSettings {

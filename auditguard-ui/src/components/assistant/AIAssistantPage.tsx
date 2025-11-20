@@ -15,24 +15,33 @@ interface AIAssistantPageProps {
 export function AIAssistantPage({ workspaceId, userId, sessionId: initialSessionId }: AIAssistantPageProps) {
   const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId);
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [filters, setFilters] = useState<FilterOptions>({});
 
   const handleConversationSelect = (conversationId: string) => {
     setCurrentConversationId(conversationId);
-    // TODO: Load conversation messages
+    // Load conversation messages from API
+    loadConversationMessages(conversationId);
+  };
+
+  const loadConversationMessages = async (conversationId: string) => {
+    try {
+      const response = await fetch(`/api/assistant/conversations/${conversationId}/messages`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMessages(data.messages);
+        setSessionId(data.sessionId);
+      }
+    } catch (error) {
+      console.error('Failed to load conversation messages:', error);
+    }
   };
 
   const handleNewConversation = () => {
     setCurrentConversationId(undefined);
     setSessionId(undefined);
     setMessages([]);
-  };
-
-  const handleSearch = (query: string) => {
-    // TODO: Implement conversation search
-    console.log('Search:', query);
   };
 
   const handleMessageSent = (message: Message) => {
@@ -48,12 +57,10 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
       {/* Left Panel - Conversation Management */}
       <div className="w-[280px] bg-white border-r border-gray-200 flex-shrink-0">
         <ConversationSidebar
-          conversations={conversations}
+          workspaceId={workspaceId}
           currentId={currentConversationId}
           onSelect={handleConversationSelect}
-          onSearch={handleSearch}
           onNewConversation={handleNewConversation}
-          filters={filters}
         />
       </div>
 

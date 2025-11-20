@@ -50,7 +50,24 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
   // Initialize audio context and analyzer
   const initializeAudio = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Check if browser supports getUserMedia
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Your browser does not support audio recording. Please use a modern browser like Chrome, Firefox, or Edge.');
+      }
+
+      // Check if running on HTTPS or localhost
+      if (typeof window !== 'undefined' && window.location.protocol === 'http:' && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
+        throw new Error('Microphone access requires HTTPS. Please use a secure connection.');
+      }
+
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        } 
+      });
       streamRef.current = stream;
 
       const audioContext = new AudioContext();
@@ -84,7 +101,34 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
 
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to initialize audio';
+      let errorMessage = 'Failed to initialize audio';
+      
+      if (error instanceof DOMException) {
+        switch (error.name) {
+          case 'NotFoundError':
+            errorMessage = 'No microphone found. Please connect a microphone and try again.';
+            break;
+          case 'NotAllowedError':
+          case 'PermissionDeniedError':
+            errorMessage = 'Microphone permission denied. Please allow microphone access in your browser settings.';
+            break;
+          case 'NotReadableError':
+            errorMessage = 'Microphone is being used by another application. Please close other apps and try again.';
+            break;
+          case 'OverconstrainedError':
+            errorMessage = 'Microphone does not meet the required constraints. Please try a different microphone.';
+            break;
+          case 'SecurityError':
+            errorMessage = 'Security error accessing microphone. Please ensure you are on HTTPS or localhost.';
+            break;
+          default:
+            errorMessage = `Microphone error: ${error.message}`;
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      console.error('Audio capture error:', error);
       setState((prev) => ({ ...prev, error: errorMessage }));
       onError?.(error instanceof Error ? error : new Error(errorMessage));
       return false;
