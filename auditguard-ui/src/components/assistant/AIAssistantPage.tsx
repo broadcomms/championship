@@ -5,7 +5,6 @@ import { ConversationSidebar } from './ConversationSidebar';
 import { ChatInterface } from './ChatInterface';
 import { DetailsSidebar } from './DetailsSidebar';
 import AnalyticsDashboard from './AnalyticsDashboard';
-import NotificationCenter from './NotificationCenter';
 import NotificationSettingsPanel from './NotificationSettingsPanel';
 import { MessageSquare, BarChart3, Settings } from 'lucide-react';
 import type { Conversation, Message, FilterOptions } from '@/types/assistant';
@@ -218,12 +217,11 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
             </div>
           </div>
 
-          {/* Notification Center */}
-          <NotificationCenter
-            workspaceId={workspaceId}
-            userId={userId}
-            onNotificationAction={handleNotificationAction}
-          />
+          {/* 
+            Notifications are now handled by the global NotificationBell in the navbar.
+            AI notifications appear in the bell dropdown with "🤖 AI" category tab.
+            This provides a unified notification experience across the entire app.
+          */}
         </div>
       </div>
 

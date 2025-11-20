@@ -4,17 +4,50 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 
+type NotificationCategory = 'ai' | 'workspace' | 'system';
+type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
+
+interface NotificationAction {
+  id: string;
+  label: string;
+  action: string;
+  style: 'primary' | 'secondary' | 'danger';
+}
+
 interface Notification {
   id: string;
   type: string;
+  category: NotificationCategory;
+  priority: NotificationPriority;
   title: string;
   message: string;
   read: boolean;
+  archived: boolean;
   action_url: string;
+  actions: NotificationAction[];
   created_at: number;
+  workspace_id?: string;
+  ai_session_id?: string;
+}
+
+interface NotificationCount {
+  total: number;
+  unread: number;
+  by_category: {
+    ai: number;
+    workspace: number;
+    system: number;
+  };
+  by_priority: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
 }
 
 const NOTIFICATION_TYPE_ICONS: Record<string, string> = {
+  // Workspace types
   issue_assigned: '📋',
   comment: '💬',
   mention: '@',
@@ -22,42 +55,66 @@ const NOTIFICATION_TYPE_ICONS: Record<string, string> = {
   workspace_invite: '✉️',
   due_date_reminder: '⏰',
   overdue_alert: '⚠️',
+  // AI types
+  ai_compliance_alert: '🚨',
+  ai_recommendation: '💡',
+  ai_issue_detected: '🔍',
+  ai_report_ready: '📊',
+  ai_insight: '✨',
+};
+
+const PRIORITY_COLORS = {
+  critical: 'text-red-600 bg-red-50 border-red-200',
+  high: 'text-orange-600 bg-orange-50 border-orange-200',
+  medium: 'text-yellow-600 bg-yellow-50 border-yellow-200',
+  low: 'text-blue-600 bg-blue-50 border-blue-200',
 };
 
 export function NotificationBell() {
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [recentNotifications, setRecentNotifications] = useState<Notification[]>([]);
+  const [counts, setCounts] = useState<NotificationCount>({
+    total: 0,
+    unread: 0,
+    by_category: { ai: 0, workspace: 0, system: 0 },
+    by_priority: { critical: 0, high: 0, medium: 0, low: 0 }
+  });
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<'all' | NotificationCategory>('all');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Fetch unread count
-  const fetchUnreadCount = async () => {
+  // Fetch notification counts
+  const fetchCounts = async () => {
     try {
-      const response = await api.get('/notifications/count');
-      const count = response?.count || 0;
-      setUnreadCount(count);
+      const response = await api.get('/api/notifications/count');
+      setCounts(response);
     } catch (error) {
-      // Silently fail - notifications endpoint may not be implemented yet
       if (process.env.NODE_ENV === 'development') {
         console.warn('Notifications count not available');
       }
-      setUnreadCount(0);
     }
   };
 
-  // Fetch recent notifications
-  const fetchRecentNotifications = async () => {
+  // Fetch notifications with filters
+  const fetchNotifications = async (category?: NotificationCategory) => {
     setLoading(true);
     try {
-      const response = await api.get('/notifications?limit=5&unread=false');
-      setRecentNotifications(Array.isArray(response) ? response : []);
+      const filter: any = {
+        limit: 10,
+        offset: 0
+      };
+
+      if (category) {
+        filter.category = [category];
+      }
+
+      const response = await api.post('/api/notifications', { filter });
+      setNotifications(response.notifications || []);
     } catch (error) {
-      // Silently fail - notifications endpoint may not be implemented yet
       if (process.env.NODE_ENV === 'development') {
         console.warn('Notifications list not available');
       }
-      setRecentNotifications([]);
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -65,17 +122,18 @@ export function NotificationBell() {
 
   // Poll for updates every 30 seconds
   useEffect(() => {
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // Load recent notifications when dropdown opens
+  // Load notifications when dropdown opens or category changes
   useEffect(() => {
     if (isOpen) {
-      fetchRecentNotifications();
+      const category = activeCategory === 'all' ? undefined : activeCategory;
+      fetchNotifications(category);
     }
-  }, [isOpen]);
+  }, [isOpen, activeCategory]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -94,16 +152,62 @@ export function NotificationBell() {
   // Mark notification as read
   const markAsRead = async (notificationId: string) => {
     try {
-      await api.patch(`/notifications/${notificationId}/read`, {});
-      setRecentNotifications(prev =>
+      await api.patch(`/api/notifications/${notificationId}/read`, {});
+      setNotifications(prev =>
         prev.map(n => (n.id === notificationId ? { ...n, read: true } : n))
       );
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      setCounts(prev => ({
+        ...prev,
+        unread: Math.max(0, prev.unread - 1)
+      }));
     } catch (error) {
-      // Silently fail - notification read tracking may not be implemented yet
       if (process.env.NODE_ENV === 'development') {
         console.warn('Failed to mark notification as read');
       }
+    }
+  };
+
+  // Mark all as read (filtered by category)
+  const markAllAsRead = async () => {
+    try {
+      const category = activeCategory === 'all' ? undefined : activeCategory;
+      await api.post('/api/notifications/read-all', { category });
+      
+      // Refresh notifications and counts
+      fetchNotifications(category);
+      fetchCounts();
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Failed to mark all as read');
+      }
+    }
+  };
+
+  // Execute notification action
+  const handleAction = async (notification: Notification, action: NotificationAction, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    try {
+      const response = await api.post(`/api/notifications/${notification.id}/action`, { action: action.action });
+      
+      // Remove notification from list if dismissed/archived
+      if (['dismiss', 'archive'].includes(action.action)) {
+        setNotifications(prev => prev.filter(n => n.id !== notification.id));
+        if (!notification.read) {
+          setCounts(prev => ({
+            ...prev,
+            unread: Math.max(0, prev.unread - 1)
+          }));
+        }
+      }
+      
+      // Navigate if there's a redirect URL
+      if (response.redirect_url) {
+        window.location.href = response.redirect_url;
+        setIsOpen(false);
+      }
+    } catch (error) {
+      console.error('Failed to execute action:', error);
     }
   };
 
@@ -115,6 +219,10 @@ export function NotificationBell() {
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
     return `${Math.floor(seconds / 86400)}d ago`;
   };
+
+  const filteredCount = activeCategory === 'all' 
+    ? counts.unread 
+    : counts.by_category[activeCategory];
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -139,73 +247,162 @@ export function NotificationBell() {
         </svg>
 
         {/* Unread Badge */}
-        {unreadCount > 0 && (
+        {counts.unread > 0 && (
           <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-5 min-w-[20px] flex items-center justify-center px-1">
-            {unreadCount > 99 ? '99+' : unreadCount}
+            {counts.unread > 99 ? '99+' : counts.unread}
           </span>
         )}
       </button>
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
-          {/* Header */}
-          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900">Notifications</h3>
-            {unreadCount > 0 && (
-              <span className="text-sm text-blue-600 font-medium">
-                {unreadCount} unread
-              </span>
-            )}
+        <div className="absolute right-0 mt-2 w-[440px] bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+          {/* Header with Tabs */}
+          <div className="border-b border-gray-200">
+            <div className="px-4 py-3 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Notifications</h3>
+              {filteredCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+
+            {/* Category Tabs */}
+            <div className="flex px-2 pb-2">
+              <button
+                onClick={() => setActiveCategory('all')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${
+                  activeCategory === 'all'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                All {counts.unread > 0 && `(${counts.unread})`}
+              </button>
+              <button
+                onClick={() => setActiveCategory('ai')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition ml-1 ${
+                  activeCategory === 'ai'
+                    ? 'bg-purple-100 text-purple-700'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                🤖 AI {counts.by_category.ai > 0 && `(${counts.by_category.ai})`}
+              </button>
+              <button
+                onClick={() => setActiveCategory('workspace')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition ml-1 ${
+                  activeCategory === 'workspace'
+                    ? 'bg-green-100 text-green-700'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                📁 Workspace {counts.by_category.workspace > 0 && `(${counts.by_category.workspace})`}
+              </button>
+            </div>
           </div>
 
           {/* Notification List */}
-          <div className="max-h-96 overflow-y-auto">
+          <div className="max-h-[500px] overflow-y-auto">
             {loading ? (
               <div className="px-4 py-8 text-center text-gray-500">
                 Loading...
               </div>
-            ) : recentNotifications.length === 0 ? (
+            ) : notifications.length === 0 ? (
               <div className="px-4 py-8 text-center text-gray-500">
-                <div className="text-3xl mb-2">🔔</div>
-                <p className="text-sm">No notifications yet</p>
+                <div className="text-3xl mb-2">
+                  {activeCategory === 'ai' ? '🤖' : activeCategory === 'workspace' ? '📁' : '🔔'}
+                </div>
+                <p className="text-sm">
+                  No {activeCategory !== 'all' ? activeCategory : ''} notifications
+                </p>
               </div>
             ) : (
-              recentNotifications.map((notification) => (
+              notifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`px-4 py-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition ${
+                  className={`px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition ${
                     !notification.read ? 'bg-blue-50' : ''
-                  }`}
-                  onClick={() => {
-                    if (!notification.read) markAsRead(notification.id);
-                    window.location.href = notification.action_url;
-                    setIsOpen(false);
-                  }}
+                  } ${notification.priority === 'critical' ? 'border-l-4 border-l-red-500' : ''}`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="text-xl flex-shrink-0">
+                    {/* Icon */}
+                    <div className="text-xl flex-shrink-0 mt-0.5">
                       {NOTIFICATION_TYPE_ICONS[notification.type] || '📬'}
                     </div>
+
+                    {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 mb-1">
-                        <p
-                          className={`text-sm text-gray-900 line-clamp-1 ${
-                            !notification.read ? 'font-semibold' : ''
-                          }`}
-                        >
-                          {notification.title}
-                        </p>
+                        <div className="flex-1">
+                          <p
+                            className={`text-sm text-gray-900 line-clamp-2 ${
+                              !notification.read ? 'font-semibold' : ''
+                            }`}
+                          >
+                            {notification.title}
+                          </p>
+                          {notification.priority === 'critical' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 mt-1">
+                              Critical
+                            </span>
+                          )}
+                          {notification.priority === 'high' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 mt-1">
+                              High
+                            </span>
+                          )}
+                        </div>
                         {!notification.read && (
                           <span className="flex-shrink-0 h-2 w-2 bg-blue-600 rounded-full mt-1" />
                         )}
                       </div>
-                      <p className="text-xs text-gray-600 line-clamp-2 mb-1">
+                      
+                      <p className="text-xs text-gray-600 line-clamp-2 mb-2">
                         {notification.message}
                       </p>
-                      <p className="text-xs text-gray-500">
-                        {formatRelativeTime(notification.created_at)}
-                      </p>
+
+                      {/* Actions */}
+                      {notification.actions && notification.actions.length > 0 && (
+                        <div className="flex gap-2 mb-2">
+                          {notification.actions.map((action) => (
+                            <button
+                              key={action.id}
+                              onClick={(e) => handleAction(notification, action, e)}
+                              className={`text-xs px-2 py-1 rounded font-medium transition ${
+                                action.style === 'primary'
+                                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                  : action.style === 'danger'
+                                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                            >
+                              {action.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-gray-500">
+                          {formatRelativeTime(notification.created_at)}
+                        </p>
+                        {!notification.read && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              markAsRead(notification.id);
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-700"
+                          >
+                            Mark read
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

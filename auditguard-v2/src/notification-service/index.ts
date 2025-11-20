@@ -4,23 +4,43 @@ import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 import { nanoid } from 'nanoid';
+import type {
+  Notification,
+  NotificationType,
+  NotificationCategory,
+  NotificationPriority,
+  NotificationSource,
+  NotificationAction,
+  NotificationAIContext,
+  NotificationFilter,
+  NotificationCount,
+  CreateAINotificationRequest
+} from '../types/notifications';
 
 /**
  * Notification Service - Handles in-app, email, and real-time notifications
  *
  * This service provides:
- * - Creating and managing in-app notifications
+ * - Creating and managing in-app notifications (workspace + AI)
  * - User notification preferences management
  * - Integration with email-service for email notifications
  * - Integration with realtime-service for WebSocket notifications
+ * - AI Assistant proactive notifications
  */
 
 export interface CreateNotificationRequest {
   user_id: string;
-  type: 'issue_assigned' | 'comment' | 'mention' | 'status_change' | 'workspace_invite' | 'due_date_reminder' | 'overdue_alert';
+  type: NotificationType;
+  category: NotificationCategory;
+  priority: NotificationPriority;
+  source: NotificationSource;
   title: string;
   message: string;
   action_url: string;
+  workspace_id?: string;
+  ai_session_id?: string;
+  ai_context?: NotificationAIContext;
+  actions?: NotificationAction[];
   metadata?: Record<string, any>;
   send_email?: boolean;      // Send email notification
   send_realtime?: boolean;    // Send real-time notification via WebSocket
@@ -32,6 +52,11 @@ export interface UpdatePreferencesRequest {
   email_mentions?: 'instant' | 'daily' | 'weekly' | 'never';
   email_due_date?: 'instant' | 'daily' | 'weekly' | 'never';
   email_status_change?: 'instant' | 'daily' | 'weekly' | 'never';
+  email_ai_compliance_alert?: 'instant' | 'daily' | 'weekly' | 'never';
+  email_ai_recommendation?: 'instant' | 'daily' | 'weekly' | 'never';
+  email_ai_issue_detected?: 'instant' | 'daily' | 'weekly' | 'never';
+  email_ai_report_ready?: 'instant' | 'daily' | 'weekly' | 'never';
+  email_ai_insight?: 'instant' | 'daily' | 'weekly' | 'never';
   in_app_enabled?: boolean;
   in_app_sound?: boolean;
   browser_push_enabled?: boolean;
@@ -49,6 +74,59 @@ export default class extends Service<Env> {
     const path = url.pathname;
 
     try {
+      // POST /api/notifications - Get user's notifications with filters (unified system)
+      if (path === '/api/notifications' && request.method === 'POST') {
+        const body = await request.json() as { userId: string, filter?: NotificationFilter };
+        return await this.getFilteredNotifications(body.userId, body.filter || {});
+      }
+
+      // GET /api/notifications/count - Get unread count with category breakdown
+      if (path === '/api/notifications/count' && request.method === 'GET') {
+        const userId = url.searchParams.get('userId');
+        if (!userId) {
+          return new Response(JSON.stringify({ error: 'userId required' }), { status: 400 });
+        }
+        return await this.getNotificationCount(userId);
+      }
+
+      // PATCH /api/notifications/:id/read - Mark notification as read
+      if (path.match(/^\/api\/notifications\/[^/]+\/read$/) && request.method === 'PATCH') {
+        const notificationId = path.split('/')[3];
+        return await this.markAsRead(notificationId);
+      }
+
+      // POST /api/notifications/read-all - Mark all as read
+      if (path === '/api/notifications/read-all' && request.method === 'POST') {
+        const body = await request.json() as { userId: string, category?: NotificationCategory };
+        return await this.markAllAsRead(body.userId, body.category);
+      }
+
+      // PATCH /api/notifications/:id/archive - Archive notification
+      if (path.match(/^\/api\/notifications\/[^/]+\/archive$/) && request.method === 'PATCH') {
+        const notificationId = path.split('/')[3];
+        return await this.archiveNotification(notificationId);
+      }
+
+      // DELETE /api/notifications/:id - Delete notification
+      if (path.match(/^\/api\/notifications\/[^/]+$/) && request.method === 'DELETE') {
+        const notificationId = path.split('/')[3];
+        return await this.deleteNotification(notificationId);
+      }
+
+      // POST /api/notifications/:id/action - Execute notification action
+      if (path.match(/^\/api\/notifications\/[^/]+\/action$/) && request.method === 'POST') {
+        const notificationId = path.split('/')[3];
+        const body = await request.json() as { action: string };
+        return await this.executeNotificationAction(notificationId, body.action);
+      }
+
+      // POST /api/notifications/ai - Create AI notification (helper endpoint)
+      if (path === '/api/notifications/ai' && request.method === 'POST') {
+        const body = await request.json() as CreateAINotificationRequest;
+        return await this.createAINotification(body);
+      }
+
+      // Legacy endpoints (kept for backward compatibility)
       // GET /notifications/:userId - Get user's notifications
       if (path.match(/^\/notifications\/[^/]+$/) && request.method === 'GET') {
         const userId = path.split('/')[2];
@@ -154,6 +232,343 @@ export default class extends Service<Env> {
   }
 
   /**
+   * Get user's notifications with advanced filtering (unified system)
+   */
+  private async getFilteredNotifications(
+    userId: string,
+    filter: NotificationFilter
+  ): Promise<Response> {
+    const db = this.getDb();
+
+    let query = db
+      .selectFrom('notifications')
+      .selectAll()
+      .where('user_id', '=', userId)
+      .where('archived', '=', 0);
+
+    // Apply category filter
+    if (filter.category && filter.category.length > 0) {
+      query = query.where('category', 'in', filter.category);
+    }
+
+    // Apply priority filter
+    if (filter.priority && filter.priority.length > 0) {
+      query = query.where('priority', 'in', filter.priority);
+    }
+
+    // Apply read/unread filter
+    if (filter.status && filter.status.length > 0) {
+      if (filter.status.includes('read') && !filter.status.includes('unread')) {
+        query = query.where('read', '=', 1);
+      } else if (filter.status.includes('unread') && !filter.status.includes('read')) {
+        query = query.where('read', '=', 0);
+      }
+    }
+
+    // Apply workspace filter
+    if (filter.workspace_id) {
+      query = query.where('workspace_id', '=', filter.workspace_id);
+    }
+
+    // Apply date range filters
+    if (filter.after) {
+      query = query.where('created_at', '>=', filter.after);
+    }
+    if (filter.before) {
+      query = query.where('created_at', '<=', filter.before);
+    }
+
+    // Count total matching notifications
+    const countQuery = query.select((eb) => eb.fn.count('id').as('total'));
+    const countResult = await countQuery.executeTakeFirst();
+    const total = Number(countResult?.total || 0);
+
+    // Apply pagination
+    const limit = filter.limit || 50;
+    const offset = filter.offset || 0;
+
+    query = query
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+      .offset(offset);
+
+    const notifications = await query.execute();
+
+    // Parse JSON fields
+    const parsedNotifications = notifications.map(n => ({
+      ...n,
+      read: n.read === 1,
+      archived: n.archived === 1,
+      metadata: n.metadata ? JSON.parse(n.metadata) : null,
+      ai_context: n.ai_context ? JSON.parse(n.ai_context) : null,
+      actions: n.actions ? JSON.parse(n.actions) : []
+    }));
+
+    const hasMore = offset + notifications.length < total;
+
+    return new Response(JSON.stringify({
+      notifications: parsedNotifications,
+      total,
+      has_more: hasMore,
+      next_offset: hasMore ? offset + limit : undefined
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Get notification count with category breakdown
+   */
+  private async getNotificationCount(userId: string): Promise<Response> {
+    const db = this.getDb();
+
+    // Get total unread count
+    const totalResult = await db
+      .selectFrom('notifications')
+      .select((eb) => eb.fn.count('id').as('count'))
+      .where('user_id', '=', userId)
+      .where('read', '=', 0)
+      .where('archived', '=', 0)
+      .executeTakeFirst();
+
+    const total = Number(totalResult?.count || 0);
+
+    // Get counts by category
+    const categoryResults = await db
+      .selectFrom('notifications')
+      .select(['category', (eb) => eb.fn.count('id').as('count')])
+      .where('user_id', '=', userId)
+      .where('read', '=', 0)
+      .where('archived', '=', 0)
+      .groupBy('category')
+      .execute();
+
+    const byCategory = {
+      ai: 0,
+      workspace: 0,
+      system: 0
+    };
+
+    categoryResults.forEach(r => {
+      const category = r.category as NotificationCategory;
+      byCategory[category] = Number(r.count);
+    });
+
+    // Get counts by priority
+    const priorityResults = await db
+      .selectFrom('notifications')
+      .select(['priority', (eb) => eb.fn.count('id').as('count')])
+      .where('user_id', '=', userId)
+      .where('read', '=', 0)
+      .where('archived', '=', 0)
+      .groupBy('priority')
+      .execute();
+
+    const byPriority = {
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0
+    };
+
+    priorityResults.forEach(r => {
+      const priority = r.priority as NotificationPriority;
+      byPriority[priority] = Number(r.count);
+    });
+
+    const count: NotificationCount = {
+      total,
+      unread: total,
+      by_category: byCategory,
+      by_priority: byPriority
+    };
+
+    return new Response(JSON.stringify(count), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Archive a notification
+   */
+  private async archiveNotification(notificationId: string): Promise<Response> {
+    const db = this.getDb();
+
+    await db
+      .updateTable('notifications')
+      .set({ archived: 1 })
+      .where('id', '=', notificationId)
+      .execute();
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Delete a notification
+   */
+  private async deleteNotification(notificationId: string): Promise<Response> {
+    const db = this.getDb();
+
+    await db
+      .deleteFrom('notifications')
+      .where('id', '=', notificationId)
+      .execute();
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Execute a notification action
+   */
+  private async executeNotificationAction(
+    notificationId: string,
+    action: string
+  ): Promise<Response> {
+    const db = this.getDb();
+
+    // Get notification
+    const notification = await db
+      .selectFrom('notifications')
+      .selectAll()
+      .where('id', '=', notificationId)
+      .executeTakeFirst();
+
+    if (!notification) {
+      return new Response(JSON.stringify({ error: 'Notification not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Mark as read when action is executed
+    await this.markAsRead(notificationId);
+
+    // Parse actions
+    const actions: NotificationAction[] = notification.actions ? JSON.parse(notification.actions) : [];
+    const actionObj = actions.find(a => a.action === action);
+
+    if (!actionObj) {
+      return new Response(JSON.stringify({ error: 'Action not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Execute action based on type
+    let redirectUrl = notification.action_url;
+
+    switch (action) {
+      case 'snooze':
+        // Snooze for 1 hour
+        await db
+          .updateTable('notifications')
+          .set({ snoozed_until: Date.now() + 3600000 })
+          .where('id', '=', notificationId)
+          .execute();
+        redirectUrl = undefined;
+        break;
+      
+      case 'dismiss':
+      case 'archive':
+        await this.archiveNotification(notificationId);
+        redirectUrl = undefined;
+        break;
+      
+      // For other actions, just mark as read and redirect
+      default:
+        break;
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      action,
+      notification_id: notificationId,
+      redirect_url: redirectUrl
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Create AI notification (helper for AI Assistant service)
+   */
+  private async createAINotification(req: CreateAINotificationRequest): Promise<Response> {
+    const orgId = req.workspace_id; // Will need to get org from workspace
+    
+    return await this.createNotification({
+      user_id: req.user_id,
+      type: req.type,
+      category: 'ai',
+      priority: req.priority || this.getAIPriority(req.context),
+      source: 'ai_assistant',
+      title: req.title,
+      message: req.message,
+      action_url: `/org/${orgId}/workspace/${req.workspace_id}/assistant?session=${req.session_id}`,
+      workspace_id: req.workspace_id,
+      ai_session_id: req.session_id,
+      ai_context: req.context,
+      actions: req.actions || this.getDefaultAIActions(req.type),
+      send_email: true,
+      send_realtime: true
+    });
+  }
+
+  /**
+   * Get AI notification priority based on context
+   */
+  private getAIPriority(context: NotificationAIContext): NotificationPriority {
+    if (context.severity === 'critical') return 'critical';
+    if (context.severity === 'high') return 'high';
+    if (context.severity === 'medium') return 'medium';
+    return 'low';
+  }
+
+  /**
+   * Get default actions for AI notification types
+   */
+  private getDefaultAIActions(type: NotificationType): NotificationAction[] {
+    switch (type) {
+      case 'ai_compliance_alert':
+        return [
+          { id: '1', label: 'View Issues', action: 'view_issues', style: 'primary' },
+          { id: '2', label: 'Dismiss', action: 'dismiss', style: 'secondary' }
+        ];
+      
+      case 'ai_recommendation':
+        return [
+          { id: '1', label: 'Review', action: 'review_recommendation', style: 'primary' },
+          { id: '2', label: 'Snooze', action: 'snooze', style: 'secondary' },
+          { id: '3', label: 'Dismiss', action: 'dismiss', style: 'secondary' }
+        ];
+      
+      case 'ai_issue_detected':
+        return [
+          { id: '1', label: 'View Details', action: 'view_issues', style: 'primary' },
+          { id: '2', label: 'Dismiss', action: 'dismiss', style: 'secondary' }
+        ];
+      
+      case 'ai_report_ready':
+        return [
+          { id: '1', label: 'View Report', action: 'view_report', style: 'primary' }
+        ];
+      
+      default:
+        return [
+          { id: '1', label: 'View', action: 'view', style: 'primary' }
+        ];
+    }
+  }
+
+  /**
    * Get user's notifications
    */
   private async getUserNotifications(
@@ -211,6 +626,15 @@ export default class extends Service<Env> {
       await this.createDefaultPreferences(req.user_id);
     }
 
+    // Determine category from type if not provided
+    const category = req.category || this.getCategoryFromType(req.type);
+    
+    // Determine priority if not provided
+    const priority = req.priority || 'medium';
+    
+    // Determine source if not provided
+    const source = req.source || 'system';
+
     // Only create in-app notification if enabled (or preferences don't exist yet)
     if (!preferences || preferences.in_app_enabled === 1) {
       await db
@@ -219,11 +643,20 @@ export default class extends Service<Env> {
           id: notificationId,
           user_id: req.user_id,
           type: req.type,
+          category,
+          priority,
+          source,
           title: req.title,
           message: req.message,
           read: 0,
+          archived: 0,
           action_url: req.action_url,
+          workspace_id: req.workspace_id || null,
+          ai_session_id: req.ai_session_id || null,
+          ai_context: req.ai_context ? JSON.stringify(req.ai_context) : null,
+          actions: req.actions ? JSON.stringify(req.actions) : null,
           metadata: req.metadata ? JSON.stringify(req.metadata) : null,
+          snoozed_until: null,
           created_at: now,
           read_at: null
         })
@@ -240,9 +673,12 @@ export default class extends Service<Env> {
       await this.sendRealtimeNotification(req.user_id, {
         id: notificationId,
         type: req.type,
+        category,
+        priority,
         title: req.title,
         message: req.message,
         action_url: req.action_url,
+        actions: req.actions,
         metadata: req.metadata
       });
     }
@@ -254,6 +690,16 @@ export default class extends Service<Env> {
       status: 201,
       headers: { 'Content-Type': 'application/json' }
     });
+  }
+
+  /**
+   * Get category from notification type
+   */
+  private getCategoryFromType(type: NotificationType): NotificationCategory {
+    if (type.startsWith('ai_')) {
+      return 'ai';
+    }
+    return 'workspace';
   }
 
   /**
@@ -279,21 +725,27 @@ export default class extends Service<Env> {
   }
 
   /**
-   * Mark all notifications as read for a user
+   * Mark all notifications as read for a user (optionally filtered by category)
    */
-  private async markAllAsRead(userId: string): Promise<Response> {
+  private async markAllAsRead(userId: string, category?: NotificationCategory): Promise<Response> {
     const db = this.getDb();
     const now = Date.now();
 
-    await db
+    let query = db
       .updateTable('notifications')
       .set({
         read: 1,
         read_at: now
       })
       .where('user_id', '=', userId)
-      .where('read', '=', 0)
-      .execute();
+      .where('read', '=', 0);
+
+    // Apply category filter if provided
+    if (category) {
+      query = query.where('category', '=', category);
+    }
+
+    await query.execute();
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -418,6 +870,11 @@ export default class extends Service<Env> {
         email_mentions: 'instant',
         email_due_date: 'instant',
         email_status_change: 'daily',
+        email_ai_compliance_alert: 'instant',
+        email_ai_recommendation: 'daily',
+        email_ai_issue_detected: 'instant',
+        email_ai_report_ready: 'instant',
+        email_ai_insight: 'weekly',
         in_app_enabled: 1,
         in_app_sound: 1,
         browser_push_enabled: 0,
@@ -452,6 +909,21 @@ export default class extends Service<Env> {
       case 'due_date_reminder':
       case 'overdue_alert':
         emailFrequency = preferences?.email_due_date || 'instant';
+        break;
+      case 'ai_compliance_alert':
+        emailFrequency = preferences?.email_ai_compliance_alert || 'instant';
+        break;
+      case 'ai_recommendation':
+        emailFrequency = preferences?.email_ai_recommendation || 'daily';
+        break;
+      case 'ai_issue_detected':
+        emailFrequency = preferences?.email_ai_issue_detected || 'instant';
+        break;
+      case 'ai_report_ready':
+        emailFrequency = preferences?.email_ai_report_ready || 'instant';
+        break;
+      case 'ai_insight':
+        emailFrequency = preferences?.email_ai_insight || 'weekly';
         break;
     }
 
@@ -570,9 +1042,13 @@ export default class extends Service<Env> {
     await this.createNotification({
       user_id: event.assignedTo,
       type: 'issue_assigned',
+      category: 'workspace',
+      priority: this.getPriorityFromSeverity(event.issueSeverity),
+      source: 'workspace',
       title: `${emoji} Issue Assigned: ${event.issueTitle}${priorityText}`,
       message: `You've been assigned a new ${event.issueSeverity} priority issue in ${event.workspaceName}${dueDateText}${event.notes ? '\n\nNote: ' + event.notes : ''}`,
       action_url: `/org/${event.workspaceId}/workspace/${event.workspaceId}/issues/${event.issueId}`,
+      workspace_id: event.workspaceId,
       metadata: {
         issueId: event.issueId,
         severity: event.issueSeverity,
@@ -581,9 +1057,31 @@ export default class extends Service<Env> {
         dueDate: event.dueDate,
         priorityLevel: event.priorityLevel,
       },
+      actions: [
+        { id: '1', label: 'View Issue', action: 'view', style: 'primary' },
+        { id: '2', label: 'Dismiss', action: 'dismiss', style: 'secondary' }
+      ],
       send_email: true,
       send_realtime: true,
     });
+  }
+
+  /**
+   * Convert severity to priority
+   */
+  private getPriorityFromSeverity(severity: string): NotificationPriority {
+    switch (severity.toLowerCase()) {
+      case 'critical':
+        return 'critical';
+      case 'high':
+        return 'high';
+      case 'medium':
+        return 'medium';
+      case 'low':
+        return 'low';
+      default:
+        return 'medium';
+    }
   }
 
   /**
@@ -635,15 +1133,22 @@ export default class extends Service<Env> {
     await this.createNotification({
       user_id: event.assignedTo,
       type: 'status_change',
+      category: 'workspace',
+      priority: 'medium',
+      source: 'workspace',
       title: `${emoji} Issue Status Updated: ${event.issueTitle}`,
       message: `${changerName} changed the status from "${event.oldStatus}" to "${event.newStatus}"${event.notes ? '\n\nNote: ' + event.notes : ''}`,
       action_url: `/org/${event.workspaceId}/workspace/${event.workspaceId}/issues/${event.issueId}`,
+      workspace_id: event.workspaceId,
       metadata: {
         issueId: event.issueId,
         oldStatus: event.oldStatus,
         newStatus: event.newStatus,
         changedBy: changerName,
       },
+      actions: [
+        { id: '1', label: 'View Issue', action: 'view', style: 'primary' }
+      ],
       send_email: true,
       send_realtime: true,
     });
@@ -691,14 +1196,22 @@ export default class extends Service<Env> {
     await this.createNotification({
       user_id: event.assignedTo,
       type: 'comment',
+      category: 'workspace',
+      priority: 'low',
+      source: 'workspace',
       title: `💬 New Comment on: ${event.issueTitle}`,
       message: `${commenterName} commented: "${previewText}"`,
       action_url: `/org/${event.workspaceId}/workspace/${event.workspaceId}/issues/${event.issueId}`,
+      workspace_id: event.workspaceId,
       metadata: {
         issueId: event.issueId,
         commentId: event.commentId,
         commentedBy: commenterName,
       },
+      actions: [
+        { id: '1', label: 'View Comment', action: 'view', style: 'primary' },
+        { id: '2', label: 'Dismiss', action: 'dismiss', style: 'secondary' }
+      ],
       send_email: true,
       send_realtime: true,
     });
@@ -750,15 +1263,23 @@ export default class extends Service<Env> {
       await this.createNotification({
         user_id: admin.user_id,
         type: 'status_change',
+        category: 'workspace',
+        priority: 'critical',
+        source: 'system',
         title: `🚨 Compliance Check Complete: ${event.criticalIssues} Critical Issues Found`,
         message: `A compliance check for "${documentName}" (${event.framework}) found ${event.criticalIssues} critical issues that require immediate attention.`,
         action_url: `/org/${event.workspaceId}/workspace/${event.workspaceId}/compliance/${event.checkId}`,
+        workspace_id: event.workspaceId,
         metadata: {
           checkId: event.checkId,
           documentId: event.documentId,
           framework: event.framework,
           criticalIssues: event.criticalIssues,
         },
+        actions: [
+          { id: '1', label: 'View Check', action: 'view', style: 'primary' },
+          { id: '2', label: 'View Issues', action: 'view_issues', style: 'secondary' }
+        ],
         send_email: true,
         send_realtime: true,
       });

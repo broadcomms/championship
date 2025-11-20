@@ -43,15 +43,44 @@ export type users = {
     workspace_count: number | null;
 };
 
+export type NotificationType = 
+    // AI Types
+    | 'ai_compliance_alert'
+    | 'ai_recommendation'
+    | 'ai_issue_detected'
+    | 'ai_report_ready'
+    | 'ai_insight'
+    // Workspace Types
+    | 'issue_assigned'
+    | 'comment'
+    | 'mention'
+    | 'status_change'
+    | 'workspace_invite'
+    | 'due_date_reminder'
+    | 'overdue_alert';
+
+export type NotificationCategory = 'ai' | 'workspace' | 'system';
+export type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
+export type NotificationSource = 'ai_assistant' | 'workspace' | 'system';
+
 export type notifications = {
     id: string;
     user_id: string;
-    type: 'issue_assigned' | 'comment' | 'mention' | 'status_change' | 'workspace_invite' | 'due_date_reminder' | 'overdue_alert';
+    type: NotificationType;
+    category: NotificationCategory;
+    priority: NotificationPriority;
+    source: NotificationSource;
     title: string;
     message: string;
     read: number;
     action_url: string;
     metadata: string | null;
+    workspace_id: string | null;
+    ai_session_id: string | null;
+    ai_context: string | null; // JSON: {compliance_framework?, issue_count?, severity?}
+    actions: string | null; // JSON array: [{id, label, action, style}]
+    archived: number;
+    snoozed_until: number | null;
     created_at: number;
     read_at: number | null;
 };
@@ -63,6 +92,11 @@ export type notification_preferences = {
     email_mentions: 'instant' | 'daily' | 'weekly' | 'never';
     email_due_date: 'instant' | 'daily' | 'weekly' | 'never';
     email_status_change: 'instant' | 'daily' | 'weekly' | 'never';
+    email_ai_compliance_alert: 'instant' | 'daily' | 'weekly' | 'never';
+    email_ai_recommendation: 'instant' | 'daily' | 'weekly' | 'never';
+    email_ai_issue_detected: 'instant' | 'daily' | 'weekly' | 'never';
+    email_ai_report_ready: 'instant' | 'daily' | 'weekly' | 'never';
+    email_ai_insight: 'instant' | 'daily' | 'weekly' | 'never';
     in_app_enabled: number;
     in_app_sound: number;
     browser_push_enabled: number;
