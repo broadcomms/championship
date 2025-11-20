@@ -1,6 +1,6 @@
 /**
  * AI Compliance Assistant - Component Exports
- * Phase 1 & Phase 2: Core Structure + Enhanced Chat Interface
+ * Phase 1, 2 & 3: Core Structure + Enhanced Chat Interface + Voice Integration
  */
 
 export { AIAssistantPage } from './AIAssistantPage';
@@ -14,6 +14,12 @@ export { Message } from './Message';
 export { EnhancedInput } from './EnhancedInput';
 export { SuggestionChips, generateSuggestions } from './SuggestionChips';
 export { StreamingMessage, StreamingIndicator, useStreamingMessage } from './StreamingMessage';
+
+// Phase 3 Components - Voice Integration
+export { VoiceChat } from './VoiceChat';
+export { VoiceVisualizer, WaveformVisualizer, AudioLevelMeter } from './VoiceVisualizer';
+export { TranscriptionDisplay, LiveTranscription } from './TranscriptionDisplay';
+export { VoiceSettingsPanel, VoiceControls } from './VoiceSettingsPanel';
 
 // Re-export types
 export type {

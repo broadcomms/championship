@@ -7,6 +7,7 @@ import { Message } from './Message';
 import { EnhancedInput } from './EnhancedInput';
 import { SuggestionChips, generateSuggestions } from './SuggestionChips';
 import { StreamingIndicator, useStreamingMessage } from './StreamingMessage';
+import { VoiceChat } from './VoiceChat';
 
 interface ChatInterfaceProps {
   workspaceId: string;
@@ -204,6 +205,19 @@ export function ChatInterface({
     // Handle file upload logic
   };
 
+  const handleVoiceTranscription = (text: string) => {
+    setInput(text);
+  };
+
+  const handleVoiceSendMessage = (text: string) => {
+    sendMessage(text);
+  };
+
+  const lastAssistantMessage = messages
+    .slice()
+    .reverse()
+    .find((m) => m.role === 'assistant')?.content;
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -325,15 +339,24 @@ export function ChatInterface({
 
       {/* Input Area */}
       <div className="px-6 py-4 border-t border-gray-200 bg-white">
-        <EnhancedInput
-          value={input}
-          onChange={setInput}
-          onSend={() => sendMessage()}
-          onFileAttach={handleFileAttach}
-          disabled={isLoading}
-          placeholder="Ask me anything about compliance..."
-          maxLength={4000}
-        />
+        <div className="flex gap-2 items-end">
+          <div className="flex-1">
+            <EnhancedInput
+              value={input}
+              onChange={setInput}
+              onSend={() => sendMessage()}
+              onFileAttach={handleFileAttach}
+              disabled={isLoading}
+              placeholder="Ask me anything about compliance..."
+              maxLength={4000}
+            />
+          </div>
+          <VoiceChat
+            onTranscription={handleVoiceTranscription}
+            onSendMessage={handleVoiceSendMessage}
+            lastAssistantMessage={lastAssistantMessage}
+          />
+        </div>
       </div>
     </div>
   );
