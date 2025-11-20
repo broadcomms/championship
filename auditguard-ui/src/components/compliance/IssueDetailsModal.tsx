@@ -206,7 +206,7 @@ export function IssueDetailsModal({
               )}
 
               {/* Remediation Steps */}
-              {issue.remediationSteps && issue.remediationSteps.length > 0 && (
+              {issue.remediationSteps && Array.isArray(issue.remediationSteps) && issue.remediationSteps.length > 0 && (
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-2">Remediation Steps</h4>
                   <ol className="list-decimal list-inside space-y-2">

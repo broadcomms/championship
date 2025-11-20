@@ -628,8 +628,8 @@ Return JSON with issues array. If fully compliant, return empty array:
           { role: 'system', content: `You are a ${framework} compliance auditor. Return JSON only.` },
           { role: 'user', content: prompt }
         ],
-        max_tokens: 2000,
-        temperature: 0.1,
+        max_tokens: 4000,
+        temperature: 0.0,
       });
       
 
