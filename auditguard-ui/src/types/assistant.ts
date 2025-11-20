@@ -8,6 +8,20 @@ export interface Message {
   content: string;
   timestamp: Date;
   actions?: Action[];
+  streaming?: boolean;
+  sources?: MessageSource[];
+  metadata?: {
+    model?: string;
+    tokens?: number;
+    duration?: number;
+  };
+}
+
+export interface MessageSource {
+  name: string;
+  page?: number;
+  relevance?: number;
+  url?: string;
 }
 
 export interface Action {

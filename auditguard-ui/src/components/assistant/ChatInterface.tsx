@@ -1,18 +1,18 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Paperclip, Loader2 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import type { Message } from '@/types/assistant';
-import 'highlight.js/styles/github-dark.css';
+import { Loader2 } from 'lucide-react';
+import type { Message as MessageType } from '@/types/assistant';
+import { Message } from './Message';
+import { EnhancedInput } from './EnhancedInput';
+import { SuggestionChips, generateSuggestions } from './SuggestionChips';
+import { StreamingIndicator, useStreamingMessage } from './StreamingMessage';
 
 interface ChatInterfaceProps {
   workspaceId: string;
   sessionId?: string;
-  messages: Message[];
-  onMessageSent: (message: Message) => void;
+  messages: MessageType[];
+  onMessageSent: (message: MessageType) => void;
   onSessionCreated: (sessionId: string) => void;
 }
 
@@ -23,12 +23,16 @@ export function ChatInterface({
   onMessageSent,
   onSessionCreated,
 }: ChatInterfaceProps) {
-  const [messages, setMessages] = useState<Message[]>(externalMessages);
+  const [messages, setMessages] = useState<MessageType[]>(externalMessages);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(initialSessionId);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState(() =>
+    generateSuggestions({ workspaceData: {} })
+  );
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { streamingContent, isStreaming, startStreaming } = useStreamingMessage();
 
   useEffect(() => {
     setMessages(externalMessages);
@@ -40,24 +44,38 @@ export function ChatInterface({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, streamingContent]);
 
   const sendMessage = async (messageText?: string) => {
     const messageToSend = messageText || input;
     if (!messageToSend.trim() || isLoading) return;
 
-    const userMessage: Message = {
+    const userMessage: MessageType = {
       id: `msg-${Date.now()}`,
       role: 'user',
       content: messageToSend,
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     onMessageSent(userMessage);
     setInput('');
     setIsLoading(true);
     setSuggestions([]);
+
+    // Create streaming message placeholder
+    const streamingMsgId = `msg-${Date.now()}-assistant`;
+    setStreamingMessageId(streamingMsgId);
+
+    const streamingMessage: MessageType = {
+      id: streamingMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      streaming: true,
+    };
+
+    setMessages((prev) => [...prev, streamingMessage]);
 
     try {
       const response = await fetch('/api/assistant/chat', {
@@ -87,36 +105,103 @@ export function ChatInterface({
         onSessionCreated(data.sessionId);
       }
 
-      const assistantMessage: Message = {
-        id: `msg-${Date.now()}-assistant`,
+      // Update streaming message with final content
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === streamingMsgId
+            ? {
+                ...msg,
+                content: data.message,
+                streaming: false,
+                actions: data.actions || [],
+                sources: data.sources || [],
+              }
+            : msg
+        )
+      );
+
+      const assistantMessage: MessageType = {
+        id: streamingMsgId,
         role: 'assistant',
         content: data.message,
         timestamp: new Date(),
         actions: data.actions || [],
+        sources: data.sources || [],
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
       onMessageSent(assistantMessage);
 
+      // Generate context-aware suggestions
       if (data.suggestions && data.suggestions.length > 0) {
         setSuggestions(data.suggestions);
+      } else {
+        setSuggestions(
+          generateSuggestions({
+            currentTopic: data.message.substring(0, 100),
+            workspaceData: {},
+          })
+        );
       }
     } catch (error) {
       console.error('Chat error:', error);
-      const errorMessage: Message = {
-        id: `msg-${Date.now()}-error`,
-        role: 'assistant',
-        content: '❌ Sorry, I encountered an error. Please try again.',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
+
+      // Update streaming message with error
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === streamingMsgId
+            ? {
+                ...msg,
+                content: '❌ Sorry, I encountered an error. Please try again.',
+                streaming: false,
+              }
+            : msg
+        )
+      );
     } finally {
       setIsLoading(false);
+      setStreamingMessageId(null);
     }
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    sendMessage(suggestion);
+  const handleSuggestionClick = (suggestion: any) => {
+    const text = typeof suggestion === 'string' ? suggestion : suggestion.text;
+    sendMessage(text);
+  };
+
+  const handleRegenerate = (messageId: string) => {
+    // Find the user message before this assistant message
+    const messageIndex = messages.findIndex((m) => m.id === messageId);
+    if (messageIndex > 0) {
+      const previousMessage = messages[messageIndex - 1];
+      if (previousMessage.role === 'user') {
+        // Remove the assistant message and regenerate
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+        sendMessage(previousMessage.content);
+      }
+    }
+  };
+
+  const handleFeedback = (messageId: string, feedback: 'positive' | 'negative') => {
+    // Send feedback to API
+    fetch('/api/assistant/feedback', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        messageId,
+        feedback,
+        sessionId,
+      }),
+    }).catch((error) => {
+      console.error('Failed to submit feedback:', error);
+    });
+  };
+
+  const handleFileAttach = (files: File[]) => {
+    console.log('Files attached:', files);
+    // Handle file upload logic
   };
 
   return (
@@ -134,12 +219,12 @@ export function ChatInterface({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50">
         {messages.length === 0 && (
           <div className="text-center mt-12">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-full mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full mb-4 shadow-lg">
               <svg
-                className="w-8 h-8 text-primary-600"
+                className="w-8 h-8 text-white"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -161,34 +246,43 @@ export function ChatInterface({
             <div className="grid grid-cols-1 gap-3 max-w-2xl mx-auto">
               <button
                 onClick={() => sendMessage('What is my current compliance score?')}
-                className="p-4 text-left bg-white border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                className="group p-4 text-left bg-white border-2 border-gray-200 rounded-xl hover:border-primary-500 hover:shadow-md transition-all"
               >
-                <div className="font-medium text-gray-900 mb-1">
-                  📊 Check Compliance Score
+                <div className="flex items-center gap-3 mb-1">
+                  <span className="text-2xl">📊</span>
+                  <span className="font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                    Check Compliance Score
+                  </span>
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 ml-11">
                   Get an overview of your current compliance status
                 </div>
               </button>
               <button
                 onClick={() => sendMessage('What documents need attention?')}
-                className="p-4 text-left bg-white border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                className="group p-4 text-left bg-white border-2 border-gray-200 rounded-xl hover:border-primary-500 hover:shadow-md transition-all"
               >
-                <div className="font-medium text-gray-900 mb-1">
-                  📄 Review Documents
+                <div className="flex items-center gap-3 mb-1">
+                  <span className="text-2xl">📄</span>
+                  <span className="font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                    Review Documents
+                  </span>
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 ml-11">
                   Find documents that require immediate attention
                 </div>
               </button>
               <button
                 onClick={() => sendMessage('Show me GDPR compliance gaps')}
-                className="p-4 text-left bg-white border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                className="group p-4 text-left bg-white border-2 border-gray-200 rounded-xl hover:border-primary-500 hover:shadow-md transition-all"
               >
-                <div className="font-medium text-gray-900 mb-1">
-                  🔍 Identify Gaps
+                <div className="flex items-center gap-3 mb-1">
+                  <span className="text-2xl">🔍</span>
+                  <span className="font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                    Identify Gaps
+                  </span>
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 ml-11">
                   Discover areas that need compliance improvement
                 </div>
               </button>
@@ -197,43 +291,20 @@ export function ChatInterface({
         )}
 
         {messages.map((message) => (
-          <div
+          <Message
             key={message.id}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[80%] rounded-lg p-4 ${
-                message.role === 'user'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-white border border-gray-200'
-              }`}
-            >
-              {message.role === 'assistant' ? (
-                <div className="prose prose-sm max-w-none">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeHighlight]}
-                  >
-                    {message.content}
-                  </ReactMarkdown>
-                </div>
-              ) : (
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-              )}
-              <p className="text-xs opacity-70 mt-2">
-                {message.timestamp.toLocaleTimeString()}
-              </p>
-            </div>
-          </div>
+            message={message}
+            onRegenerate={
+              message.role === 'assistant' ? () => handleRegenerate(message.id) : undefined
+            }
+            onFeedback={message.role === 'assistant' ? handleFeedback : undefined}
+          />
         ))}
 
-        {isLoading && (
+        {isLoading && !streamingMessageId && (
           <div className="flex justify-start">
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-primary-600" />
-                <span className="text-sm text-gray-600">Thinking...</span>
-              </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+              <StreamingIndicator />
             </div>
           </div>
         )}
@@ -243,72 +314,26 @@ export function ChatInterface({
 
       {/* Suggestions */}
       {suggestions.length > 0 && !isLoading && (
-        <div className="px-6 pb-4">
-          <p className="text-xs text-gray-500 font-medium mb-2">
-            Suggested questions:
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {suggestions.map((suggestion, index) => (
-              <button
-                key={index}
-                onClick={() => handleSuggestionClick(suggestion)}
-                className="px-3 py-1.5 bg-primary-50 hover:bg-primary-100 text-primary-700 rounded-full text-sm transition-colors"
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
+        <div className="px-6 py-4 bg-white border-t border-gray-200">
+          <SuggestionChips
+            suggestions={suggestions}
+            onSelect={handleSuggestionClick}
+            showCategories={true}
+          />
         </div>
       )}
 
       {/* Input Area */}
       <div className="px-6 py-4 border-t border-gray-200 bg-white">
-        <div className="flex items-end gap-2">
-          <div className="flex-1">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-              placeholder="Type your message..."
-              rows={1}
-              disabled={isLoading}
-              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed resize-none"
-              style={{ minHeight: '48px', maxHeight: '120px' }}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="p-3 text-gray-400 hover:text-gray-600 transition-colors"
-              aria-label="Attach file"
-            >
-              <Paperclip className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              className="p-3 text-gray-400 hover:text-gray-600 transition-colors"
-              aria-label="Voice input"
-            >
-              <Mic className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => sendMessage()}
-              disabled={!input.trim() || isLoading}
-              className="px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-              aria-label="Send message"
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-        <p className="text-xs text-gray-500 mt-2">
-          Press Enter to send, Shift+Enter for new line
-        </p>
+        <EnhancedInput
+          value={input}
+          onChange={setInput}
+          onSend={() => sendMessage()}
+          onFileAttach={handleFileAttach}
+          disabled={isLoading}
+          placeholder="Ask me anything about compliance..."
+          maxLength={4000}
+        />
       </div>
     </div>
   );
