@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ConversationSidebar } from './ConversationSidebar';
 import { ChatInterface } from './ChatInterface';
 import { DetailsSidebar } from './DetailsSidebar';
@@ -15,6 +15,19 @@ import { SkeletonFullPage } from '@/components/common/Skeleton';
 import { TRANSITIONS, PAGE_TRANSITION } from '@/lib/animations';
 import { useChatWidget } from '@/contexts/ChatWidgetContext';
 
+/**
+ * ARCHITECTURE NOTES:
+ *
+ * This component is the SINGLE SOURCE OF TRUTH for:
+ * 1. localStorage session persistence
+ * 2. Session ID in context
+ * 3. Conversation state
+ *
+ * The ChatInterface and AIChatWidget are CONSUMERS of session state,
+ * not managers of it. They read sessionId from context and report
+ * new sessions back to this component.
+ */
+
 interface AIAssistantPageProps {
   workspaceId: string;
   userId: string;
@@ -23,45 +36,64 @@ interface AIAssistantPageProps {
 
 type ViewMode = 'chat' | 'analytics' | 'settings';
 
+// localStorage key helper
+function getStorageKey(workspaceId: string): string {
+  return `ai_session_${workspaceId}`;
+}
+
 export function AIAssistantPage({ workspaceId, userId, sessionId: initialSessionId }: AIAssistantPageProps) {
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('chat');
-  const [hasLoadedInitialConversation, setHasLoadedInitialConversation] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [hasRestoredSession, setHasRestoredSession] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [conversationRefreshTrigger, setConversationRefreshTrigger] = useState(0);
 
-  // Chat widget control - using context for shared state
+  // Chat widget context - this is the SINGLE source of truth for sessionId
   const chatWidget = useChatWidget();
-  const sessionId = chatWidget.sessionId;
 
-  // Restore session from localStorage on mount
+  // Initialize session on mount - SINGLE PLACE for localStorage reads
   useEffect(() => {
-    if (hasRestoredSession) return;
+    if (isInitialized) return;
 
-    const restoreSession = async () => {
-      const storageKey = `ai_session_${workspaceId}`;
-      const storedSessionId = localStorage.getItem(storageKey);
+    const initializeSession = async () => {
+      setIsLoading(true);
 
-      console.log('🔍 Restoring session from localStorage:', storedSessionId);
+      try {
+        // 1. Check localStorage for existing session
+        const storageKey = getStorageKey(workspaceId);
+        const storedSessionId = localStorage.getItem(storageKey);
+        console.log('🔍 Initializing session - stored:', storedSessionId);
 
-      if (storedSessionId) {
-        chatWidget.setSessionId(storedSessionId);
-        // Load conversation history for this session
-        await loadSessionHistory(storedSessionId);
+        if (storedSessionId) {
+          // 2. Set sessionId in context SYNCHRONOUSLY via the new pattern
+          chatWidget.setSessionId(storedSessionId);
+          setCurrentConversationId(storedSessionId);
+
+          // 3. Load conversation history
+          await loadSessionHistory(storedSessionId);
+        } else {
+          // No stored session - start fresh
+          chatWidget.setSessionId(null);
+          setMessages([]);
+        }
+      } catch (error) {
+        console.error('Error initializing session:', error);
+        chatWidget.setSessionId(null);
+        setMessages([]);
+      } finally {
+        setIsLoading(false);
+        setIsInitialized(true);
       }
-
-      setHasRestoredSession(true);
     };
 
-    restoreSession();
-  }, [workspaceId, hasRestoredSession]);
+    initializeSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId, isInitialized]); // Intentionally exclude chatWidget to prevent infinite loop
 
   // Load conversation history for a session
-  const loadSessionHistory = async (sessionIdToLoad: string) => {
+  const loadSessionHistory = useCallback(async (sessionIdToLoad: string) => {
     try {
-      setIsLoading(true);
       console.log('📜 Loading session history for:', sessionIdToLoad);
 
       const response = await fetch(
@@ -91,19 +123,21 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
         }
       } else {
         console.warn('Failed to load session history:', response.status);
+        // Session might be invalid - clear it
+        const storageKey = getStorageKey(workspaceId);
+        localStorage.removeItem(storageKey);
+        chatWidget.setSessionId(null);
       }
     } catch (error) {
       console.error('Error loading session history:', error);
-    } finally {
-      setIsLoading(false);
-      setHasLoadedInitialConversation(true);
     }
-  };
-  
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]); // Intentionally exclude chatWidget
+
   // Mobile and accessibility hooks
   const deviceType = useDeviceType();
   useViewportHeight();
-  
+
   // Keyboard shortcuts
   useKeyboardShortcuts([
     {
@@ -144,27 +178,31 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
     },
   ]);
 
-  const handleConversationSelect = (conversationId: string) => {
+  // Handle selecting an existing conversation from sidebar
+  const handleConversationSelect = useCallback(async (conversationId: string) => {
+    console.log('📂 Selecting conversation:', conversationId);
+
     setCurrentConversationId(conversationId);
     setViewMode('chat');
-    announceToScreenReader('Loading conversation');
-    // Load conversation messages from API
-    loadConversationMessages(conversationId);
-  };
 
-  const loadConversationMessages = async (conversationId: string) => {
     try {
       setIsLoading(true);
       const response = await fetch(`/api/assistant/conversations/${conversationId}/messages?workspaceId=${workspaceId}`, {
         credentials: 'include',
       });
+
       if (response.ok) {
         const data = await response.json();
-        setMessages(data.messages);
+        setMessages(data.messages || []);
+
+        // Update sessionId in context and localStorage
         if (data.sessionId) {
           chatWidget.setSessionId(data.sessionId);
+          const storageKey = getStorageKey(workspaceId);
+          localStorage.setItem(storageKey, data.sessionId);
         }
-        announceToScreenReader(`Loaded conversation with ${data.messages.length} messages`);
+
+        announceToScreenReader(`Loaded conversation with ${data.messages?.length || 0} messages`);
       }
     } catch (error) {
       console.error('Failed to load conversation messages:', error);
@@ -172,75 +210,61 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
     } finally {
       setIsLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]); // Intentionally exclude chatWidget
 
-  const handleNewConversation = () => {
-    setCurrentConversationId(undefined);
-    chatWidget.setSessionId(null);
-    setMessages([]);
-    // Clear localStorage session
-    const storageKey = `ai_session_${workspaceId}`;
+  // Handle creating a new conversation - CRITICAL: This is the ONLY place that clears session
+  const handleNewConversation = useCallback(() => {
+    console.log('🆕 Creating new conversation');
+
+    // 1. Clear localStorage FIRST
+    const storageKey = getStorageKey(workspaceId);
     localStorage.removeItem(storageKey);
-  };
 
-  const handleMessageSent = (message: Message) => {
-    setMessages(prev => [...prev, message]);
-  };
+    // 2. Clear context sessionId (this notifies all listeners synchronously)
+    chatWidget.setSessionId(null);
 
-  const handleSessionCreated = (newSessionId: string) => {
+    // 3. Clear local state
+    setCurrentConversationId(undefined);
+    setMessages([]);
+
+    announceToScreenReader('Started new conversation');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]); // Intentionally exclude chatWidget
+
+  // Handle when a message is sent (for local state tracking)
+  const handleMessageSent = useCallback((message: Message) => {
+    setMessages(prev => {
+      // Avoid duplicates
+      const exists = prev.some(m => m.id === message.id);
+      if (exists) return prev;
+      return [...prev, message];
+    });
+  }, []);
+
+  // Handle when a new session is created by ChatInterface - SINGLE PLACE for localStorage writes
+  const handleSessionCreated = useCallback((newSessionId: string) => {
+    console.log('✨ New session created:', newSessionId);
+
+    // 1. Update context (synchronously via the new pattern)
     chatWidget.setSessionId(newSessionId);
+
+    // 2. Update local state
     setCurrentConversationId(newSessionId);
-    // Save to localStorage for persistence
-    const storageKey = `ai_session_${workspaceId}`;
+
+    // 3. Save to localStorage - SINGLE PLACE
+    const storageKey = getStorageKey(workspaceId);
     localStorage.setItem(storageKey, newSessionId);
-    // Trigger conversation list refresh after a short delay to allow backend to save
+
+    // 4. Trigger conversation list refresh after a delay
     setTimeout(() => {
       setConversationRefreshTrigger(prev => prev + 1);
     }, 500);
-  };
-
-  // Load the most recent conversation on mount ONLY if no session was restored
-  useEffect(() => {
-    // Wait until we've tried to restore from localStorage
-    if (!hasRestoredSession) return;
-
-    // Only load most recent if we don't have a session AND haven't loaded initial conversation
-    if (!hasLoadedInitialConversation && !sessionId) {
-      console.log('📂 No session found, loading most recent conversation...');
-      loadMostRecentConversation();
-    } else if (sessionId && hasLoadedInitialConversation) {
-      // Session was restored, we're good
-      setIsLoading(false);
-    }
-  }, [hasRestoredSession, hasLoadedInitialConversation, sessionId]);
-
-  const loadMostRecentConversation = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch(`/api/assistant/conversations?workspaceId=${workspaceId}&limit=1`, {
-        credentials: 'include',
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.conversations && data.conversations.length > 0) {
-          const mostRecent = data.conversations[0];
-          setCurrentConversationId(mostRecent.id);
-          // Load the conversation messages
-          await loadConversationMessages(mostRecent.id);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load most recent conversation:', error);
-    } finally {
-      setHasLoadedInitialConversation(true);
-      setIsLoading(false);
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]); // Intentionally exclude chatWidget
 
   const handleNotificationAction = (notificationId: string, action: string) => {
     console.log('Notification action:', action, notificationId);
-    // Handle different notification actions
     if (action === 'view_issues' || action === 'view_checklist') {
       setViewMode('chat');
     } else if (action === 'view_report') {
@@ -253,16 +277,13 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
     announceToScreenReader('Voice mode activated in chat widget');
   };
 
-  // NOTE: Messages are already in sync because:
-  // 1. ChatInterface broadcasts all messages to chatWidget context
-  // 2. AIChatWidget receives messages from chatWidget context
-  // 3. Both use the same API endpoint with same sessionId
-  // No need for additional message syncing here
-
-  // Show loading skeleton while restoring session or loading initial data
-  if (isLoading && (!hasRestoredSession || !hasLoadedInitialConversation)) {
+  // Show loading skeleton while initializing
+  if (isLoading && !isInitialized) {
     return <SkeletonFullPage />;
   }
+
+  // Get current sessionId from context for passing to children
+  const currentSessionId = chatWidget.sessionId;
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
@@ -271,7 +292,7 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-semibold text-gray-900">AI Compliance Assistant</h1>
-            
+
             {/* View Mode Tabs */}
             <div className="flex items-center gap-1 ml-8" role="tablist" aria-label="View modes">
               <button
@@ -328,12 +349,6 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
             <Mic className="w-4 h-4" />
             <span className="font-medium">Voice Mode</span>
           </button>
-
-          {/* 
-            Notifications are now handled by the global NotificationBell in the navbar.
-            AI notifications appear in the bell dropdown with "🤖 AI" category tab.
-            This provides a unified notification experience across the entire app.
-          */}
         </div>
       </div>
 
@@ -356,7 +371,6 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
             <div className="flex-1 flex flex-col min-w-0">
               <ChatInterface
                 workspaceId={workspaceId}
-                sessionId={sessionId ?? undefined}
                 messages={messages}
                 onMessageSent={handleMessageSent}
                 onSessionCreated={handleSessionCreated}
@@ -366,7 +380,7 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
             {/* Right Panel - Details & Actions */}
             <div className="w-[320px] bg-white border-l border-gray-200 flex-shrink-0 hidden lg:block">
               <DetailsSidebar
-                sessionId={sessionId ?? undefined}
+                sessionId={currentSessionId ?? undefined}
                 conversationId={currentConversationId}
                 workspaceId={workspaceId}
                 messageCount={messages.length}

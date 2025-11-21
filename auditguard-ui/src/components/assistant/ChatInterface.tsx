@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Loader2, Download, Copy, FileText } from 'lucide-react';
 import type { Message as MessageType } from '@/types/assistant';
 import { Message } from './Message';
@@ -8,12 +8,20 @@ import { EnhancedInput } from './EnhancedInput';
 import { SuggestionChips, generateSuggestions } from './SuggestionChips';
 import { StreamingIndicator, useStreamingMessage } from './StreamingMessage';
 import { VoiceChat } from './VoiceChat';
-import { useChatWidget } from '@/contexts/ChatWidgetContext';
+import { useChatWidget, BroadcastMessage } from '@/contexts/ChatWidgetContext';
 import { exportConversation, copyConversationToClipboard } from '@/lib/exportConversation';
+
+/**
+ * ARCHITECTURE NOTES:
+ *
+ * This component is a CONSUMER of session state, not a manager.
+ * - Reads sessionId from context using getSessionId() (synchronous)
+ * - Reports new sessions to parent via onSessionCreated callback
+ * - Parent (AIAssistantPage) is responsible for localStorage persistence
+ */
 
 interface ChatInterfaceProps {
   workspaceId: string;
-  sessionId?: string;
   messages: MessageType[];
   onMessageSent: (message: MessageType) => void;
   onSessionCreated: (sessionId: string) => void;
@@ -21,7 +29,6 @@ interface ChatInterfaceProps {
 
 export function ChatInterface({
   workspaceId,
-  sessionId: initialSessionId,
   messages: externalMessages,
   onMessageSent,
   onSessionCreated,
@@ -29,32 +36,16 @@ export function ChatInterface({
   const [messages, setMessages] = useState<MessageType[]>(externalMessages);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState(initialSessionId);
-
-  // Use ref to always have current sessionId (avoids stale closure in sendMessage)
-  // CRITICAL: Always sync with prop FIRST, not local state, to prevent race conditions
-  const sessionIdRef = useRef<string | undefined>(initialSessionId);
-
-  // CRITICAL: Sync sessionId when parent changes it (e.g., when user clicks "New Conversation")
-  useEffect(() => {
-    console.log('🔄 SessionId prop changed:', initialSessionId);
-    setSessionId(initialSessionId);
-  }, [initialSessionId]);
-
-  // Keep ref in sync with PROP on every render (not state - state is async!)
-  // This is the CRITICAL fix: ref must always reflect the prop value
-  sessionIdRef.current = initialSessionId;
   const [suggestions, setSuggestions] = useState(() =>
     generateSuggestions({ workspaceData: {} })
   );
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied'>('idle');
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { streamingContent, isStreaming, startStreaming } = useStreamingMessage();
 
-  // Get chat widget context for broadcasting AND subscribing to messages
+  // Get chat widget context - use getSessionId() for synchronous reads
   const chatWidget = useChatWidget();
 
   // Sync external messages to local state
@@ -62,10 +53,18 @@ export function ChatInterface({
     setMessages(externalMessages);
   }, [externalMessages]);
 
-  // Subscribe to messages from chat widget (bidirectional sync)
+  // Subscribe to messages from chat widget (for bidirectional sync with floating widget)
   useEffect(() => {
-    const unsubscribe = chatWidget.subscribeToMessages((message: MessageType) => {
-      // Add message if not duplicate
+    const unsubscribe = chatWidget.subscribeToMessages((message: BroadcastMessage) => {
+      // Only add message if it belongs to our session and is not a duplicate
+      const currentSessionId = chatWidget.getSessionId();
+
+      // Skip if message is from a different session
+      if (message.sourceSessionId !== null && message.sourceSessionId !== currentSessionId) {
+        console.log('⏭️ Skipping message from different session:', message.sourceSessionId, 'vs', currentSessionId);
+        return;
+      }
+
       setMessages(prev => {
         const exists = prev.some(m =>
           m.id === message.id ||
@@ -79,14 +78,8 @@ export function ChatInterface({
     });
 
     return () => unsubscribe();
-  }, [chatWidget]);
-
-  // Sync sessionId with context
-  useEffect(() => {
-    if (sessionId && sessionId !== chatWidget.sessionId) {
-      chatWidget.setSessionId(sessionId);
-    }
-  }, [sessionId, chatWidget]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount, chatWidget methods are stable
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -96,9 +89,13 @@ export function ChatInterface({
     scrollToBottom();
   }, [messages, streamingContent]);
 
-  const sendMessage = async (messageText?: string) => {
+  const sendMessage = useCallback(async (messageText?: string) => {
     const messageToSend = messageText || input;
     if (!messageToSend.trim() || isLoading) return;
+
+    // Get sessionId SYNCHRONOUSLY from context
+    const currentSessionId = chatWidget.getSessionId();
+    console.log('📤 Sending message with sessionId:', currentSessionId);
 
     const userMessage: MessageType = {
       id: `msg-${Date.now()}`,
@@ -109,7 +106,7 @@ export function ChatInterface({
 
     setMessages((prev) => [...prev, userMessage]);
     onMessageSent(userMessage);
-    
+
     // Broadcast to chat widget so it stays in sync
     chatWidget.notifyMessage(userMessage);
     setInput('');
@@ -131,10 +128,6 @@ export function ChatInterface({
     setMessages((prev) => [...prev, streamingMessage]);
 
     try {
-      // Use ref to get current sessionId (avoids stale closure)
-      const currentSessionId = sessionIdRef.current;
-      console.log('📤 Sending message with sessionId:', currentSessionId);
-
       const response = await fetch('/api/assistant/chat', {
         method: 'POST',
         headers: {
@@ -157,12 +150,9 @@ export function ChatInterface({
 
       const data = await response.json();
 
-      // If backend created a new session and we didn't have one, notify parent
+      // If backend created a new session, notify parent (who will update context and localStorage)
       if (data.sessionId && !currentSessionId) {
-        console.log('🆕 New session created:', data.sessionId);
-        setSessionId(data.sessionId);
-        sessionIdRef.current = data.sessionId;
-        chatWidget.setSessionId(data.sessionId);
+        console.log('🆕 New session created by backend:', data.sessionId);
         onSessionCreated(data.sessionId);
       }
 
@@ -215,7 +205,7 @@ export function ChatInterface({
           msg.id === streamingMsgId
             ? {
                 ...msg,
-                content: '❌ Sorry, I encountered an error. Please try again.',
+                content: 'Sorry, I encountered an error. Please try again.',
                 streaming: false,
               }
             : msg
@@ -225,7 +215,8 @@ export function ChatInterface({
       setIsLoading(false);
       setStreamingMessageId(null);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [input, isLoading, workspaceId, onMessageSent, onSessionCreated]); // Exclude chatWidget
 
   const handleSuggestionClick = (suggestion: any) => {
     const text = typeof suggestion === 'string' ? suggestion : suggestion.text;
@@ -246,6 +237,7 @@ export function ChatInterface({
   };
 
   const handleFeedback = (messageId: string, feedback: 'positive' | 'negative') => {
+    const currentSessionId = chatWidget.getSessionId();
     // Send feedback to API
     fetch('/api/assistant/feedback', {
       method: 'POST',
@@ -256,7 +248,7 @@ export function ChatInterface({
       body: JSON.stringify({
         messageId,
         feedback,
-        sessionId,
+        sessionId: currentSessionId,
       }),
     }).catch((error) => {
       console.error('Failed to submit feedback:', error);
@@ -277,8 +269,9 @@ export function ChatInterface({
   };
 
   const handleExport = (format: 'markdown' | 'json') => {
+    const currentSessionId = chatWidget.getSessionId();
     try {
-      exportConversation(messages, format, sessionId, workspaceId);
+      exportConversation(messages, format, currentSessionId ?? undefined, workspaceId);
       setShowExportMenu(false);
     } catch (error) {
       console.error('Export failed:', error);
@@ -287,9 +280,10 @@ export function ChatInterface({
   };
 
   const handleCopyToClipboard = async () => {
+    const currentSessionId = chatWidget.getSessionId();
     setCopyStatus('copying');
     try {
-      await copyConversationToClipboard(messages, sessionId, workspaceId);
+      await copyConversationToClipboard(messages, currentSessionId ?? undefined, workspaceId);
       setCopyStatus('copied');
       setTimeout(() => setCopyStatus('idle'), 2000);
     } catch (error) {
@@ -304,6 +298,9 @@ export function ChatInterface({
     .reverse()
     .find((m) => m.role === 'assistant')?.content;
 
+  // Get current sessionId for display
+  const currentSessionId = chatWidget.sessionId;
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -313,7 +310,7 @@ export function ChatInterface({
             <h1 className="text-xl font-semibold text-gray-900">
               AI Compliance Assistant
             </h1>
-            {sessionId && (
+            {currentSessionId && (
               <p className="text-sm text-gray-500 mt-1">
                 Session active • {messages.length} messages
               </p>

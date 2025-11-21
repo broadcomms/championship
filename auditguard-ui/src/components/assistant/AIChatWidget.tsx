@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, Send, X, Minimize2, Maximize2, ExternalLink, Download, Shield, MessageSquare, Mic } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -12,8 +12,18 @@ import { VoiceInputPanel } from './VoiceInputPanel';
 import { VoiceSettingsPanel } from './VoiceSettingsPanel';
 import { VoiceSettings } from '@/hooks/useSpeechSynthesis';
 import { InputMode } from '@/hooks/useAudioCapture';
-import { useChatWidget } from '@/contexts/ChatWidgetContext';
+import { useChatWidget, BroadcastMessage } from '@/contexts/ChatWidgetContext';
 import type { Message as MessageType, Action as ActionType } from '@/types/assistant';
+
+/**
+ * ARCHITECTURE NOTES:
+ *
+ * This widget is a CONSUMER of session state, not a manager.
+ * - Reads sessionId from context using getSessionId() (synchronous)
+ * - Does NOT read/write localStorage (that's AIAssistantPage's job)
+ * - Clears messages when session changes to null
+ * - Only displays messages; main chat handles API calls when on assistant page
+ */
 
 // Local simplified message interface for internal state
 interface LocalMessage {
@@ -23,18 +33,13 @@ interface LocalMessage {
   actions?: ActionType[];
 }
 
-interface Suggestion {
-  text: string;
-  onClick: () => void;
-}
-
 type ChatMode = 'chat' | 'voice';
 
 interface Props {
-  workspaceId?: string; // Made optional for demo mode
-  initialMode?: ChatMode; // Allow external control of initial mode
-  onModeChange?: (mode: ChatMode) => void; // Notify parent of mode changes
-  onMessageSent?: (message: MessageType) => void; // Notify parent when message sent
+  workspaceId?: string;
+  initialMode?: ChatMode;
+  onModeChange?: (mode: ChatMode) => void;
+  onMessageSent?: (message: MessageType) => void;
 }
 
 export function AIChatWidget({
@@ -48,35 +53,15 @@ export function AIChatWidget({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Get chat widget context for centralized state management
   const chatWidgetContext = useChatWidget();
 
-  // Use context state instead of local state
+  // Use context state
   const isOpen = chatWidgetContext.isOpen;
   const mode = chatWidgetContext.mode;
-  const sessionId = chatWidgetContext.sessionId;
-
-  // CRITICAL: Subscribe to session changes for immediate notification when new conversation starts
-  // This is more reliable than useEffect watching sessionId because it uses synchronous callbacks
-  useEffect(() => {
-    const unsubscribe = chatWidgetContext.subscribeToSessionChange((newSessionId, prevSessionId) => {
-      // If sessionId changed from a value to null, new conversation was started
-      if (prevSessionId !== null && newSessionId === null) {
-        console.log('🆕 New conversation detected (via subscription) - clearing widget messages');
-        setMessages([]);
-        setSuggestions([]);
-        // Clear localStorage for this workspace
-        const storageKey = `ai_session_${workspaceId}`;
-        localStorage.removeItem(storageKey);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [workspaceId, chatWidgetContext]);
 
   // Voice settings state
   const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({
@@ -103,7 +88,8 @@ export function AIChatWidget({
     if (initialMode !== mode) {
       chatWidgetContext.setMode(initialMode);
     }
-  }, [initialMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMode, mode]); // Exclude chatWidgetContext
 
   // Notify parent of mode changes
   useEffect(() => {
@@ -112,20 +98,51 @@ export function AIChatWidget({
     }
   }, [mode, onModeChange]);
 
-  // Subscribe to messages from main chat interface (when on assistant page)
+  // CRITICAL: Subscribe to session changes - clear messages when session changes to null
   useEffect(() => {
-    const unsubscribe = chatWidgetContext.subscribeToMessages((message: MessageType) => {
-      // Convert to local message format and add if not duplicate
+    const unsubscribe = chatWidgetContext.subscribeToSessionChange((newSessionId, prevSessionId) => {
+      console.log('🔄 Widget: Session changed from', prevSessionId, 'to', newSessionId);
+
+      // If session changed to null, clear messages (new conversation started)
+      if (newSessionId === null && prevSessionId !== null) {
+        console.log('🧹 Widget: Clearing messages for new conversation');
+        setMessages([]);
+        setSuggestions([]);
+      }
+
+      // If session changed to a different value, also clear (switching conversations)
+      if (newSessionId !== null && prevSessionId !== null && newSessionId !== prevSessionId) {
+        console.log('🔄 Widget: Switching conversations - clearing messages');
+        setMessages([]);
+        setSuggestions([]);
+      }
+    });
+
+    return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
+
+  // Subscribe to messages from main chat interface
+  useEffect(() => {
+    const unsubscribe = chatWidgetContext.subscribeToMessages((message: BroadcastMessage) => {
+      const currentSessionId = chatWidgetContext.getSessionId();
+
+      // Only add message if it belongs to current session
+      if (message.sourceSessionId !== null && message.sourceSessionId !== currentSessionId) {
+        console.log('⏭️ Widget: Skipping message from different session');
+        return;
+      }
+
       const localMsg: LocalMessage = {
         role: message.role,
         content: message.content,
         timestamp: message.timestamp,
         actions: message.actions,
       };
-      
+
       setMessages(prev => {
-        const exists = prev.some(m => 
-          m.content === localMsg.content && 
+        const exists = prev.some(m =>
+          m.content === localMsg.content &&
           m.role === localMsg.role &&
           Math.abs(new Date(m.timestamp).getTime() - new Date(localMsg.timestamp).getTime()) < 1000
         );
@@ -133,64 +150,19 @@ export function AIChatWidget({
         return [...prev, localMsg];
       });
     });
-    
+
     return () => unsubscribe();
-  }, [chatWidgetContext]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
 
-  // Load session ID and conversation history from localStorage on mount
-  useEffect(() => {
-    const loadConversationHistory = async () => {
-      // Get stored session ID for this workspace
-      const storageKey = `ai_session_${workspaceId}`;
-      const storedSessionId = localStorage.getItem(storageKey);
-
-      if (storedSessionId) {
-        chatWidgetContext.setSessionId(storedSessionId);
-        setIsLoadingHistory(true);
-
-        try {
-          // Fetch conversation history from backend
-          const response = await fetch(
-            `/api/assistant/chat?workspaceId=${workspaceId}&sessionId=${storedSessionId}`,
-            {
-              method: 'GET',
-              credentials: 'include',
-            }
-          );
-
-          if (response.ok) {
-            const data = await response.json();
-
-            // Convert backend messages to widget format
-            if (data.messages && Array.isArray(data.messages)) {
-              const loadedMessages: LocalMessage[] = data.messages.map((msg: any) => ({
-                role: msg.role,
-                content: msg.content,
-                timestamp: msg.created_at ? new Date(msg.created_at) :
-                          msg.timestamp ? new Date(msg.timestamp) :
-                          new Date() // Fallback to current time if neither exists
-              }));
-
-              setMessages(loadedMessages);
-            }
-          }
-        } catch (error) {
-          console.error('Failed to load conversation history:', error);
-          // If loading fails, clear the stored session to start fresh
-          localStorage.removeItem(storageKey);
-          chatWidgetContext.setSessionId(null);
-        } finally {
-          setIsLoadingHistory(false);
-        }
-      }
-    };
-
-    loadConversationHistory();
-  }, [workspaceId]);
-
-  const sendMessage = async (messageText?: string) => {
+  // Send message - uses context sessionId synchronously
+  const sendMessage = useCallback(async (messageText?: string) => {
     const messageToSend = messageText || input;
     if (!messageToSend.trim() || isLoading) return;
+
+    // Get sessionId SYNCHRONOUSLY from context
+    const currentSessionId = chatWidgetContext.getSessionId();
+    console.log('📤 Widget: Sending message with sessionId:', currentSessionId);
 
     const userMessage: LocalMessage = {
       role: 'user',
@@ -199,62 +171,56 @@ export function AIChatWidget({
     };
 
     setMessages(prev => [...prev, userMessage]);
-    
-    // Notify context of user message (convert to MessageType)
+
+    // Notify context of user message (for main chat to receive)
     const contextMessage: MessageType = {
       id: `msg-${Date.now()}-user`,
       ...userMessage
     };
     chatWidgetContext.notifyMessage(contextMessage);
-    
+
     setInput('');
     setIsLoading(true);
     setSuggestions([]);
 
     try {
-      // Send request - the API route will read the HttpOnly session cookie
       const response = await fetch('/api/assistant/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include', // Include HttpOnly cookies
+        credentials: 'include',
         body: JSON.stringify({
           workspaceId,
           message: messageToSend,
-          sessionId,
+          sessionId: currentSessionId,
           context: {
             currentPage: window.location.pathname
           }
         })
       });
 
-      let errorMessage = '';
       if (!response.ok) {
-        // Try to get error message from response
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         try {
           const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`;
-        } catch {
-          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        }
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch {}
         throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      
-      // Debug: Log the full response to understand structure
-      console.log('🔍 AI Response Data:', JSON.stringify(data, null, 2));
-      console.log('📊 Actions:', data.actions);
-      console.log('💡 Suggestions:', data.suggestions);
+      console.log('✅ Widget: Received response');
 
-      // Save session ID for this workspace
-      if (data.sessionId) {
+      // If a new session was created, the main page will handle updating context
+      // We don't touch localStorage here - that's AIAssistantPage's job
+      // But we do update our local reference if one was created
+      if (data.sessionId && !currentSessionId) {
+        console.log('🆕 Widget: New session created by backend:', data.sessionId);
+        // Let context know about the new session
         chatWidgetContext.setSessionId(data.sessionId);
-        const storageKey = `ai_session_${workspaceId}`;
-        localStorage.setItem(storageKey, data.sessionId);
       }
-      
+
       const assistantMessage: LocalMessage = {
         role: 'assistant',
         content: data.message,
@@ -263,46 +229,35 @@ export function AIChatWidget({
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-      
-      // Notify context of assistant message (convert to MessageType)
-      const contextMessage: MessageType = {
+
+      // Notify context of assistant message
+      const assistantContextMsg: MessageType = {
         id: `msg-${Date.now()}-assistant`,
         ...assistantMessage
       };
-      
+
       if (onMessageSent) {
-        onMessageSent(contextMessage);
+        onMessageSent(assistantContextMsg);
       }
-      
-      chatWidgetContext.notifyMessage(contextMessage);
-      
+
+      chatWidgetContext.notifyMessage(assistantContextMsg);
+
       // Set suggestions if available
       if (data.suggestions && data.suggestions.length > 0) {
-        console.log('✅ Setting suggestions:', data.suggestions);
         setSuggestions(data.suggestions);
-      } else {
-        console.log('⚠️ No suggestions in response');
       }
     } catch (error) {
-      console.error('Chat error:', error);
-      
-      // Show more helpful error messages
+      console.error('Widget chat error:', error);
+
       let errorContent = 'Sorry, I encountered an error. Please try again.';
-      
       if (error instanceof Error) {
-        if (error.message.includes('401') || error.message.includes('Unauthorized') || error.message.includes('Access denied')) {
-          errorContent = '🔒 **Authentication Required**\n\nPlease log in to use the AI assistant. Your session may have expired.';
-        } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
-          errorContent = '🚫 **Access Denied**\n\nYou don\'t have permission to access this workspace. Please check your workspace membership.';
-        } else if (error.message.includes('500')) {
-          errorContent = '⚠️ **Server Error**\n\nThe AI service is temporarily unavailable. Please try again in a moment.';
-        } else if (error.message.includes('timeout')) {
-          errorContent = '⏱️ **Request Timeout**\n\nThe request took too long to process. Please try a simpler question.';
-        } else {
-          errorContent = `❌ **Error**\n\n${error.message}\n\nPlease try again or contact support if the problem persists.`;
+        if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+          errorContent = 'Please log in to use the AI assistant.';
+        } else if (error.message.includes('403')) {
+          errorContent = 'You don\'t have permission to access this workspace.';
         }
       }
-      
+
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: errorContent,
@@ -311,7 +266,8 @@ export function AIChatWidget({
     } finally {
       setIsLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [input, isLoading, workspaceId, onMessageSent]); // Exclude chatWidgetContext
 
   const handleSuggestionClick = (suggestion: string) => {
     setInput(suggestion);
@@ -328,15 +284,11 @@ export function AIChatWidget({
 
   const clearConversation = () => {
     if (confirm('Are you sure you want to clear this conversation? This cannot be undone.')) {
-      const storageKey = `ai_session_${workspaceId}`;
-      localStorage.removeItem(storageKey);
+      // Clear context session (this will trigger the subscription and clear messages)
       chatWidgetContext.setSessionId(null);
-      setMessages([]);
-      setSuggestions([]);
     }
   };
 
-  // Handle widget open/close using context
   const handleToggleWidget = () => {
     chatWidgetContext.toggleWidget();
   };
@@ -344,6 +296,9 @@ export function AIChatWidget({
   const handleCloseWidget = () => {
     chatWidgetContext.closeWidget();
   };
+
+  // Get current sessionId for display
+  const currentSessionId = chatWidgetContext.sessionId;
 
   return (
     <>
@@ -377,7 +332,7 @@ export function AIChatWidget({
               <div className="flex items-center space-x-2">
                 <Shield className="w-5 h-5" />
                 <span className="font-semibold">AuditGuardX AI</span>
-                {sessionId && (
+                {currentSessionId && (
                   <span className="text-xs opacity-70">• Active Session</span>
                 )}
               </div>
@@ -438,8 +393,8 @@ export function AIChatWidget({
                   voiceSettings={voiceSettings}
                   inputMode={inputMode}
                   onSettingsClick={() => setShowVoiceSettings(true)}
-                  lastAssistantMessage={messages.length > 0 && messages[messages.length - 1].role === 'assistant' 
-                    ? messages[messages.length - 1].content 
+                  lastAssistantMessage={messages.length > 0 && messages[messages.length - 1].role === 'assistant'
+                    ? messages[messages.length - 1].content
                     : undefined}
                 />
               </div>
@@ -447,14 +402,7 @@ export function AIChatWidget({
 
             {/* Messages */}
             <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${mode === 'voice' ? 'max-h-64' : ''}`}>
-              {isLoadingHistory && (
-                <div className="text-center text-gray-500 py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                  <p className="text-sm">Loading conversation history...</p>
-                </div>
-              )}
-              
-              {!isLoadingHistory && messages.length === 0 && (
+              {messages.length === 0 && (
                 <div className="text-center text-gray-500 mt-8">
                   <Bot className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                   <p className="mb-2 font-semibold">Hi! I'm your AI compliance assistant.</p>
@@ -464,19 +412,19 @@ export function AIChatWidget({
                       onClick={() => sendMessage("What is my current compliance score?")}
                       className="block w-full text-left px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors"
                     >
-                      📊 What is my current compliance score?
+                      What is my current compliance score?
                     </button>
                     <button
                       onClick={() => sendMessage("What documents need attention?")}
                       className="block w-full text-left px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors"
                     >
-                      📄 What documents need attention?
+                      What documents need attention?
                     </button>
                     <button
                       onClick={() => sendMessage("Show me GDPR compliance gaps")}
                       className="block w-full text-left px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors"
                     >
-                      🔍 Show me GDPR compliance gaps
+                      Show me GDPR compliance gaps
                     </button>
                   </div>
                 </div>
@@ -500,12 +448,11 @@ export function AIChatWidget({
                           remarkPlugins={[remarkGfm]}
                           rehypePlugins={[rehypeHighlight]}
                           components={{
-                            // Customize rendering for better chat display
                             h1: ({node, ...props}) => <h1 className="text-lg font-bold" {...props} />,
                             h2: ({node, ...props}) => <h2 className="text-base font-bold" {...props} />,
                             h3: ({node, ...props}) => <h3 className="text-sm font-bold" {...props} />,
                             p: ({node, ...props}) => <p className="text-sm" {...props} />,
-                            code: ({node, inline, ...props}: any) => 
+                            code: ({node, inline, ...props}: any) =>
                               inline ? (
                                 <code className="bg-gray-200 px-1 rounded text-xs" {...props} />
                               ) : (
@@ -519,7 +466,7 @@ export function AIChatWidget({
                         >
                           {message.content}
                         </ReactMarkdown>
-                        
+
                         {/* Action Buttons */}
                         {message.actions && message.actions.length > 0 && (
                           <div className="mt-3 pt-2 border-t border-gray-200 flex flex-wrap gap-2">
@@ -587,7 +534,7 @@ export function AIChatWidget({
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                   placeholder="Ask a question..."
                   disabled={isLoading}
                   className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 text-gray-900"
