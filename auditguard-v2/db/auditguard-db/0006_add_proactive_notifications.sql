@@ -284,37 +284,15 @@ CREATE INDEX idx_compliance_trends_workspace_date ON compliance_trends(workspace
 CREATE INDEX idx_compliance_trends_date ON compliance_trends(date DESC);
 
 -- ============================================
--- TRIGGERS
+-- TRIGGERS (DISABLED FOR D1 COMPATIBILITY)
 -- ============================================
+-- Note: Cloudflare D1 does not support triggers.
+-- These operations must be handled in application code.
 
--- Update monitoring settings timestamp
-CREATE TRIGGER update_proactive_settings_timestamp
-AFTER UPDATE ON proactive_monitoring_settings
-BEGIN
-    UPDATE proactive_monitoring_settings
-    SET updated_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
-
--- Set dismissal timestamp
-CREATE TRIGGER set_notification_dismissal_timestamp
-AFTER UPDATE OF is_dismissed ON proactive_notifications
-WHEN NEW.is_dismissed = 1 AND OLD.is_dismissed = 0
-BEGIN
-    UPDATE proactive_notifications
-    SET dismissed_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
-
--- Set action taken timestamp
-CREATE TRIGGER set_notification_action_timestamp
-AFTER UPDATE OF action_taken ON proactive_notifications
-WHEN NEW.action_taken IS NOT NULL AND OLD.action_taken IS NULL
-BEGIN
-    UPDATE proactive_notifications
-    SET action_taken_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
+-- TODO: Handle in application code:
+-- - Update proactive_monitoring_settings.updated_at on UPDATE
+-- - Set proactive_notifications.dismissed_at when is_dismissed changes to 1
+-- - Set proactive_notifications.action_taken_at when action_taken is set
 
 -- ============================================
 -- SEED DATA: DEFAULT SETTINGS

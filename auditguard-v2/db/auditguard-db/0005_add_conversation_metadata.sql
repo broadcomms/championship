@@ -144,18 +144,22 @@ CREATE TABLE conversation_bookmarks (
 );
 
 -- ============================================
--- CONVERSATION SEARCH INDEX
+-- CONVERSATION SEARCH INDEX (DISABLED FOR D1)
 -- ============================================
--- Full-text search index for conversations (SQLite FTS5)
+-- Note: Cloudflare D1 does not support FTS5 virtual tables.
+-- Full-text search must be implemented using:
+-- - LIKE queries for simple search
+-- - External search service (Elasticsearch, Algolia, etc.)
+-- - Cloudflare Vectorize for semantic search
 
-CREATE VIRTUAL TABLE conversation_search_index USING fts5(
-    session_id UNINDEXED,
-    title,
-    summary,
-    message_content,
-    tags,
-    tokenize = 'porter unicode61'
-);
+-- CREATE VIRTUAL TABLE conversation_search_index USING fts5(
+--     session_id UNINDEXED,
+--     title,
+--     summary,
+--     message_content,
+--     tags,
+--     tokenize = 'porter unicode61'
+-- );
 
 -- ============================================
 -- INDEXES FOR PERFORMANCE
@@ -193,97 +197,18 @@ CREATE INDEX idx_conversation_bookmarks_user ON conversation_bookmarks(user_id);
 CREATE INDEX idx_conversation_bookmarks_message ON conversation_bookmarks(message_id);
 
 -- ============================================
--- TRIGGERS
+-- TRIGGERS (DISABLED FOR D1 COMPATIBILITY)
 -- ============================================
+-- Note: Cloudflare D1 does not support triggers.
+-- These operations must be handled in application code.
 
--- Update conversation_sessions when summary is created
-CREATE TRIGGER update_session_summary_timestamp
-AFTER INSERT ON conversation_summaries
-BEGIN
-    UPDATE conversation_sessions
-    SET last_summary_generated_at = (unixepoch() * 1000),
-        summary = NEW.short_summary
-    WHERE id = NEW.session_id;
-END;
-
--- Update folder conversation count
-CREATE TRIGGER increment_folder_count
-AFTER INSERT ON conversation_folder_assignments
-BEGIN
-    UPDATE conversation_folders
-    SET conversation_count = conversation_count + 1
-    WHERE id = NEW.folder_id;
-END;
-
-CREATE TRIGGER decrement_folder_count
-AFTER DELETE ON conversation_folder_assignments
-BEGIN
-    UPDATE conversation_folders
-    SET conversation_count = conversation_count - 1
-    WHERE id = OLD.folder_id;
-END;
-
--- Update folder timestamp
-CREATE TRIGGER update_folder_timestamp
-AFTER UPDATE ON conversation_folders
-BEGIN
-    UPDATE conversation_folders
-    SET updated_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
-
--- Update tag usage count
-CREATE TRIGGER update_tag_usage_on_session_update
-AFTER UPDATE OF tags ON conversation_sessions
-WHEN OLD.tags != NEW.tags
-BEGIN
-    -- Note: This is a simple trigger. In production, you'd parse the JSON
-    -- and update counts for specific tags. For now, this marks that the
-    -- tag system needs usage count recalculation.
-    UPDATE conversation_tags
-    SET usage_count = (
-        SELECT COUNT(*)
-        FROM conversation_sessions
-        WHERE workspace_id = conversation_tags.workspace_id
-        AND tags LIKE '%' || conversation_tags.name || '%'
-    )
-    WHERE workspace_id IN (
-        SELECT workspace_id FROM conversation_sessions WHERE id = NEW.id
-    );
-END;
-
--- Populate search index when conversation or message changes
-CREATE TRIGGER populate_search_index_on_session_insert
-AFTER INSERT ON conversation_sessions
-BEGIN
-    INSERT INTO conversation_search_index (session_id, title, tags)
-    VALUES (NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.tags, '[]'));
-END;
-
-CREATE TRIGGER populate_search_index_on_session_update
-AFTER UPDATE ON conversation_sessions
-BEGIN
-    DELETE FROM conversation_search_index WHERE session_id = NEW.id;
-    INSERT INTO conversation_search_index (session_id, title, summary, tags)
-    VALUES (NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.summary, ''), COALESCE(NEW.tags, '[]'));
-END;
-
-CREATE TRIGGER populate_search_index_on_message_insert
-AFTER INSERT ON conversation_messages
-BEGIN
-    INSERT INTO conversation_search_index (session_id, message_content)
-    VALUES (NEW.session_id, NEW.content);
-END;
-
--- Archive timestamp
-CREATE TRIGGER set_archived_timestamp
-AFTER UPDATE OF is_archived ON conversation_sessions
-WHEN NEW.is_archived = 1 AND OLD.is_archived = 0
-BEGIN
-    UPDATE conversation_sessions
-    SET archived_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
+-- TODO: Handle in application code:
+-- - Update conversation_sessions.last_summary_generated_at and summary on INSERT to conversation_summaries
+-- - Update conversation_folders.conversation_count on INSERT/DELETE to conversation_folder_assignments
+-- - Update conversation_folders.updated_at on UPDATE
+-- - Update conversation_tags.usage_count when session tags change
+-- - Populate search index when conversations/messages change (use external search service)
+-- - Set conversation_sessions.archived_at when is_archived changes to 1
 
 -- ============================================
 -- SEED DATA: SYSTEM TAGS

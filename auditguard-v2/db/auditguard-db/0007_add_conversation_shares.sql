@@ -243,91 +243,19 @@ CREATE INDEX idx_share_activity_created ON conversation_share_activity_log(creat
 CREATE INDEX idx_collab_settings_workspace ON conversation_collaboration_settings(workspace_id);
 
 -- ============================================
--- TRIGGERS
+-- TRIGGERS (DISABLED FOR D1 COMPATIBILITY)
 -- ============================================
+-- Note: Cloudflare D1 does not support triggers.
+-- These operations must be handled in application code.
 
--- Update share view count
-CREATE TRIGGER increment_share_view_count
-AFTER INSERT ON conversation_share_activity_log
-WHEN NEW.activity_type = 'viewed'
-BEGIN
-    UPDATE conversation_shares
-    SET view_count = view_count + 1,
-        last_viewed_at = (unixepoch() * 1000)
-    WHERE id = NEW.share_id;
-END;
-
--- Update share comment count
-CREATE TRIGGER increment_share_comment_count
-AFTER INSERT ON conversation_comments
-BEGIN
-    UPDATE conversation_shares
-    SET comment_count = comment_count + 1
-    WHERE session_id = NEW.session_id;
-END;
-
-CREATE TRIGGER decrement_share_comment_count
-AFTER DELETE ON conversation_comments
-BEGIN
-    UPDATE conversation_shares
-    SET comment_count = comment_count - 1
-    WHERE session_id = OLD.session_id;
-END;
-
--- Set revoked timestamp
-CREATE TRIGGER set_share_revoked_timestamp
-AFTER UPDATE OF is_revoked ON conversation_shares
-WHEN NEW.is_revoked = 1 AND OLD.is_revoked = 0
-BEGIN
-    UPDATE conversation_shares
-    SET revoked_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-    
-    -- Log revocation
-    INSERT INTO conversation_share_activity_log (share_id, activity_type, actor_id)
-    VALUES (NEW.id, 'revoked', NEW.revoked_by);
-END;
-
--- Set comment edited timestamp
-CREATE TRIGGER set_comment_edited_timestamp
-AFTER UPDATE OF content ON conversation_comments
-WHEN NEW.is_edited = 0
-BEGIN
-    UPDATE conversation_comments
-    SET is_edited = 1,
-        edited_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
-
--- Set comment deleted timestamp
-CREATE TRIGGER set_comment_deleted_timestamp
-AFTER UPDATE OF is_deleted ON conversation_comments
-WHEN NEW.is_deleted = 1 AND OLD.is_deleted = 0
-BEGIN
-    UPDATE conversation_comments
-    SET deleted_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
-
--- Update collaboration settings timestamp
-CREATE TRIGGER update_collab_settings_timestamp
-AFTER UPDATE ON conversation_collaboration_settings
-BEGIN
-    UPDATE conversation_collaboration_settings
-    SET updated_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
-
--- Increment export download count
-CREATE TRIGGER increment_export_download_count
-AFTER UPDATE OF downloaded ON conversation_exports
-WHEN NEW.downloaded = 1 AND OLD.downloaded = 0
-BEGIN
-    UPDATE conversation_exports
-    SET download_count = download_count + 1,
-        last_downloaded_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
+-- TODO: Handle in application code:
+-- - Update conversation_shares.view_count and last_viewed_at on INSERT to activity_log with type='viewed'
+-- - Update conversation_shares.comment_count on INSERT/DELETE to conversation_comments
+-- - Set conversation_shares.revoked_at and log activity on is_revoked change
+-- - Set conversation_comments.is_edited and edited_at on content UPDATE
+-- - Set conversation_comments.deleted_at on is_deleted change
+-- - Update conversation_collaboration_settings.updated_at on UPDATE
+-- - Update conversation_exports.download_count and last_downloaded_at on download
 
 -- ============================================
 -- SEED DATA: DEFAULT COLLABORATION SETTINGS
@@ -353,3 +281,6 @@ WHERE NOT EXISTS (
 -- Password verification: Use bcrypt in application layer
 -- Check expiration: WHERE expires_at IS NULL OR expires_at > (unixepoch() * 1000)
 -- Check revoked: WHERE is_revoked = 0
+
+-- Migration complete marker
+SELECT 'Migration 0007 completed successfully' as status;

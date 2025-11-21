@@ -193,42 +193,16 @@ INSERT INTO available_voices (id, name, category, description, gender, age, acce
 ('yoZ06aMxZJJ28mfd3POQ', 'Sam', 'premade', 'Dynamic and engaging American male voice', 'male', 'young', 'american', 'conversational', 1, 0);
 
 -- ============================================
--- TRIGGERS
+-- TRIGGERS (DISABLED FOR D1 COMPATIBILITY)
 -- ============================================
+-- Note: Cloudflare D1 does not support triggers.
+-- These operations must be handled in application code.
 
--- Update voice preferences timestamp
-CREATE TRIGGER update_voice_preferences_timestamp
-AFTER UPDATE ON voice_preferences
-BEGIN
-    UPDATE voice_preferences 
-    SET updated_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
+-- TODO: Handle in application code:
+-- - Update voice_preferences.updated_at on UPDATE
+-- - Update available_voices.updated_at on UPDATE
+-- - Update voice_usage_daily.updated_at on UPDATE
+-- - Increment available_voices.times_used and last_used_at on INSERT to voice_interactions
 
--- Update available voices timestamp
-CREATE TRIGGER update_available_voices_timestamp
-AFTER UPDATE ON available_voices
-BEGIN
-    UPDATE available_voices 
-    SET updated_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
-
--- Update voice usage timestamp
-CREATE TRIGGER update_voice_usage_timestamp
-AFTER UPDATE ON voice_usage_daily
-BEGIN
-    UPDATE voice_usage_daily 
-    SET updated_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
-
--- Increment voice usage count
-CREATE TRIGGER increment_voice_usage_count
-AFTER INSERT ON voice_interactions
-BEGIN
-    UPDATE available_voices
-    SET times_used = times_used + 1,
-        last_used_at = (unixepoch() * 1000)
-    WHERE id = NEW.voice_id;
-END;
+-- Migration complete marker
+SELECT 'Migration 0004 completed successfully' as status;

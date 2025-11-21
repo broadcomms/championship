@@ -45,3 +45,6 @@ ALTER TABLE notification_preferences ADD COLUMN email_ai_insight TEXT DEFAULT 'w
 -- - source: 'system' (existing notifications came from system)
 -- - archived: 0 (not archived)
 -- All other new fields will be NULL
+
+-- Migration complete marker
+SELECT 'Migration 0009 completed successfully' as status;

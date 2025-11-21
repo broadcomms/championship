@@ -354,106 +354,50 @@ CREATE INDEX idx_benchmarks_workspace ON performance_benchmarks(workspace_id);
 CREATE INDEX idx_benchmarks_duration ON performance_benchmarks(duration);
 
 -- ============================================
--- TRIGGERS
+-- TRIGGERS (DISABLED FOR D1 COMPATIBILITY)
 -- ============================================
+-- Note: Cloudflare D1 does not support triggers.
+-- These operations must be handled in application code.
 
--- Update analytics timestamp
-CREATE TRIGGER update_analytics_daily_timestamp
-AFTER UPDATE ON assistant_analytics_daily
-BEGIN
-    UPDATE assistant_analytics_daily
-    SET updated_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
-
--- Update user analytics timestamp
-CREATE TRIGGER update_user_analytics_timestamp
-AFTER UPDATE ON user_analytics
-BEGIN
-    UPDATE user_analytics
-    SET updated_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
-
--- Update popular queries timestamp
-CREATE TRIGGER update_popular_queries_timestamp
-AFTER UPDATE ON popular_queries
-BEGIN
-    UPDATE popular_queries
-    SET updated_at = (unixepoch() * 1000)
-    WHERE id = NEW.id;
-END;
-
--- Update user analytics on new conversation
-CREATE TRIGGER update_user_analytics_on_conversation
-AFTER INSERT ON conversation_sessions
-BEGIN
-    INSERT INTO user_analytics (user_id, workspace_id, total_conversations, first_interaction_at, last_interaction_at)
-    VALUES (
-        NEW.user_id,
-        NEW.workspace_id,
-        1,
-        NEW.started_at,
-        NEW.started_at
-    )
-    ON CONFLICT(user_id, workspace_id) DO UPDATE SET
-        total_conversations = total_conversations + 1,
-        last_interaction_at = NEW.started_at;
-END;
-
--- Update user analytics on new message
-CREATE TRIGGER update_user_analytics_on_message
-AFTER INSERT ON conversation_messages
-WHEN NEW.role = 'user'
-BEGIN
-    UPDATE user_analytics
-    SET total_messages = total_messages + 1,
-        last_interaction_at = NEW.created_at
-    WHERE user_id = (SELECT user_id FROM conversation_sessions WHERE id = NEW.session_id)
-    AND workspace_id = (SELECT workspace_id FROM conversation_sessions WHERE id = NEW.session_id);
-END;
+-- TODO: Handle in application code:
+-- - Update assistant_analytics_daily.updated_at on UPDATE
+-- - Update user_analytics.updated_at on UPDATE
+-- - Update popular_queries.updated_at on UPDATE
+-- - Update/insert user_analytics on INSERT to conversation_sessions
+-- - Update user_analytics on INSERT to conversation_messages (when role='user')
 
 -- ============================================
--- VIEWS FOR ANALYTICS
+-- VIEWS FOR ANALYTICS (DISABLED FOR D1)
 -- ============================================
+-- Note: Cloudflare D1 has limited support for views.
+-- These queries should be executed directly or computed in application code.
 
--- Real-time dashboard metrics view
-CREATE VIEW vw_realtime_metrics AS
-SELECT 
-    workspace_id,
-    COUNT(DISTINCT id) as active_conversations,
-    COUNT(DISTINCT user_id) as active_users,
-    SUM(message_count) as total_messages
-FROM conversation_sessions
-WHERE last_activity_at > (unixepoch() * 1000) - 3600000  -- Last hour
-GROUP BY workspace_id;
+-- Real-time dashboard metrics (execute as query)
+-- SELECT workspace_id, COUNT(DISTINCT id) as active_conversations,
+--        COUNT(DISTINCT user_id) as active_users, SUM(message_count) as total_messages
+-- FROM conversation_sessions
+-- WHERE last_activity_at > (unixepoch() * 1000) - 3600000
+-- GROUP BY workspace_id;
 
--- Weekly performance summary view
-CREATE VIEW vw_weekly_performance AS
-SELECT 
-    workspace_id,
-    DATE(date) as week_start,
-    SUM(conversations_count) as weekly_conversations,
-    SUM(messages_count) as weekly_messages,
-    AVG(avg_response_time) as avg_weekly_response_time,
-    AVG(satisfaction_avg) as avg_weekly_satisfaction
-FROM assistant_analytics_daily
-WHERE date >= DATE('now', '-7 days')
-GROUP BY workspace_id, week_start;
+-- Weekly performance summary (execute as query)
+-- SELECT workspace_id, DATE(date) as week_start,
+--        SUM(conversations_count) as weekly_conversations,
+--        SUM(messages_count) as weekly_messages,
+--        AVG(avg_response_time) as avg_weekly_response_time,
+--        AVG(satisfaction_avg) as avg_weekly_satisfaction
+-- FROM assistant_analytics_daily
+-- WHERE date >= DATE('now', '-7 days')
+-- GROUP BY workspace_id, week_start;
 
--- Top tools usage view
-CREATE VIEW vw_top_tools AS
-SELECT 
-    workspace_id,
-    tool_name,
-    COUNT(*) as usage_count,
-    AVG(execution_time) as avg_execution_time,
-    SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count,
-    SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failure_count
-FROM tool_usage_analytics
-WHERE executed_at > (unixepoch() * 1000) - 2592000000  -- Last 30 days
-GROUP BY workspace_id, tool_name
-ORDER BY usage_count DESC;
+-- Top tools usage (execute as query)
+-- SELECT workspace_id, tool_name, COUNT(*) as usage_count,
+--        AVG(execution_time) as avg_execution_time,
+--        SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count,
+--        SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failure_count
+-- FROM tool_usage_analytics
+-- WHERE executed_at > (unixepoch() * 1000) - 2592000000
+-- GROUP BY workspace_id, tool_name
+-- ORDER BY usage_count DESC;
 
 -- ============================================
 -- SEED DATA: INITIALIZE ANALYTICS
@@ -470,7 +414,7 @@ WHERE NOT EXISTS (
 
 -- Create initial daily analytics for today
 INSERT INTO assistant_analytics_daily (workspace_id, date)
-SELECT DISTINCT workspace_id, DATE('now')
+SELECT DISTINCT id, DATE('now')
 FROM workspaces
 WHERE NOT EXISTS (
     SELECT 1 FROM assistant_analytics_daily aad
