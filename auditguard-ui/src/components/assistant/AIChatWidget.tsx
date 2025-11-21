@@ -98,7 +98,34 @@ export function AIChatWidget({
     }
   }, [mode, onModeChange]);
 
-  // CRITICAL: Subscribe to session changes - clear messages when session changes to null
+  // Load conversation history for a session
+  const loadConversationHistory = useCallback(async (sessionId: string) => {
+    console.log('📜 Widget: Loading conversation history for:', sessionId);
+    try {
+      const response = await fetch(
+        `/api/assistant/chat?workspaceId=${workspaceId}&sessionId=${sessionId}`,
+        { method: 'GET', credentials: 'include' }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.messages && Array.isArray(data.messages)) {
+          const loadedMessages: LocalMessage[] = data.messages.map((msg: any) => ({
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.created_at ? new Date(msg.created_at) : new Date(msg.timestamp || Date.now()),
+            actions: msg.actions || [],
+          }));
+          console.log('✅ Widget: Loaded', loadedMessages.length, 'messages');
+          setMessages(loadedMessages);
+        }
+      }
+    } catch (error) {
+      console.error('Widget: Failed to load conversation history:', error);
+    }
+  }, [workspaceId]);
+
+  // CRITICAL: Subscribe to session changes - load/clear messages appropriately
   useEffect(() => {
     const unsubscribe = chatWidgetContext.subscribeToSessionChange((newSessionId, prevSessionId) => {
       console.log('🔄 Widget: Session changed from', prevSessionId, 'to', newSessionId);
@@ -109,16 +136,31 @@ export function AIChatWidget({
         setMessages([]);
         setSuggestions([]);
       }
-
-      // If session changed to a different value, also clear (switching conversations)
-      if (newSessionId !== null && prevSessionId !== null && newSessionId !== prevSessionId) {
-        console.log('🔄 Widget: Switching conversations - clearing messages');
+      // If session changed from null to a value, load that conversation's history
+      else if (newSessionId !== null && prevSessionId === null) {
+        console.log('📂 Widget: Session activated - loading history');
+        loadConversationHistory(newSessionId);
+      }
+      // If session changed to a different value, load the new conversation
+      else if (newSessionId !== null && prevSessionId !== null && newSessionId !== prevSessionId) {
+        console.log('🔄 Widget: Switching conversations - loading new history');
         setMessages([]);
         setSuggestions([]);
+        loadConversationHistory(newSessionId);
       }
     });
 
     return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadConversationHistory]); // Include loadConversationHistory
+
+  // Load initial conversation if session already exists on mount
+  useEffect(() => {
+    const currentSessionId = chatWidgetContext.getSessionId();
+    if (currentSessionId && messages.length === 0) {
+      console.log('🚀 Widget: Initial session detected, loading history');
+      loadConversationHistory(currentSessionId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount
 
