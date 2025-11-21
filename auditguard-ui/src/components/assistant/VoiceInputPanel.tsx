@@ -7,6 +7,7 @@ import { useSpeechSynthesis, VoiceSettings } from '@/hooks/useSpeechSynthesis';
 import { WaveformVisualizer } from './VoiceVisualizer';
 
 interface VoiceInputPanelProps {
+  workspaceId: string;
   onSendTranscription: (text: string) => void;
   voiceSettings: VoiceSettings;
   inputMode: InputMode;
@@ -16,6 +17,7 @@ interface VoiceInputPanelProps {
 }
 
 export function VoiceInputPanel({
+  workspaceId,
   onSendTranscription,
   voiceSettings,
   inputMode,
@@ -28,11 +30,17 @@ export function VoiceInputPanel({
 
   // Audio capture hook
   const audioCapture = useAudioCapture({
+    workspaceId,
     inputMode,
     voiceActivationThreshold: 0.2,
     silenceTimeout: 2000,
     onTranscription: (text) => {
       setTranscribedText(text);
+      // Auto-send in push-to-talk mode (space bar release)
+      if (inputMode === 'push-to-talk' && text.trim()) {
+        onSendTranscription(text);
+        setTranscribedText('');
+      }
     },
     onError: (error) => {
       console.error('Audio capture error:', error);

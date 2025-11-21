@@ -9,12 +9,13 @@ import { TranscriptionDisplay, LiveTranscription } from './TranscriptionDisplay'
 import { VoiceSettingsPanel } from './VoiceSettingsPanel';
 
 interface VoiceChatProps {
+  workspaceId: string;
   onTranscription: (text: string) => void;
   onSendMessage?: (text: string) => void;
   lastAssistantMessage?: string;
 }
 
-export function VoiceChat({ onTranscription, onSendMessage, lastAssistantMessage }: VoiceChatProps) {
+export function VoiceChat({ workspaceId, onTranscription, onSendMessage, lastAssistantMessage }: VoiceChatProps) {
   const [isVoiceModeActive, setIsVoiceModeActive] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [transcribedText, setTranscribedText] = useState('');
@@ -34,6 +35,7 @@ export function VoiceChat({ onTranscription, onSendMessage, lastAssistantMessage
 
   // Audio capture hook
   const audioCapture = useAudioCapture({
+    workspaceId,
     inputMode,
     voiceActivationThreshold: 0.2,
     silenceTimeout: 2000,

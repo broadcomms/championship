@@ -431,6 +431,7 @@ export function AIChatWidget({
             {mode === 'voice' && (
               <div className="px-4 pt-4">
                 <VoiceInputPanel
+                  workspaceId={workspaceId}
                   onSendTranscription={sendMessage}
                   voiceSettings={voiceSettings}
                   inputMode={inputMode}

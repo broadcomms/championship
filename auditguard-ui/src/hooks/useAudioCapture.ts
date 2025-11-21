@@ -5,6 +5,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 export type InputMode = 'push-to-talk' | 'voice-activation' | 'always-on';
 
 interface AudioCaptureOptions {
+  workspaceId: string;
   inputMode?: InputMode;
   voiceActivationThreshold?: number;
   silenceTimeout?: number;
@@ -20,8 +21,9 @@ interface AudioCaptureState {
   duration: number;
 }
 
-export function useAudioCapture(options: AudioCaptureOptions = {}) {
+export function useAudioCapture(options: AudioCaptureOptions) {
   const {
+    workspaceId,
     inputMode = 'push-to-talk',
     voiceActivationThreshold = 0.2,
     silenceTimeout = 2000,
@@ -46,6 +48,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isRecordingRef = useRef<boolean>(false);
 
   // Initialize audio context and analyzer
   const initializeAudio = useCallback(async () => {
@@ -80,7 +83,17 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
       const source = audioContext.createMediaStreamSource(stream);
       source.connect(analyser);
 
-      const mediaRecorder = new MediaRecorder(stream);
+      // Configure MediaRecorder with higher quality settings
+      const options: MediaRecorderOptions = {
+        mimeType: 'audio/webm;codecs=opus',
+        audioBitsPerSecond: 128000, // 128 kbps for better quality
+      };
+
+      // Fallback to default if preferred type not supported
+      const mediaRecorder = MediaRecorder.isTypeSupported(options.mimeType!)
+        ? new MediaRecorder(stream, options)
+        : new MediaRecorder(stream);
+
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event) => {
@@ -90,8 +103,39 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const recordingDuration = Date.now() - startTimeRef.current;
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm;codecs=opus' });
         audioChunksRef.current = [];
+
+        console.log('📼 Recording stopped:', {
+          duration: `${(recordingDuration / 1000).toFixed(2)}s`,
+          size: `${(audioBlob.size / 1024).toFixed(2)} KB`,
+          type: audioBlob.type,
+        });
+
+        // Check minimum recording duration (0.5 seconds)
+        if (recordingDuration < 500) {
+          console.warn('⚠️ Recording too short, skipping transcription');
+          setState((prev) => ({
+            ...prev,
+            isRecording: false,
+            isProcessing: false,
+            error: 'Recording too short. Please hold for at least half a second.',
+          }));
+          return;
+        }
+
+        // Check minimum audio size (5KB)
+        if (audioBlob.size < 5000) {
+          console.warn('⚠️ Audio file too small, skipping transcription');
+          setState((prev) => ({
+            ...prev,
+            isRecording: false,
+            isProcessing: false,
+            error: 'Audio file too small. Please speak louder or hold longer.',
+          }));
+          return;
+        }
 
         setState((prev) => ({ ...prev, isRecording: false, isProcessing: true }));
 
@@ -136,24 +180,35 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
   }, [onError]);
 
   // Process audio for transcription
-  const processAudioForTranscription = async (audioBlob: Blob) => {
+  const processAudioForTranscription = useCallback(async (audioBlob: Blob) => {
     try {
       // Convert blob to base64 or send directly to API
       const formData = new FormData();
-      formData.append('audio', audioBlob);
+      formData.append('audio', audioBlob, 'recording.webm');
 
-      // TODO: Replace with actual API endpoint
-      const response = await fetch('/api/assistant/transcribe', {
-        method: 'POST',
-        body: formData,
+      console.log('🎙️ Sending audio for transcription:', {
+        size: `${(audioBlob.size / 1024).toFixed(2)} KB`,
+        type: audioBlob.type,
       });
 
+      // Call transcription API with workspaceId and language hint
+      const response = await fetch(
+        `/api/assistant/transcribe?workspaceId=${workspaceId}&language=en`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
       if (!response.ok) {
-        throw new Error('Transcription failed');
+        const errorText = await response.text();
+        throw new Error(`Transcription failed: ${errorText}`);
       }
 
       const data = await response.json();
       const transcription = data.text || '';
+
+      console.log('✅ Transcription received:', transcription.substring(0, 100));
 
       onTranscription?.(transcription);
       setState((prev) => ({ ...prev, isProcessing: false, error: null }));
@@ -162,7 +217,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
       setState((prev) => ({ ...prev, isProcessing: false, error: errorMessage }));
       onError?.(error instanceof Error ? error : new Error(errorMessage));
     }
-  };
+  }, [workspaceId, onTranscription, onError]);
 
   // Monitor audio levels
   const monitorAudioLevel = useCallback(() => {
@@ -210,7 +265,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
 
   // Start recording
   const startRecording = useCallback(async () => {
-    if (state.isRecording || state.isProcessing) return;
+    if (isRecordingRef.current || state.isProcessing) return;
 
     const initialized = mediaRecorderRef.current || (await initializeAudio());
     if (!initialized || !mediaRecorderRef.current) return;
@@ -219,7 +274,9 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
       audioChunksRef.current = [];
       mediaRecorderRef.current.start();
       startTimeRef.current = Date.now();
+      isRecordingRef.current = true;
 
+      console.log('🎤 Recording started via', inputMode);
       setState((prev) => ({ ...prev, isRecording: true, error: null, duration: 0 }));
 
       // Start duration timer
@@ -230,18 +287,24 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
 
       monitorAudioLevel();
     } catch (error) {
+      isRecordingRef.current = false;
       const errorMessage = error instanceof Error ? error.message : 'Failed to start recording';
       setState((prev) => ({ ...prev, error: errorMessage }));
       onError?.(error instanceof Error ? error : new Error(errorMessage));
     }
-  }, [state.isRecording, state.isProcessing, initializeAudio, monitorAudioLevel, onError]);
+  }, [state.isProcessing, initializeAudio, monitorAudioLevel, onError, inputMode]);
 
   // Stop recording
   const stopRecording = useCallback(() => {
-    if (!state.isRecording || !mediaRecorderRef.current) return;
+    if (!isRecordingRef.current || !mediaRecorderRef.current) {
+      console.log('⏹️ Stop recording called but not recording');
+      return;
+    }
 
     try {
+      console.log('⏹️ Stopping recording...');
       mediaRecorderRef.current.stop();
+      isRecordingRef.current = false;
 
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -260,11 +323,12 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
 
       setState((prev) => ({ ...prev, audioLevel: 0 }));
     } catch (error) {
+      isRecordingRef.current = false;
       const errorMessage = error instanceof Error ? error.message : 'Failed to stop recording';
       setState((prev) => ({ ...prev, error: errorMessage }));
       onError?.(error instanceof Error ? error : new Error(errorMessage));
     }
-  }, [state.isRecording, onError]);
+  }, [onError]);
 
   // Toggle recording
   const toggleRecording = useCallback(() => {
@@ -301,15 +365,19 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
     if (inputMode !== 'push-to-talk') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !e.repeat && !state.isRecording) {
+      // Use ref to avoid stale closure issues
+      if (e.code === 'Space' && !e.repeat && !isRecordingRef.current) {
         e.preventDefault();
+        console.log('⌨️ Space key DOWN - starting recording');
         startRecording();
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && state.isRecording) {
+      // Use ref to avoid stale closure issues
+      if (e.code === 'Space' && isRecordingRef.current) {
         e.preventDefault();
+        console.log('⌨️ Space key UP - stopping recording');
         stopRecording();
       }
     };
@@ -317,11 +385,14 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
+    console.log('🎹 Keyboard shortcuts registered for push-to-talk');
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      console.log('🎹 Keyboard shortcuts unregistered');
     };
-  }, [inputMode, state.isRecording, startRecording, stopRecording]);
+  }, [inputMode, startRecording, stopRecording]);
 
   return {
     ...state,

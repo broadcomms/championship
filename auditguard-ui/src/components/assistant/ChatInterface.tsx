@@ -7,7 +7,6 @@ import { Message } from './Message';
 import { EnhancedInput } from './EnhancedInput';
 import { SuggestionChips, generateSuggestions } from './SuggestionChips';
 import { StreamingIndicator, useStreamingMessage } from './StreamingMessage';
-import { VoiceChat } from './VoiceChat';
 import { useChatWidget, BroadcastMessage } from '@/contexts/ChatWidgetContext';
 import { exportConversation, copyConversationToClipboard } from '@/lib/exportConversation';
 
@@ -260,14 +259,6 @@ export function ChatInterface({
     // Handle file upload logic
   };
 
-  const handleVoiceTranscription = (text: string) => {
-    setInput(text);
-  };
-
-  const handleVoiceSendMessage = (text: string) => {
-    sendMessage(text);
-  };
-
   const handleExport = (format: 'markdown' | 'json') => {
     const currentSessionId = chatWidget.getSessionId();
     try {
@@ -292,11 +283,6 @@ export function ChatInterface({
       setCopyStatus('idle');
     }
   };
-
-  const lastAssistantMessage = messages
-    .slice()
-    .reverse()
-    .find((m) => m.role === 'assistant')?.content;
 
   // Get current sessionId for display
   const currentSessionId = chatWidget.sessionId;
@@ -362,12 +348,6 @@ export function ChatInterface({
                 )}
               </div>
             )}
-
-            <VoiceChat
-              onTranscription={handleVoiceTranscription}
-              onSendMessage={handleVoiceSendMessage}
-              lastAssistantMessage={lastAssistantMessage}
-            />
           </div>
         </div>
       </div>

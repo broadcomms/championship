@@ -25,13 +25,15 @@ interface SpeechSynthesisState {
   currentText: string | null;
 }
 
-// Available ElevenLabs voices (sample IDs - replace with actual IDs)
+// Available ElevenLabs voices (mapped to actual ElevenLabs voice IDs)
 export const AVAILABLE_VOICES = [
-  { id: 'rachel', name: 'Rachel', description: 'Professional, clear' },
-  { id: 'josh', name: 'Josh', description: 'Friendly, warm' },
-  { id: 'emily', name: 'Emily', description: 'Formal, articulate' },
-  { id: 'adam', name: 'Adam', description: 'Confident, authoritative' },
-  { id: 'bella', name: 'Bella', description: 'Expressive, engaging' },
+  { id: 'rachel', name: 'Rachel', description: 'Clear and professional' },
+  { id: 'adam', name: 'Adam', description: 'Deep and resonant' },
+  { id: 'bella', name: 'Bella', description: 'Soft and warm' },
+  { id: 'domi', name: 'Domi', description: 'Strong and confident' },
+  { id: 'arnold', name: 'Arnold', description: 'Crisp and authoritative' },
+  { id: 'antoni', name: 'Antoni', description: 'Well-rounded' },
+  { id: 'sam', name: 'Sam', description: 'Dynamic and engaging' },
 ];
 
 export function useSpeechSynthesis(options: SpeechSynthesisOptions) {

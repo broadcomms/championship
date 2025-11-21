@@ -36,11 +36,23 @@ export async function POST(request: NextRequest) {
 
     if (elevenlabsKey) {
       try {
-        // Default to Rachel voice if not specified
-        const voiceId = voice_id || '21m00Tcm4TlvDq8ikWAM'; // Rachel
+        // Map friendly voice IDs to actual ElevenLabs voice IDs
+        const voiceIdMap: Record<string, string> = {
+          'rachel': '21m00Tcm4TlvDq8ikWAM',
+          'adam': 'pNInz6obpgDQGcFmaJgB',
+          'bella': 'EXAVITQu4vr4xnSDxMaL',
+          'domi': 'AZnzlk1XvdvUeBnXmlld',
+          'arnold': 'VR6AewLTigWG4xSOukaG',
+          'antoni': 'ErXwobaYiN019PkySvjV',
+          'sam': 'yoZ06aMxZJJ28mfd3POQ',
+        };
+
+        // Get the actual ElevenLabs voice ID, default to Rachel if not found
+        const requestedVoice = voice_id || 'rachel';
+        const elevenlabsVoiceId = voiceIdMap[requestedVoice.toLowerCase()] || voiceIdMap['rachel'];
 
         const elevenlabsResponse = await fetch(
-          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+          `https://api.elevenlabs.io/v1/text-to-speech/${elevenlabsVoiceId}`,
           {
             method: 'POST',
             headers: {
@@ -189,11 +201,13 @@ export async function GET() {
       'Web Speech API': 'https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API',
     },
     availableVoices: [
-      { id: 'rachel', name: 'Rachel', description: 'Professional female voice', elevenlabs_id: '21m00Tcm4TlvDq8ikWAM' },
-      { id: 'josh', name: 'Josh', description: 'Friendly male voice', elevenlabs_id: 'TxGEqnHWrfWFTfGW9XjX' },
-      { id: 'emily', name: 'Emily', description: 'Formal female voice', elevenlabs_id: 'LcfcDJNUP1GQjkzn1xUU' },
-      { id: 'adam', name: 'Adam', description: 'Confident male voice', elevenlabs_id: 'pNInz6obpgDQGcFmaJgB' },
-      { id: 'bella', name: 'Bella', description: 'Expressive female voice', elevenlabs_id: 'EXAVITQu4vr4xnSDxMaL' },
+      { id: 'rachel', name: 'Rachel', description: 'Clear and professional American female voice', elevenlabs_id: '21m00Tcm4TlvDq8ikWAM' },
+      { id: 'adam', name: 'Adam', description: 'Deep and resonant American male voice', elevenlabs_id: 'pNInz6obpgDQGcFmaJgB' },
+      { id: 'bella', name: 'Bella', description: 'Soft and warm American female voice', elevenlabs_id: 'EXAVITQu4vr4xnSDxMaL' },
+      { id: 'domi', name: 'Domi', description: 'Strong and confident American female voice', elevenlabs_id: 'AZnzlk1XvdvUeBnXmlld' },
+      { id: 'arnold', name: 'Arnold', description: 'Crisp and authoritative American male voice', elevenlabs_id: 'VR6AewLTigWG4xSOukaG' },
+      { id: 'antoni', name: 'Antoni', description: 'Well-rounded American male voice', elevenlabs_id: 'ErXwobaYiN019PkySvjV' },
+      { id: 'sam', name: 'Sam', description: 'Dynamic and engaging American male voice', elevenlabs_id: 'yoZ06aMxZJJ28mfd3POQ' },
     ],
   });
 }

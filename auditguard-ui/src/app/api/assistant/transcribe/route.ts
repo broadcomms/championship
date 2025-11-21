@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * POST /api/assistant/transcribe
- * Transcribes audio to text using OpenAI Whisper API
+ * Transcribes audio to text using LiquidMetal AI Whisper (via backend)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -16,41 +16,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (!openaiKey) {
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!backendUrl) {
       return NextResponse.json(
-        { error: 'Transcription service not configured. Add OPENAI_API_KEY to environment.' },
+        { error: 'Backend API URL not configured' },
         { status: 503 }
+      );
+    }
+
+    // Extract workspaceId and language from query params
+    const workspaceId = request.nextUrl.searchParams.get('workspaceId');
+    const language = request.nextUrl.searchParams.get('language') || 'en';
+
+    if (!workspaceId) {
+      return NextResponse.json(
+        { error: 'workspaceId is required' },
+        { status: 400 }
       );
     }
 
     const audioSize = audioBlob.size;
     const audioType = audioBlob.type;
 
-    console.log('Transcribing audio:', {
+    console.log('Forwarding transcription to backend:', {
       size: `${(audioSize / 1024).toFixed(2)} KB`,
       type: audioType,
+      workspaceId,
+      language,
     });
 
-    // Convert blob to file for OpenAI
-    const audioFile = new File([audioBlob], 'audio.webm', { type: audioType });
+    // Forward to backend with language parameter
+    const backendFormData = new FormData();
+    backendFormData.append('audio', audioBlob);
 
-    const openaiFormData = new FormData();
-    openaiFormData.append('file', audioFile);
-    openaiFormData.append('model', 'whisper-1');
-    openaiFormData.append('language', 'en');
-
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiKey}`,
-      },
-      body: openaiFormData,
-    });
+    const response = await fetch(
+      `${backendUrl}/api/workspaces/${workspaceId}/assistant/transcribe?language=${language}`,
+      {
+        method: 'POST',
+        headers: {
+          // Forward auth cookies
+          'Cookie': request.headers.get('cookie') || '',
+        },
+        body: backendFormData,
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('OpenAI Whisper API error:', errorText);
+      console.error('Backend transcription error:', errorText);
       return NextResponse.json(
         { error: 'Transcription failed', details: errorText },
         { status: response.status }
@@ -58,14 +71,9 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await response.json();
-    console.log('Transcription successful:', result.text.substring(0, 100));
+    console.log('Transcription successful:', result.text?.substring(0, 100) || 'empty');
 
-    return NextResponse.json({
-      text: result.text,
-      confidence: 0.95,
-      language: 'en',
-      provider: 'openai-whisper',
-    });
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Transcription error:', error);
     return NextResponse.json(
@@ -80,12 +88,12 @@ export async function POST(request: NextRequest) {
  * Returns API status
  */
 export async function GET() {
-  const hasOpenAI = !!process.env.OPENAI_API_KEY;
+  const hasBackend = !!process.env.NEXT_PUBLIC_API_URL;
 
   return NextResponse.json({
-    status: hasOpenAI ? 'available' : 'unconfigured',
-    provider: 'openai-whisper',
-    configured: hasOpenAI,
+    status: hasBackend ? 'available' : 'unconfigured',
+    provider: 'liquidmetal-whisper',
+    configured: hasBackend,
     supportedFormats: ['audio/webm', 'audio/wav', 'audio/mp3', 'audio/ogg'],
     maxFileSize: '25MB',
   });
