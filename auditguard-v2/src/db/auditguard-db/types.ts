@@ -316,6 +316,7 @@ export type conversation_sessions = {
     workspace_id: string;
     user_id: string;
     memory_session_id: string;
+    title: string | null;
     started_at: number;
     last_activity_at: number;
     message_count: number;

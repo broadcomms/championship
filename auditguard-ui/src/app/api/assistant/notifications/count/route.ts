@@ -1,19 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+/**
+ * GET /api/assistant/notifications/count
+ * This endpoint is deprecated - use /api/notifications/count instead
+ * Returns zero counts for backward compatibility
+ */
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get('workspaceId');
-
-    // Mock unread count
-    const unreadCount = 3;
-
-    return NextResponse.json({ unreadCount });
-  } catch (error) {
-    console.error('Notification count API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch unread count' },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json({
+    unreadCount: 0,
+    total: 0,
+    by_category: { ai: 0, workspace: 0, system: 0 },
+    by_priority: { critical: 0, high: 0, medium: 0, low: 0 },
+  });
 }

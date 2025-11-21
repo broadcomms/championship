@@ -2,24 +2,25 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, Send, X, Minimize2, Maximize2, ExternalLink, Download, Shield } from 'lucide-react';
+import { Bot, Send, X, Minimize2, Maximize2, ExternalLink, Download, Shield, MessageSquare, Mic } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
+import { VoiceInputPanel } from './VoiceInputPanel';
+import { VoiceSettingsPanel } from './VoiceSettingsPanel';
+import { VoiceSettings } from '@/hooks/useSpeechSynthesis';
+import { InputMode } from '@/hooks/useAudioCapture';
+import { useChatWidget } from '@/contexts/ChatWidgetContext';
+import type { Message as MessageType, Action as ActionType } from '@/types/assistant';
 
-interface Message {
+// Local simplified message interface for internal state
+interface LocalMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  actions?: Action[];
-}
-
-interface Action {
-  type: 'navigate' | 'download';
-  target?: string;
-  label?: string;
+  actions?: ActionType[];
 }
 
 interface Suggestion {
@@ -27,20 +28,67 @@ interface Suggestion {
   onClick: () => void;
 }
 
+type ChatMode = 'chat' | 'voice';
+
 interface Props {
   workspaceId?: string; // Made optional for demo mode
+  initialMode?: ChatMode; // Allow external control of initial mode
+  onModeChange?: (mode: ChatMode) => void; // Notify parent of mode changes
+  onMessageSent?: (message: MessageType) => void; // Notify parent when message sent
 }
 
-export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
+export function AIChatWidget({
+  workspaceId = 'demo-workspace',
+  initialMode = 'chat',
+  onModeChange,
+  onMessageSent,
+}: Props) {
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Get chat widget context for centralized state management
+  const chatWidgetContext = useChatWidget();
+
+  // Use context state instead of local state
+  const isOpen = chatWidgetContext.isOpen;
+  const mode = chatWidgetContext.mode;
+  const sessionId = chatWidgetContext.sessionId;
+
+  // CRITICAL: Subscribe to session changes for immediate notification when new conversation starts
+  // This is more reliable than useEffect watching sessionId because it uses synchronous callbacks
+  useEffect(() => {
+    const unsubscribe = chatWidgetContext.subscribeToSessionChange((newSessionId, prevSessionId) => {
+      // If sessionId changed from a value to null, new conversation was started
+      if (prevSessionId !== null && newSessionId === null) {
+        console.log('🆕 New conversation detected (via subscription) - clearing widget messages');
+        setMessages([]);
+        setSuggestions([]);
+        // Clear localStorage for this workspace
+        const storageKey = `ai_session_${workspaceId}`;
+        localStorage.removeItem(storageKey);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [workspaceId, chatWidgetContext]);
+
+  // Voice settings state
+  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({
+    voiceId: 'rachel',
+    voiceName: 'Rachel',
+    speed: 1.0,
+    stability: 0.5,
+    similarityBoost: 0.75,
+    autoPlay: true,
+  });
+
+  const [inputMode, setInputMode] = useState<InputMode>('push-to-talk');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -50,17 +98,56 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
     scrollToBottom();
   }, [messages]);
 
+  // Sync mode with context when initialMode changes from parent
+  useEffect(() => {
+    if (initialMode !== mode) {
+      chatWidgetContext.setMode(initialMode);
+    }
+  }, [initialMode]);
+
+  // Notify parent of mode changes
+  useEffect(() => {
+    if (onModeChange) {
+      onModeChange(mode);
+    }
+  }, [mode, onModeChange]);
+
+  // Subscribe to messages from main chat interface (when on assistant page)
+  useEffect(() => {
+    const unsubscribe = chatWidgetContext.subscribeToMessages((message: MessageType) => {
+      // Convert to local message format and add if not duplicate
+      const localMsg: LocalMessage = {
+        role: message.role,
+        content: message.content,
+        timestamp: message.timestamp,
+        actions: message.actions,
+      };
+      
+      setMessages(prev => {
+        const exists = prev.some(m => 
+          m.content === localMsg.content && 
+          m.role === localMsg.role &&
+          Math.abs(new Date(m.timestamp).getTime() - new Date(localMsg.timestamp).getTime()) < 1000
+        );
+        if (exists) return prev;
+        return [...prev, localMsg];
+      });
+    });
+    
+    return () => unsubscribe();
+  }, [chatWidgetContext]);
+
   // Load session ID and conversation history from localStorage on mount
   useEffect(() => {
     const loadConversationHistory = async () => {
       // Get stored session ID for this workspace
       const storageKey = `ai_session_${workspaceId}`;
       const storedSessionId = localStorage.getItem(storageKey);
-      
+
       if (storedSessionId) {
-        setSessionId(storedSessionId);
+        chatWidgetContext.setSessionId(storedSessionId);
         setIsLoadingHistory(true);
-        
+
         try {
           // Fetch conversation history from backend
           const response = await fetch(
@@ -73,17 +160,17 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
 
           if (response.ok) {
             const data = await response.json();
-            
+
             // Convert backend messages to widget format
             if (data.messages && Array.isArray(data.messages)) {
-              const loadedMessages: Message[] = data.messages.map((msg: any) => ({
+              const loadedMessages: LocalMessage[] = data.messages.map((msg: any) => ({
                 role: msg.role,
                 content: msg.content,
-                timestamp: msg.created_at ? new Date(msg.created_at) : 
-                          msg.timestamp ? new Date(msg.timestamp) : 
+                timestamp: msg.created_at ? new Date(msg.created_at) :
+                          msg.timestamp ? new Date(msg.timestamp) :
                           new Date() // Fallback to current time if neither exists
               }));
-              
+
               setMessages(loadedMessages);
             }
           }
@@ -91,7 +178,7 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
           console.error('Failed to load conversation history:', error);
           // If loading fails, clear the stored session to start fresh
           localStorage.removeItem(storageKey);
-          setSessionId(null);
+          chatWidgetContext.setSessionId(null);
         } finally {
           setIsLoadingHistory(false);
         }
@@ -105,13 +192,21 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
     const messageToSend = messageText || input;
     if (!messageToSend.trim() || isLoading) return;
 
-    const userMessage: Message = {
+    const userMessage: LocalMessage = {
       role: 'user',
       content: messageToSend,
       timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMessage]);
+    
+    // Notify context of user message (convert to MessageType)
+    const contextMessage: MessageType = {
+      id: `msg-${Date.now()}-user`,
+      ...userMessage
+    };
+    chatWidgetContext.notifyMessage(contextMessage);
+    
     setInput('');
     setIsLoading(true);
     setSuggestions([]);
@@ -152,15 +247,15 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
       console.log('🔍 AI Response Data:', JSON.stringify(data, null, 2));
       console.log('📊 Actions:', data.actions);
       console.log('💡 Suggestions:', data.suggestions);
-      
+
       // Save session ID for this workspace
       if (data.sessionId) {
-        setSessionId(data.sessionId);
+        chatWidgetContext.setSessionId(data.sessionId);
         const storageKey = `ai_session_${workspaceId}`;
         localStorage.setItem(storageKey, data.sessionId);
       }
       
-      const assistantMessage: Message = {
+      const assistantMessage: LocalMessage = {
         role: 'assistant',
         content: data.message,
         timestamp: new Date(),
@@ -168,6 +263,18 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+      
+      // Notify context of assistant message (convert to MessageType)
+      const contextMessage: MessageType = {
+        id: `msg-${Date.now()}-assistant`,
+        ...assistantMessage
+      };
+      
+      if (onMessageSent) {
+        onMessageSent(contextMessage);
+      }
+      
+      chatWidgetContext.notifyMessage(contextMessage);
       
       // Set suggestions if available
       if (data.suggestions && data.suggestions.length > 0) {
@@ -211,7 +318,7 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
     sendMessage(suggestion);
   };
 
-  const handleAction = (action: Action) => {
+  const handleAction = (action: ActionType) => {
     if (action.type === 'navigate' && action.target) {
       router.push(action.target);
     } else if (action.type === 'download' && action.target) {
@@ -223,10 +330,19 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
     if (confirm('Are you sure you want to clear this conversation? This cannot be undone.')) {
       const storageKey = `ai_session_${workspaceId}`;
       localStorage.removeItem(storageKey);
-      setSessionId(null);
+      chatWidgetContext.setSessionId(null);
       setMessages([]);
       setSuggestions([]);
     }
+  };
+
+  // Handle widget open/close using context
+  const handleToggleWidget = () => {
+    chatWidgetContext.toggleWidget();
+  };
+
+  const handleCloseWidget = () => {
+    chatWidgetContext.closeWidget();
   };
 
   return (
@@ -238,7 +354,7 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             exit={{ scale: 0 }}
-            onClick={() => setIsOpen(true)}
+            onClick={handleToggleWidget}
             className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white rounded-full p-4 shadow-lg hover:bg-blue-700 transition-colors"
             aria-label="Open AI Assistant"
           >
@@ -277,7 +393,7 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
                   </button>
                 )}
                 <button
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleCloseWidget}
                   className="hover:bg-blue-700 p-1 rounded"
                   aria-label="Close chat"
                 >
@@ -286,8 +402,51 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
               </div>
             </div>
 
+            {/* Mode Toggle */}
+            <div className="px-4 pt-4">
+              <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+                <button
+                  onClick={() => chatWidgetContext.setMode('chat')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                    mode === 'chat'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Chat
+                </button>
+                <button
+                  onClick={() => chatWidgetContext.setMode('voice')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                    mode === 'voice'
+                      ? 'bg-white text-purple-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Mic className="w-4 h-4" />
+                  Voice
+                </button>
+              </div>
+            </div>
+
+            {/* Voice Input Panel */}
+            {mode === 'voice' && (
+              <div className="px-4 pt-4">
+                <VoiceInputPanel
+                  onSendTranscription={sendMessage}
+                  voiceSettings={voiceSettings}
+                  inputMode={inputMode}
+                  onSettingsClick={() => setShowVoiceSettings(true)}
+                  lastAssistantMessage={messages.length > 0 && messages[messages.length - 1].role === 'assistant' 
+                    ? messages[messages.length - 1].content 
+                    : undefined}
+                />
+              </div>
+            )}
+
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${mode === 'voice' ? 'max-h-64' : ''}`}>
               {isLoadingHistory && (
                 <div className="text-center text-gray-500 py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
@@ -446,6 +605,16 @@ export function AIChatWidget({ workspaceId = 'demo-workspace' }: Props) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Voice Settings Panel */}
+      <VoiceSettingsPanel
+        voiceSettings={voiceSettings}
+        inputMode={inputMode}
+        onVoiceSettingsChange={setVoiceSettings}
+        onInputModeChange={setInputMode}
+        onClose={() => setShowVoiceSettings(false)}
+        isOpen={showVoiceSettings}
+      />
     </>
   );
 }

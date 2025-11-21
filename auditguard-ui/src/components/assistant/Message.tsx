@@ -198,10 +198,10 @@ export function Message({ message, onRegenerate, onFeedback }: MessageProps) {
           }`}
         >
           <span className="text-xs">
-            {message.timestamp.toLocaleTimeString([], {
+            {message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
-            })}
+            }) : ''}
           </span>
 
           {/* Action Buttons (Assistant messages only) */}

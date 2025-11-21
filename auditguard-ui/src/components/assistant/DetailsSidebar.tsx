@@ -8,42 +8,143 @@ interface DetailsSidebarProps {
   sessionId?: string;
   conversationId?: string;
   workspaceId: string;
+  messageCount?: number; // Optional: pass message count directly for reliability
 }
 
-export function DetailsSidebar({ sessionId, conversationId, workspaceId }: DetailsSidebarProps) {
+export function DetailsSidebar({ sessionId, conversationId, workspaceId, messageCount = 0 }: DetailsSidebarProps) {
   const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
   const [complianceScore, setComplianceScore] = useState<ComplianceScore | null>(null);
   const [relatedDocuments, setRelatedDocuments] = useState<RelatedDocument[]>([]);
+  const [hasMessages, setHasMessages] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Mock data for now - will be replaced with API calls
+  // Determine if we have an active session based on sessionId OR messageCount
+  const hasActiveSession = !!sessionId || messageCount > 0;
+
+  // Load real data from APIs
   useEffect(() => {
-    if (sessionId) {
-      setSessionDetails({
-        id: sessionId,
-        startedAt: new Date(),
-        messageCount: 24,
-        duration: '15m',
-        tokenCount: 3456,
-        cost: 0.012,
-      });
-
-      setComplianceScore({
-        overall: 85,
-        frameworks: [
-          { name: 'GDPR', score: 92, status: 'good' },
-          { name: 'SOC2', score: 78, status: 'warning' },
-          { name: 'ISO 27001', score: 85, status: 'good' },
-          { name: 'HIPAA', score: 95, status: 'good' },
-        ],
-      });
-
-      setRelatedDocuments([
-        { id: '1', name: 'Privacy Policy.pdf', lastChecked: '2d', status: 'compliant' },
-        { id: '2', name: 'Data Processing.doc', lastChecked: '1w', status: 'issues', issueCount: 3 },
-        { id: '3', name: 'Security Audit.xlsx', lastChecked: '3d', status: 'compliant' },
-      ]);
+    if (sessionId || messageCount > 0) {
+      setHasMessages(true);
+      loadSessionData();
+    } else {
+      // Clear data when no session
+      setHasMessages(false);
+      setSessionDetails(null);
+      setComplianceScore(null);
+      setRelatedDocuments([]);
     }
-  }, [sessionId]);
+  }, [sessionId, workspaceId, messageCount]);
+
+  const loadSessionData = async () => {
+    setIsLoading(true);
+    try {
+      // If we have sessionId, try to fetch analytics
+      if (sessionId) {
+        try {
+          const analyticsRes = await fetch(`/api/assistant/session/${sessionId}/analytics?workspaceId=${workspaceId}`, {
+            credentials: 'include',
+          });
+
+          if (analyticsRes.ok) {
+            const analytics = await analyticsRes.json();
+            setHasMessages(analytics.messageCount > 0 || messageCount > 0);
+            setSessionDetails({
+              id: sessionId,
+              startedAt: new Date(analytics.startedAt || Date.now()),
+              messageCount: analytics.messageCount || messageCount,
+              duration: analytics.duration || '0s',
+              tokenCount: Math.round(analytics.tokensUsed || 0),
+              cost: analytics.estimatedCost || 0,
+            });
+          } else {
+            // Fallback session details when API fails
+            setSessionDetails({
+              id: sessionId,
+              startedAt: new Date(),
+              messageCount: messageCount,
+              duration: '0s',
+              tokenCount: 0,
+              cost: 0,
+            });
+          }
+        } catch (error) {
+          console.error('Analytics fetch error:', error);
+          // Set fallback session details
+          setSessionDetails({
+            id: sessionId,
+            startedAt: new Date(),
+            messageCount: messageCount,
+            duration: '0s',
+            tokenCount: 0,
+            cost: 0,
+          });
+        }
+      } else {
+        // No sessionId but we have messages
+        setSessionDetails({
+          id: 'active',
+          startedAt: new Date(),
+          messageCount: messageCount,
+          duration: '0s',
+          tokenCount: 0,
+          cost: 0,
+        });
+      }
+
+      // Fetch workspace compliance score
+      const complianceRes = await fetch(`/api/workspaces/${workspaceId}/compliance`, {
+        credentials: 'include',
+      });
+
+      if (complianceRes.ok) {
+        const complianceData = await complianceRes.json();
+        if (complianceData.overall_score !== undefined && complianceData.frameworks) {
+          setComplianceScore({
+            overall: complianceData.overall_score,
+            frameworks: complianceData.frameworks,
+          });
+        }
+      }
+
+      // Fetch related documents (recent documents)
+      const docsRes = await fetch(
+        `/api/workspaces/${workspaceId}/documents?limit=3&sort=recent`,
+        {
+          credentials: 'include',
+        }
+      );
+
+      if (docsRes.ok) {
+        const docsData = await docsRes.json();
+        setRelatedDocuments(
+          (docsData.documents || []).map((doc: any) => ({
+            id: doc.id,
+            name: doc.filename,
+            lastChecked: getRelativeTime(doc.last_checked_at),
+            status: doc.compliance_status || 'pending',
+            issueCount: doc.issue_count || 0,
+          }))
+        );
+      }
+    } catch (error) {
+      console.error('Failed to load session data:', error);
+      setHasMessages(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getRelativeTime = (timestamp: number | undefined): string => {
+    if (!timestamp) return 'never';
+    const now = Date.now();
+    const diff = now - timestamp;
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+
+    if (days > 0) return `${days}d`;
+    if (hours > 0) return `${hours}h`;
+    return 'just now';
+  };
 
   const getScoreColor = (score: number) => {
     if (score >= 90) return 'text-green-600';
@@ -69,6 +170,27 @@ export function DetailsSidebar({ sessionId, conversationId, workspaceId }: Detai
         return 'text-gray-600';
     }
   };
+
+  // Show empty state when no active session
+  if (!hasActiveSession) {
+    return (
+      <div className="flex flex-col h-full overflow-y-auto">
+        <div className="p-6">
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <FileText className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-sm font-medium text-gray-900 mb-2">
+              No Active Conversation
+            </h3>
+            <p className="text-sm text-gray-500 max-w-xs">
+              Start a conversation to see insights, compliance scores, and related documents
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">

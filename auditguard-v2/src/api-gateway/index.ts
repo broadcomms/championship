@@ -4967,6 +4967,52 @@ export default class extends Service<Env> {
         }
       }
 
+      // ==========================================================================
+      // NOTIFICATION ROUTES
+      // ==========================================================================
+
+      // POST /api/notifications - Get notifications with filters
+      if (path === '/api/notifications' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+        const body = await request.json() as { filter?: any };
+        return this.env.NOTIFICATION_SERVICE.fetch(new Request(request.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.userId, filter: body.filter || {} }),
+        }));
+      }
+
+      // GET /api/notifications/count - Get notification counts
+      if (path === '/api/notifications/count' && request.method === 'GET') {
+        const user = await this.validateSession(request);
+        return this.env.NOTIFICATION_SERVICE.fetch(new Request(
+          `${url.origin}/api/notifications/count?userId=${encodeURIComponent(user.userId)}`,
+          { method: 'GET' }
+        ));
+      }
+
+      // PATCH /api/notifications/:id/read - Mark as read
+      const notifReadMatch = path.match(/^\/api\/notifications\/([^\/]+)\/read$/);
+      if (notifReadMatch && notifReadMatch[1] && request.method === 'PATCH') {
+        await this.validateSession(request);
+        return this.env.NOTIFICATION_SERVICE.fetch(new Request(request.url, { method: 'PATCH' }));
+      }
+
+      // POST /api/notifications/read-all - Mark all as read
+      if (path === '/api/notifications/read-all' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+        const body = await request.json().catch(() => ({})) as { category?: string };
+        return this.env.NOTIFICATION_SERVICE.fetch(new Request(request.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.userId, category: body.category }),
+        }));
+      }
+
+      // ==========================================================================
+      // END NOTIFICATION ROUTES
+      // ==========================================================================
+
       // Track 404 as failed request
       await this.trackPerformance(operation, startTime, false, 'Not Found');
 

@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Download, Copy, FileText } from 'lucide-react';
 import type { Message as MessageType } from '@/types/assistant';
 import { Message } from './Message';
 import { EnhancedInput } from './EnhancedInput';
 import { SuggestionChips, generateSuggestions } from './SuggestionChips';
 import { StreamingIndicator, useStreamingMessage } from './StreamingMessage';
 import { VoiceChat } from './VoiceChat';
+import { useChatWidget } from '@/contexts/ChatWidgetContext';
+import { exportConversation, copyConversationToClipboard } from '@/lib/exportConversation';
 
 interface ChatInterfaceProps {
   workspaceId: string;
@@ -28,16 +30,63 @@ export function ChatInterface({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(initialSessionId);
+
+  // Use ref to always have current sessionId (avoids stale closure in sendMessage)
+  // CRITICAL: Always sync with prop FIRST, not local state, to prevent race conditions
+  const sessionIdRef = useRef<string | undefined>(initialSessionId);
+
+  // CRITICAL: Sync sessionId when parent changes it (e.g., when user clicks "New Conversation")
+  useEffect(() => {
+    console.log('🔄 SessionId prop changed:', initialSessionId);
+    setSessionId(initialSessionId);
+  }, [initialSessionId]);
+
+  // Keep ref in sync with PROP on every render (not state - state is async!)
+  // This is the CRITICAL fix: ref must always reflect the prop value
+  sessionIdRef.current = initialSessionId;
   const [suggestions, setSuggestions] = useState(() =>
     generateSuggestions({ workspaceData: {} })
   );
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied'>('idle');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { streamingContent, isStreaming, startStreaming } = useStreamingMessage();
 
+  // Get chat widget context for broadcasting AND subscribing to messages
+  const chatWidget = useChatWidget();
+
+  // Sync external messages to local state
   useEffect(() => {
     setMessages(externalMessages);
   }, [externalMessages]);
+
+  // Subscribe to messages from chat widget (bidirectional sync)
+  useEffect(() => {
+    const unsubscribe = chatWidget.subscribeToMessages((message: MessageType) => {
+      // Add message if not duplicate
+      setMessages(prev => {
+        const exists = prev.some(m =>
+          m.id === message.id ||
+          (m.content === message.content &&
+           m.role === message.role &&
+           Math.abs(new Date(m.timestamp).getTime() - new Date(message.timestamp).getTime()) < 1000)
+        );
+        if (exists) return prev;
+        return [...prev, message];
+      });
+    });
+
+    return () => unsubscribe();
+  }, [chatWidget]);
+
+  // Sync sessionId with context
+  useEffect(() => {
+    if (sessionId && sessionId !== chatWidget.sessionId) {
+      chatWidget.setSessionId(sessionId);
+    }
+  }, [sessionId, chatWidget]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -60,6 +109,9 @@ export function ChatInterface({
 
     setMessages((prev) => [...prev, userMessage]);
     onMessageSent(userMessage);
+    
+    // Broadcast to chat widget so it stays in sync
+    chatWidget.notifyMessage(userMessage);
     setInput('');
     setIsLoading(true);
     setSuggestions([]);
@@ -79,6 +131,10 @@ export function ChatInterface({
     setMessages((prev) => [...prev, streamingMessage]);
 
     try {
+      // Use ref to get current sessionId (avoids stale closure)
+      const currentSessionId = sessionIdRef.current;
+      console.log('📤 Sending message with sessionId:', currentSessionId);
+
       const response = await fetch('/api/assistant/chat', {
         method: 'POST',
         headers: {
@@ -88,7 +144,7 @@ export function ChatInterface({
         body: JSON.stringify({
           workspaceId,
           message: messageToSend,
-          sessionId,
+          sessionId: currentSessionId,
           context: {
             currentPage: 'assistant',
           },
@@ -101,8 +157,12 @@ export function ChatInterface({
 
       const data = await response.json();
 
-      if (data.sessionId && !sessionId) {
+      // If backend created a new session and we didn't have one, notify parent
+      if (data.sessionId && !currentSessionId) {
+        console.log('🆕 New session created:', data.sessionId);
         setSessionId(data.sessionId);
+        sessionIdRef.current = data.sessionId;
+        chatWidget.setSessionId(data.sessionId);
         onSessionCreated(data.sessionId);
       }
 
@@ -131,6 +191,9 @@ export function ChatInterface({
       };
 
       onMessageSent(assistantMessage);
+
+      // Broadcast assistant message to chat widget
+      chatWidget.notifyMessage(assistantMessage);
 
       // Generate context-aware suggestions
       if (data.suggestions && data.suggestions.length > 0) {
@@ -213,6 +276,29 @@ export function ChatInterface({
     sendMessage(text);
   };
 
+  const handleExport = (format: 'markdown' | 'json') => {
+    try {
+      exportConversation(messages, format, sessionId, workspaceId);
+      setShowExportMenu(false);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export conversation. Please try again.');
+    }
+  };
+
+  const handleCopyToClipboard = async () => {
+    setCopyStatus('copying');
+    try {
+      await copyConversationToClipboard(messages, sessionId, workspaceId);
+      setCopyStatus('copied');
+      setTimeout(() => setCopyStatus('idle'), 2000);
+    } catch (error) {
+      console.error('Copy failed:', error);
+      alert('Failed to copy to clipboard. Please try again.');
+      setCopyStatus('idle');
+    }
+  };
+
   const lastAssistantMessage = messages
     .slice()
     .reverse()
@@ -233,11 +319,59 @@ export function ChatInterface({
               </p>
             )}
           </div>
-          <VoiceChat
-            onTranscription={handleVoiceTranscription}
-            onSendMessage={handleVoiceSendMessage}
-            lastAssistantMessage={lastAssistantMessage}
-          />
+          <div className="flex items-center gap-3">
+            {/* Export Menu */}
+            {messages.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Export conversation"
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline">Export</span>
+                </button>
+
+                {showExportMenu && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                    <button
+                      onClick={() => handleExport('markdown')}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Export as Markdown
+                    </button>
+                    <button
+                      onClick={() => handleExport('json')}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Export as JSON
+                    </button>
+                    <hr className="my-1" />
+                    <button
+                      onClick={handleCopyToClipboard}
+                      disabled={copyStatus === 'copying'}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                    >
+                      <Copy className="w-4 h-4" />
+                      {copyStatus === 'copied'
+                        ? 'Copied!'
+                        : copyStatus === 'copying'
+                        ? 'Copying...'
+                        : 'Copy to Clipboard'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <VoiceChat
+              onTranscription={handleVoiceTranscription}
+              onSendMessage={handleVoiceSendMessage}
+              lastAssistantMessage={lastAssistantMessage}
+            />
+          </div>
         </div>
       </div>
 

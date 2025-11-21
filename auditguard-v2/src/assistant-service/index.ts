@@ -227,6 +227,17 @@ export default class extends Service<Env> {
         })
         .execute();
 
+    // Generate title from first message if this is a new session (message_count was 0)
+    if (session.message_count === 0) {
+      const title = this.generateConversationTitle(request.message);
+      await db
+        .updateTable('conversation_sessions')
+        .set({ title })
+        .where('id', '=', session.id)
+        .execute();
+      this.env.logger.info('📝 Set conversation title', { sessionId: session.id, title });
+    }
+
     // Get workspace context for the assistant
     const workspaceContext = await this.getWorkspaceContext(workspaceId);
 
@@ -999,6 +1010,53 @@ Respond with this exact JSON structure:
     return stream;
   }
 
+  /**
+   * Generate a conversation title from the first user message
+   * Extracts the main topic/question and truncates to a reasonable length
+   */
+  private generateConversationTitle(message: string): string {
+    // Clean up the message
+    let title = message.trim();
+
+    // Remove common question prefixes
+    const prefixesToRemove = [
+      /^(hey|hi|hello|please|can you|could you|would you|i want to|i need to|help me)\s+/i,
+      /^(what is|what are|what's|how do|how can|how to|where is|where are|when|why|who)\s+/i,
+    ];
+
+    for (const prefix of prefixesToRemove) {
+      const match = title.match(prefix);
+      if (match) {
+        // Only remove greeting prefixes, keep question words but capitalize
+        if (/^(hey|hi|hello|please|can you|could you|would you|i want to|i need to|help me)/i.test(match[0])) {
+          title = title.replace(prefix, '');
+        }
+        break;
+      }
+    }
+
+    // Capitalize first letter
+    title = title.charAt(0).toUpperCase() + title.slice(1);
+
+    // Truncate to reasonable length (50 chars) at word boundary
+    if (title.length > 50) {
+      title = title.substring(0, 47);
+      const lastSpace = title.lastIndexOf(' ');
+      if (lastSpace > 30) {
+        title = title.substring(0, lastSpace);
+      }
+      title += '...';
+    }
+
+    // Remove trailing punctuation except ellipsis
+    title = title.replace(/[?!.,;:]+$/, '');
+    if (!title.endsWith('...')) {
+      // Keep original punctuation style
+    }
+
+    return title || 'New Conversation';
+  }
+
   private async getWorkspaceContext(workspaceId: string): Promise<string> {
     const db = this.getDb();
 
@@ -1605,6 +1663,7 @@ RULES:
   async listSessions(workspaceId: string, userId: string): Promise<{
     sessions: Array<{
       id: string;
+      title: string | null;
       startedAt: number;
       lastActivityAt: number;
       messageCount: number;
@@ -1626,7 +1685,7 @@ RULES:
 
     const sessions = await db
       .selectFrom('conversation_sessions')
-      .select(['id', 'started_at', 'last_activity_at', 'message_count'])
+      .select(['id', 'title', 'started_at', 'last_activity_at', 'message_count'])
       .where('workspace_id', '=', workspaceId)
       .where('user_id', '=', userId)
       .orderBy('last_activity_at', 'desc')
@@ -1636,6 +1695,7 @@ RULES:
     return {
       sessions: sessions.map((s) => ({
         id: s.id,
+        title: s.title,
         startedAt: s.started_at,
         lastActivityAt: s.last_activity_at,
         messageCount: s.message_count,
@@ -1669,13 +1729,12 @@ RULES:
       throw new Error('Access denied: You are not a member of this workspace');
     }
 
-    // Get session
+    // Get session (any workspace member can view conversations)
     const session = await db
       .selectFrom('conversation_sessions')
-      .select(['id', 'started_at', 'message_count'])
+      .select(['id', 'started_at', 'message_count', 'user_id'])
       .where('id', '=', sessionId)
       .where('workspace_id', '=', workspaceId)
-      .where('user_id', '=', userId)
       .executeTakeFirst();
 
     if (!session) {
@@ -1719,17 +1778,21 @@ RULES:
       throw new Error('Access denied: You are not a member of this workspace');
     }
 
-    // Verify session ownership
+    // Verify session exists in this workspace (any member can delete their workspace sessions)
     const session = await db
       .selectFrom('conversation_sessions')
-      .select(['id', 'memory_session_id'])
+      .select(['id', 'memory_session_id', 'user_id'])
       .where('id', '=', sessionId)
       .where('workspace_id', '=', workspaceId)
-      .where('user_id', '=', userId)
       .executeTakeFirst();
 
     if (!session) {
       throw new Error('Session not found');
+    }
+
+    // Only allow deletion if user owns the session OR is an admin/owner
+    if (session.user_id !== userId && membership.role !== 'admin' && membership.role !== 'owner') {
+      throw new Error('Access denied: You can only delete your own sessions');
     }
 
     // Delete from database (messages will cascade delete)

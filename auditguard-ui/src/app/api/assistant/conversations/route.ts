@@ -1,5 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { Conversation, FilterOptions } from '@/types/assistant';
+import type { Conversation } from '@/types/assistant';
+
+// Simple session validation
+async function getSession(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  const sessionCookie = request.cookies.get('session');
+
+  let sessionId = null;
+  if (authHeader?.startsWith('Bearer ')) {
+    sessionId = authHeader.replace('Bearer ', '');
+  } else if (sessionCookie) {
+    sessionId = sessionCookie.value;
+  }
+
+  if (!sessionId) {
+    return null;
+  }
+
+  return {
+    userId: sessionId,
+    token: sessionId
+  };
+}
 
 /**
  * GET /api/assistant/conversations
@@ -7,8 +29,14 @@ import type { Conversation, FilterOptions } from '@/types/assistant';
  */
 export async function GET(request: NextRequest) {
   try {
+    const session = await getSession(request);
+    if (!session?.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const workspaceId = searchParams.get('workspaceId');
+    const limit = searchParams.get('limit') || '20';
 
     if (!workspaceId) {
       return NextResponse.json(
@@ -17,49 +45,50 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // TODO: Implement actual database query
-    // For now, return mock data
-    const mockConversations: Conversation[] = [
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+
+    // Fetch sessions from backend
+    const response = await fetch(
+      `${backendUrl}/api/workspaces/${workspaceId}/assistant/sessions?limit=${limit}`,
       {
-        id: 'conv_1',
-        title: 'GDPR Compliance Review',
-        lastMessage: 'The requirements include data processing records...',
-        lastMessageTime: new Date(),
-        messageCount: 24,
-        status: 'active',
-        isPinned: true,
-        isArchived: false,
-        isUnread: false,
-        tags: ['GDPR', 'urgent'],
-        frameworks: ['GDPR'],
-        completionPercentage: 85,
-      },
-      {
-        id: 'conv_2',
-        title: 'SOC2 Audit Preparation',
-        lastMessage: 'You need to update your security policies...',
-        lastMessageTime: new Date(Date.now() - 86400000), // Yesterday
-        messageCount: 18,
-        status: 'in-progress',
-        isPinned: false,
-        isArchived: false,
-        isUnread: true,
-        tags: ['SOC2', 'audit'],
-        frameworks: ['SOC2'],
-        completionPercentage: 60,
-      },
-    ];
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.token}`
+        }
+      }
+    );
+
+    if (!response.ok) {
+      console.error('Backend error fetching conversations:', response.status);
+      return NextResponse.json({ conversations: [], hasMore: false });
+    }
+
+    const data = await response.json();
+
+    // Transform backend sessions to Conversation format
+    // Backend returns: { id, title, startedAt, lastActivityAt, messageCount }
+    const conversations: Conversation[] = (data.sessions || []).map((s: any) => ({
+      id: s.id || s.session_id,
+      title: s.title || 'Untitled Conversation',
+      lastMessage: s.last_message || s.lastMessage || '',
+      lastMessageTime: new Date(s.lastActivityAt || s.last_activity_at || s.updated_at || s.created_at || Date.now()),
+      messageCount: s.messageCount || s.message_count || 0,
+      status: s.status || 'active',
+      isPinned: s.is_pinned || s.isPinned || false,
+      isArchived: s.is_archived || s.isArchived || false,
+      isUnread: s.is_unread || s.isUnread || false,
+      tags: s.tags || [],
+      frameworks: s.frameworks || [],
+      completionPercentage: s.completion_percentage || 0,
+    }));
 
     return NextResponse.json({
-      conversations: mockConversations,
-      hasMore: false,
+      conversations,
+      hasMore: data.hasMore || false,
     });
   } catch (error) {
     console.error('Error fetching conversations:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch conversations' },
-      { status: 500 }
-    );
+    return NextResponse.json({ conversations: [], hasMore: false });
   }
 }
 
@@ -69,6 +98,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession(request);
+    if (!session?.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { workspaceId, filters, page = 1, limit = 20 } = body;
 
@@ -79,97 +113,61 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Implement actual database query with filters
-    // For now, return filtered mock data
-    const mockConversations: Conversation[] = [
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+
+    // Build query params
+    const queryParams = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+
+    if (filters?.search) queryParams.set('search', filters.search);
+    if (filters?.status?.length) queryParams.set('status', filters.status.join(','));
+    if (filters?.showPinned) queryParams.set('pinned', 'true');
+    if (filters?.showArchived) queryParams.set('archived', 'true');
+
+    // Fetch sessions from backend
+    const response = await fetch(
+      `${backendUrl}/api/workspaces/${workspaceId}/assistant/sessions?${queryParams}`,
       {
-        id: 'conv_1',
-        title: 'GDPR Compliance Review',
-        lastMessage: 'The requirements include data processing records...',
-        lastMessageTime: new Date(),
-        messageCount: 24,
-        status: 'active',
-        isPinned: true,
-        isArchived: false,
-        isUnread: false,
-        tags: ['GDPR', 'urgent'],
-        frameworks: ['GDPR'],
-        completionPercentage: 85,
-      },
-      {
-        id: 'conv_2',
-        title: 'SOC2 Audit Preparation',
-        lastMessage: 'You need to update your security policies...',
-        lastMessageTime: new Date(Date.now() - 86400000),
-        messageCount: 18,
-        status: 'in-progress',
-        isPinned: false,
-        isArchived: false,
-        isUnread: true,
-        tags: ['SOC2', 'audit'],
-        frameworks: ['SOC2'],
-        completionPercentage: 60,
-      },
-      {
-        id: 'conv_3',
-        title: 'ISO 27001 Checklist',
-        lastMessage: 'All items are complete and ready for review',
-        lastMessageTime: new Date(Date.now() - 604800000), // 1 week ago
-        messageCount: 32,
-        status: 'complete',
-        isPinned: false,
-        isArchived: false,
-        isUnread: false,
-        tags: ['ISO27001', 'complete'],
-        frameworks: ['ISO27001'],
-        completionPercentage: 100,
-      },
-    ];
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.token}`
+        }
+      }
+    );
 
-    // Apply search filter
-    let filteredConversations = mockConversations;
-    if (filters?.search) {
-      const searchLower = filters.search.toLowerCase();
-      filteredConversations = filteredConversations.filter(
-        (conv) =>
-          conv.title.toLowerCase().includes(searchLower) ||
-          conv.lastMessage.toLowerCase().includes(searchLower)
-      );
+    if (!response.ok) {
+      console.error('Backend error fetching conversations:', response.status);
+      return NextResponse.json({ conversations: [], hasMore: false, total: 0 });
     }
 
-    // Apply status filter
-    if (filters?.status && filters.status.length > 0) {
-      filteredConversations = filteredConversations.filter((conv) =>
-        filters.status.includes(conv.status)
-      );
-    }
+    const data = await response.json();
 
-    // Apply pinned filter
-    if (filters?.showPinned) {
-      filteredConversations = filteredConversations.filter((conv) => conv.isPinned);
-    }
-
-    // Apply archived filter
-    if (!filters?.showArchived) {
-      filteredConversations = filteredConversations.filter((conv) => !conv.isArchived);
-    }
-
-    // Pagination
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    const paginatedConversations = filteredConversations.slice(start, end);
-    const hasMore = end < filteredConversations.length;
+    // Transform backend sessions to Conversation format
+    // Backend returns: { id, title, startedAt, lastActivityAt, messageCount }
+    const conversations: Conversation[] = (data.sessions || []).map((s: any) => ({
+      id: s.id || s.session_id,
+      title: s.title || 'Untitled Conversation',
+      lastMessage: s.last_message || s.lastMessage || '',
+      lastMessageTime: new Date(s.lastActivityAt || s.last_activity_at || s.updated_at || s.created_at || Date.now()),
+      messageCount: s.messageCount || s.message_count || 0,
+      status: s.status || 'active',
+      isPinned: s.is_pinned || s.isPinned || false,
+      isArchived: s.is_archived || s.isArchived || false,
+      isUnread: s.is_unread || s.isUnread || false,
+      tags: s.tags || [],
+      frameworks: s.frameworks || [],
+      completionPercentage: s.completion_percentage || 0,
+    }));
 
     return NextResponse.json({
-      conversations: paginatedConversations,
-      hasMore,
-      total: filteredConversations.length,
+      conversations,
+      hasMore: data.hasMore || false,
+      total: data.total || conversations.length,
     });
   } catch (error) {
     console.error('Error fetching conversations:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch conversations' },
-      { status: 500 }
-    );
+    return NextResponse.json({ conversations: [], hasMore: false, total: 0 });
   }
 }

@@ -35,6 +35,7 @@ interface ConversationSidebarProps {
   onSelect: (id: string) => void;
   onNewConversation: () => void;
   className?: string;
+  refreshTrigger?: number; // Increment to trigger refresh
 }
 
 export function ConversationSidebar({
@@ -43,6 +44,7 @@ export function ConversationSidebar({
   onSelect,
   onNewConversation,
   className = '',
+  refreshTrigger = 0,
 }: ConversationSidebarProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [groups, setGroups] = useState<ConversationGroup[]>([]);
@@ -68,6 +70,14 @@ export function ConversationSidebar({
   useEffect(() => {
     loadConversations();
   }, [workspaceId, filters, page]);
+
+  // Refresh when refreshTrigger changes (e.g., after new session created)
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      setPage(1);
+      loadConversations();
+    }
+  }, [refreshTrigger]);
 
   const loadConversations = async () => {
     setIsLoading(true);
@@ -165,7 +175,7 @@ export function ConversationSidebar({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ conversationId, isPinned: !isPinned }),
+        body: JSON.stringify({ conversationId, isPinned: !isPinned, workspaceId }),
       });
 
       setConversations((prev) =>
@@ -185,7 +195,7 @@ export function ConversationSidebar({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ conversationId, isArchived: !isArchived }),
+        body: JSON.stringify({ conversationId, isArchived: !isArchived, workspaceId }),
       });
 
       setConversations((prev) =>
@@ -202,17 +212,26 @@ export function ConversationSidebar({
   const handleDelete = async (conversationId: string) => {
     if (!confirm('Are you sure you want to delete this conversation?')) return;
 
+    // Optimistically remove from UI immediately
+    setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+
     try {
-      await fetch('/api/assistant/conversations/delete', {
+      const response = await fetch('/api/assistant/conversations/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ conversationId }),
+        body: JSON.stringify({ conversationId, workspaceId }),
       });
 
-      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+      if (!response.ok) {
+        console.error('Failed to delete conversation:', await response.text());
+        // Reload to restore state if delete failed
+        loadConversations();
+      }
     } catch (error) {
       console.error('Failed to delete conversation:', error);
+      // Reload to restore state if delete failed
+      loadConversations();
     }
   };
 
