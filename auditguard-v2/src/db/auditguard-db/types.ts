@@ -370,7 +370,7 @@ export type usage_tracking = {
     resource_type: string;
     resource_id: string | null;
     user_id: string | null;
-    metadata: string | null;
+    meta_info: string | null;
     tracked_at: number;
 };
 

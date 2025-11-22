@@ -498,6 +498,27 @@ export default class extends Service<Env> {
         genuineAnalysis: true,
       });
 
+      // Track compliance check usage
+      try {
+        await this.env.USAGE_SERVICE.trackUsage({
+          workspaceId,
+          resourceType: 'compliance_check',
+          resourceId: checkId,
+          metaInfo: {
+            framework: framework,
+            documentId: documentId,
+            overallScore,
+            issuesFound: genuineIssues.length,
+          },
+        });
+        this.env.logger.info('✅ Compliance check usage tracked', { 
+          workspaceId, 
+          checkId 
+        });
+      } catch (error) {
+        this.env.logger.error(`Failed to track compliance check usage: ${error instanceof Error ? error.message : 'Unknown'}`);
+      }
+
       // Broadcast completion (PHASE 4.2.1)
       await broadcastComplianceCheckUpdate(this.env, workspaceId, {
         checkId,

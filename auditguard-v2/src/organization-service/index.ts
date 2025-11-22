@@ -606,61 +606,83 @@ export default class extends Service<Env> {
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = endDate.toISOString().split('T')[0];
 
-    // Get organization-wide usage from organization_usage_daily
-    const orgUsageResult = await db
-      .selectFrom('organization_usage_daily')
-      .select(({ fn }) => [
-        fn.sum('documents_created').as('total_documents'),
-        fn.sum('compliance_checks_count').as('total_checks'),
-        fn.sum('assistant_messages_count').as('total_messages'),
-        fn.sum('api_calls_count').as('total_api_calls'),
-        fn.sum('storage_bytes').as('total_storage_bytes'),
-      ])
+    // Get all workspaces in the organization
+    const orgWorkspaces = await db
+      .selectFrom('workspaces')
+      .select('id')
       .where('organization_id', '=', organizationId)
-      .where('date', '>=', startDateStr)
-      .where('date', '<=', endDateStr)
-      .executeTakeFirst();
-
-    const totalDocuments = Number(orgUsageResult?.total_documents || 0);
-    const totalChecks = Number(orgUsageResult?.total_checks || 0);
-    const totalMessages = Number(orgUsageResult?.total_messages || 0);
-    const totalApiCalls = Number(orgUsageResult?.total_api_calls || 0);
-    const totalStorageBytes = Number(orgUsageResult?.total_storage_bytes || 0);
-
-    // Get usage breakdown by workspace
-    const workspaceUsage = await db
-      .selectFrom('workspaces as w')
-      .leftJoin('documents as d', 'd.workspace_id', 'w.id')
-      .leftJoin('compliance_checks as cc', 'cc.workspace_id', 'w.id')
-      .select(({ fn }) => [
-        'w.id as workspace_id',
-        'w.name as workspace_name',
-        fn.countAll<number>().as('documents'),
-        fn.count('cc.id').as('checks'),
-        fn.sum('d.file_size').as('storage_bytes'),
-      ])
-      .where('w.organization_id', '=', organizationId)
-      .groupBy(['w.id', 'w.name'])
       .execute();
 
-    const byWorkspace = workspaceUsage.map((ws) => {
-      const documents = Number(ws.documents || 0);
-      const checks = Number(ws.checks || 0);
-      const storageBytes = Number(ws.storage_bytes || 0);
+    const workspaceIds = orgWorkspaces.map(w => w.id);
+
+    if (workspaceIds.length === 0) {
+      // No workspaces in organization
+      return {
+        organization_id: organizationId,
+        period,
+        start_date: startDateStr,
+        end_date: endDateStr,
+        total_documents: 0,
+        total_checks: 0,
+        total_messages: 0,
+        total_api_calls: 0,
+        total_storage_bytes: 0,
+        by_workspace: [],
+      };
+    }
+
+    // Get organization-wide usage from usage_summaries (aggregated by workspace)
+    const usageSummaries = await db
+      .selectFrom('usage_summaries')
+      .select(({ fn }) => [
+        'workspace_id',
+        fn.sum('documents_uploaded').as('total_documents'),
+        fn.sum('compliance_checks').as('total_checks'),
+        fn.sum('assistant_messages').as('total_messages'),
+        fn.sum('api_calls').as('total_api_calls'),
+        fn.sum('storage_bytes').as('total_storage_bytes'),
+      ])
+      .where('workspace_id', 'in', workspaceIds)
+      .where('date', '>=', startDateStr)
+      .where('date', '<=', endDateStr)
+      .groupBy('workspace_id')
+      .execute();
+
+    // Calculate totals
+    const totalDocuments = usageSummaries.reduce((sum, ws) => sum + Number(ws.total_documents || 0), 0);
+    const totalChecks = usageSummaries.reduce((sum, ws) => sum + Number(ws.total_checks || 0), 0);
+    const totalMessages = usageSummaries.reduce((sum, ws) => sum + Number(ws.total_messages || 0), 0);
+    const totalApiCalls = usageSummaries.reduce((sum, ws) => sum + Number(ws.total_api_calls || 0), 0);
+    const totalStorageBytes = usageSummaries.reduce((sum, ws) => sum + Number(ws.total_storage_bytes || 0), 0);
+
+    // Get usage breakdown by workspace with workspace names
+    const workspaceUsage = await db
+      .selectFrom('workspaces as w')
+      .select(['w.id as workspace_id', 'w.name as workspace_name'])
+      .where('w.organization_id', '=', organizationId)
+      .execute();
+
+    const byWorkspace = await Promise.all(workspaceUsage.map(async (ws) => {
+      // Get usage data for this workspace
+      const wsUsage = usageSummaries.find(u => u.workspace_id === ws.workspace_id);
+      const documents = Number(wsUsage?.total_documents || 0);
+      const checks = Number(wsUsage?.total_checks || 0);
+      const messages = Number(wsUsage?.total_messages || 0);
+      const storageBytes = Number(wsUsage?.total_storage_bytes || 0);
 
       return {
         workspace_id: ws.workspace_id,
         workspace_name: ws.workspace_name,
         documents,
         checks,
-        messages: 0, // Would need to track this separately
+        messages,
         storage_bytes: storageBytes,
         percentage_of_total:
           totalStorageBytes > 0
             ? Math.round((storageBytes / totalStorageBytes) * 100)
             : 0,
       };
-    });
+    }));
 
     return {
       organization_id: organizationId,

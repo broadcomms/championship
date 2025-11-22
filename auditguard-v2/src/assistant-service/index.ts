@@ -616,6 +616,27 @@ User: "thank you"
       })
       .execute();
 
+    // Track usage for assistant message
+    try {
+      await this.env.USAGE_SERVICE.trackUsage({
+        workspaceId,
+        resourceType: 'assistant_message',
+        resourceId: assistantMsgId,
+        userId,
+        metaInfo: {
+          sessionId: session.id,
+          messageLength: assistantMessage.length,
+          toolsUsed: decision.needsTools || false,
+        },
+      });
+      this.env.logger.info('✅ Assistant message usage tracked', { 
+        workspaceId, 
+        messageId: assistantMsgId 
+      });
+    } catch (error) {
+      this.env.logger.error(`Failed to track assistant message usage: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+
     // Store assistant message in SmartMemory
     try {
       const workingMemory = await this.env.ASSISTANT_MEMORY.getWorkingMemorySession(memorySessionId);
@@ -956,6 +977,28 @@ Respond with this exact JSON structure:
                 created_at: Date.now(),
               })
               .execute();
+
+            // Track usage for assistant message (streaming)
+            try {
+              await self.env.USAGE_SERVICE.trackUsage({
+                workspaceId,
+                resourceType: 'assistant_message',
+                resourceId: assistantMsgId,
+                userId,
+                metaInfo: {
+                  sessionId: session.id,
+                  messageLength: fullMessage.length,
+                  streaming: true,
+                  toolsUsed: capturedToolsUsed.length > 0,
+                },
+              });
+              self.env.logger.info('✅ Streaming assistant message usage tracked', { 
+                workspaceId, 
+                messageId: assistantMsgId 
+              });
+            } catch (error) {
+              self.env.logger.error(`Failed to track streaming assistant message usage: ${error instanceof Error ? error.message : 'Unknown'}`);
+            }
 
             // Store in SmartMemory
             await workingMemory.putMemory({

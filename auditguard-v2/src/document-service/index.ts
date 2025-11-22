@@ -205,6 +205,28 @@ export default class extends Service<Env> {
       throw error;  // Actually, DO fail so we know it's broken
     }
 
+    // Track document upload usage
+    try {
+      await this.env.USAGE_SERVICE.trackUsage({
+        workspaceId: input.workspaceId,
+        resourceType: 'document',
+        resourceId: documentId,
+        userId: input.userId,
+        metaInfo: {
+          filename: input.filename,
+          fileSize,
+          contentType: actualContentType,
+          category: input.category || 'uncategorized',
+        },
+      });
+      this.env.logger.info('✅ Document upload usage tracked', { 
+        workspaceId: input.workspaceId, 
+        documentId 
+      });
+    } catch (error) {
+      this.env.logger.error(`Failed to track document upload usage: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+
     return {
       id: documentId,
       workspaceId: input.workspaceId,

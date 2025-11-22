@@ -9,7 +9,7 @@ interface TrackUsageInput {
   resourceType: 'api_call' | 'document' | 'compliance_check' | 'assistant_message';
   resourceId?: string;
   userId?: string;
-  metadata?: Record<string, unknown>;
+  metaInfo?: Record<string, unknown>;
 }
 
 export default class extends Service<Env> {
@@ -40,7 +40,7 @@ export default class extends Service<Env> {
           resource_type: input.resourceType,
           resource_id: input.resourceId || null,
           user_id: input.userId || null,
-          metadata: input.metadata ? JSON.stringify(input.metadata) : null,
+          meta_info: input.metaInfo ? JSON.stringify(input.metaInfo) : null,
           tracked_at: now,
         })
         .execute();
