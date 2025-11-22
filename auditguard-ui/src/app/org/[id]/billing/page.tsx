@@ -26,6 +26,8 @@ interface UsageMetrics {
   uploads_limit: number;
   checks_used: number;
   checks_limit: number;
+  messages_used: number;
+  messages_limit: number;
   period_start: number;
   period_end: number;
 }
@@ -205,68 +207,94 @@ export default function OrganizationBillingPage() {
         }));
         setPlans(fetchedPlans);
 
-        // Get subscription from organization data
-        if (orgData) {
-          // Find subscription details from database
-          const subRes = await api.post('/api/admin/database/query', {
-            sql: `SELECT * FROM subscriptions WHERE organization_id = "${orgId}" AND status IN ('active', 'trialing', 'past_due') ORDER BY created_at DESC LIMIT 1`
-          }).catch(() => null);
-
-          const subData = subRes?.rows?.[0];
-          console.log('Subscription data:', subData);
-
-          if (subData) {
-            // Find the plan details
-            const planDetails = fetchedPlans.find(p => p.id === subData.plan_id);
-            
-            setSubscription({
-              plan_id: subData.plan_id,
-              plan_name: planDetails?.displayName || subData.plan_id,
-              status: subData.status,
-              current_period_start: subData.current_period_start,
-              current_period_end: subData.current_period_end,
-              cancel_at_period_end: subData.cancel_at_period_end === 1,
-              trial_start: subData.trial_start,
-              trial_end: subData.trial_end,
-              billing_cycle: subData.billing_cycle,
-              price_monthly: planDetails?.priceMonthly,
-              price_yearly: planDetails?.priceYearly,
-            });
-          } else {
-            // Default to free plan
-            setSubscription({
-              plan_id: 'plan_free',
-              plan_name: 'Free',
-              status: 'active',
-              current_period_start: Date.now(),
-              current_period_end: Date.now() + 30 * 24 * 60 * 60 * 1000,
-              cancel_at_period_end: false,
-            });
-          }
-        }
-
         // Fetch usage forecast (includes current usage + plan limits)
-        // Note: api.get() returns data directly, not wrapped in .data property
-        const forecast = await api.get(`/api/organizations/${orgId}/usage/forecast`).catch(() => null);
+        const forecast = await api.get(`/api/organizations/${orgId}/usage/forecast`).catch((err) => {
+          console.error('Failed to fetch usage forecast:', err);
+          return null;
+        });
+
+        console.log('Usage forecast data:', forecast);
+
+        // Fetch subscription details using the proper API endpoint
+        const subscriptionData = await api.get(`/api/organizations/${orgId}/subscription`).catch((err) => {
+          console.error('Failed to fetch subscription:', err);
+          return null;
+        });
+
+        console.log('Subscription data:', subscriptionData);
+
+        // Get subscription details from the dedicated API endpoint
+        if (subscriptionData && subscriptionData.plan_id) {
+          // Find the plan details from fetched plans
+          const planDetails = fetchedPlans.find(p => p.id === subscriptionData.plan_id);
+          
+          setSubscription({
+            plan_id: subscriptionData.plan_id,
+            plan_name: subscriptionData.plan_name,
+            status: subscriptionData.status,
+            current_period_start: subscriptionData.current_period_start,
+            current_period_end: subscriptionData.current_period_end,
+            cancel_at_period_end: subscriptionData.cancel_at_period_end,
+            trial_start: subscriptionData.trial_start,
+            trial_end: subscriptionData.trial_end,
+            billing_cycle: 'monthly',
+            price_monthly: planDetails?.priceMonthly,
+            price_yearly: planDetails?.priceYearly,
+          });
+        } else if (orgData && orgData.subscription_plan) {
+          // Fallback to organization data if subscription API fails
+          const planId = `plan_${orgData.subscription_plan}`;
+          const planDetails = fetchedPlans.find(p => p.id === planId);
+          
+          setSubscription({
+            plan_id: planId,
+            plan_name: planDetails?.displayName || orgData.subscription_plan,
+            status: orgData.subscription_status || 'active',
+            current_period_start: Date.now() - (30 * 24 * 60 * 60 * 1000),
+            current_period_end: Date.now() + (30 * 24 * 60 * 60 * 1000),
+            cancel_at_period_end: false,
+            trial_start: null,
+            trial_end: null,
+            billing_cycle: 'monthly',
+            price_monthly: planDetails?.priceMonthly,
+            price_yearly: planDetails?.priceYearly,
+          });
+        } else {
+          // Default to free plan
+          setSubscription({
+            plan_id: 'plan_free',
+            plan_name: 'Free',
+            status: 'active',
+            current_period_start: Date.now(),
+            current_period_end: Date.now() + 30 * 24 * 60 * 60 * 1000,
+            cancel_at_period_end: false,
+          });
+        }
 
         // Check if forecast data is valid
         if (forecast && typeof forecast === 'object' && forecast.current_usage && forecast.plan_limits) {
           // Map backend data structure to frontend expected format
+          // Backend uses: max_documents, max_checks, max_messages (not documents, compliance_checks, assistant_messages)
           setUsage({
             uploads_used: forecast.current_usage?.documents || 0,
-            uploads_limit: forecast.plan_limits?.documents || 3,
+            uploads_limit: forecast.plan_limits?.max_documents || 0,
             checks_used: forecast.current_usage?.checks || 0,
-            checks_limit: forecast.plan_limits?.compliance_checks || 5,
+            checks_limit: forecast.plan_limits?.max_checks || 0,
+            messages_used: forecast.current_usage?.messages || 0,
+            messages_limit: forecast.plan_limits?.max_messages || 0,
             period_start: Date.now() - 30 * 24 * 60 * 60 * 1000, // 30 days ago
             period_end: Date.now(),
           });
         } else {
-          // No forecast data available, use defaults
+          // No forecast data - should not happen for valid subscription
+          console.error('No forecast data available, subscription may not be active');
           setUsage({
             uploads_used: 0,
-            uploads_limit: 3,
+            uploads_limit: 0,
             checks_used: 0,
-            checks_limit: 5,
+            checks_limit: 0,
+            messages_used: 0,
+            messages_limit: 0,
             period_start: Date.now() - 30 * 24 * 60 * 60 * 1000,
             period_end: Date.now(),
           });
@@ -278,7 +306,8 @@ export default function OrganizationBillingPage() {
         console.error('Failed to fetch billing data:', error);
         // Set defaults on error
         setSubscription({
-          tier: 'Free',
+          plan_id: 'plan_free',
+          plan_name: 'Free',
           status: 'active',
           current_period_start: Date.now(),
           current_period_end: Date.now() + 30 * 24 * 60 * 60 * 1000,
@@ -286,8 +315,11 @@ export default function OrganizationBillingPage() {
         });
         setUsage({
           uploads_used: 0,
-          uploads_limit: 10,
+          uploads_limit: 0,
           checks_used: 0,
+          checks_limit: 0,
+          messages_used: 0,
+          messages_limit: 0,
           checks_limit: 5,
           period_start: Date.now() - 30 * 24 * 60 * 60 * 1000,
           period_end: Date.now(),
@@ -326,11 +358,14 @@ export default function OrganizationBillingPage() {
     subscription ? p.id === subscription.plan_id : p.name === 'free'
   ) || plans.find(p => p.name === 'free') || plans[0]; // Fallback to free plan
   
-  const usagePercentUploads = usage
+  const usagePercentUploads = usage && usage.uploads_limit > 0
     ? (usage.uploads_used / usage.uploads_limit) * 100
     : 0;
-  const usagePercentChecks = usage
+  const usagePercentChecks = usage && usage.checks_limit > 0
     ? (usage.checks_used / usage.checks_limit) * 100
+    : 0;
+  const usagePercentMessages = usage && usage.messages_limit > 0
+    ? (usage.messages_used / usage.messages_limit) * 100
     : 0;
 
   return (
@@ -477,6 +512,37 @@ export default function OrganizationBillingPage() {
                   {usagePercentChecks > 75 && (
                     <p className="text-xs text-red-600 mt-1">
                       ⚠️ You're approaching your check limit. Consider upgrading your plan.
+                    </p>
+                  )}
+                </div>
+
+                {/* AI Messages */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      AI Assistant Messages
+                    </span>
+                    <span className="text-sm text-gray-600">
+                      {usage.messages_used} / {usage.messages_limit === -1 ? '∞' : usage.messages_limit}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div
+                      className={`h-3 rounded-full transition-all ${
+                        usagePercentMessages > 90
+                          ? 'bg-red-600'
+                          : usagePercentMessages > 75
+                          ? 'bg-yellow-600'
+                          : 'bg-purple-600'
+                      }`}
+                      style={{
+                        width: `${Math.min(usagePercentMessages, 100)}%`,
+                      }}
+                    />
+                  </div>
+                  {usagePercentMessages > 75 && (
+                    <p className="text-xs text-red-600 mt-1">
+                      ⚠️ You're approaching your AI message limit. Consider upgrading your plan.
                     </p>
                   )}
                 </div>

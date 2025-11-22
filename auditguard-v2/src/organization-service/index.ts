@@ -785,10 +785,10 @@ export default class extends Service<Env> {
       try {
         const limits = JSON.parse(subscription.limits as string);
         planLimits = {
-          max_documents: limits.max_documents || -1,
-          max_checks: limits.max_checks || -1,
-          max_messages: limits.max_ai_messages || -1,
-          max_storage_gb: limits.max_storage_gb || -1,
+          max_documents: limits.documents ?? limits.max_documents ?? -1,
+          max_checks: limits.compliance_checks ?? limits.max_checks ?? -1,
+          max_messages: limits.assistant_messages ?? limits.max_ai_messages ?? -1,
+          max_storage_gb: limits.storage_gb ?? limits.max_storage_gb ?? -1,
         };
       } catch (err) {
         this.env.logger.error('Failed to parse plan limits', { error: err });
@@ -910,6 +910,66 @@ export default class extends Service<Env> {
         storage: storagePercentage,
       },
       alerts,
+    };
+  }
+
+  /**
+   * Get organization subscription details
+   * Returns full subscription information including trial dates
+   */
+  async getOrganizationSubscription(
+    organizationId: string,
+    userId: string
+  ): Promise<{
+    plan_id: string;
+    plan_name: string;
+    status: string;
+    current_period_start: number | null;
+    current_period_end: number | null;
+    trial_start: number | null;
+    trial_end: number | null;
+    cancel_at_period_end: boolean;
+  } | null> {
+    const db = this.getDb();
+
+    // Check permission
+    const hasPermission = await this.checkOrganizationPermission(organizationId, userId, 'member');
+    if (!hasPermission) {
+      throw new Error('You do not have permission to view organization subscription');
+    }
+
+    // Get subscription with plan details
+    const subscription = await db
+      .selectFrom('subscriptions')
+      .innerJoin('subscription_plans', 'subscription_plans.id', 'subscriptions.plan_id')
+      .select([
+        'subscriptions.plan_id',
+        'subscription_plans.display_name as plan_name',
+        'subscriptions.status',
+        'subscriptions.current_period_start',
+        'subscriptions.current_period_end',
+        'subscriptions.trial_start',
+        'subscriptions.trial_end',
+        'subscriptions.cancel_at_period_end',
+      ])
+      .where('subscriptions.organization_id', '=', organizationId)
+      .where('subscriptions.status', 'in', ['active', 'trialing', 'past_due'])
+      .orderBy('subscriptions.created_at', 'desc')
+      .executeTakeFirst();
+
+    if (!subscription) {
+      return null;
+    }
+
+    return {
+      plan_id: subscription.plan_id,
+      plan_name: subscription.plan_name,
+      status: subscription.status,
+      current_period_start: subscription.current_period_start,
+      current_period_end: subscription.current_period_end,
+      trial_start: subscription.trial_start,
+      trial_end: subscription.trial_end,
+      cancel_at_period_end: subscription.cancel_at_period_end === 1,
     };
   }
 }

@@ -63,39 +63,48 @@ export default function OrganizationUsagePage() {
 
   const fetchData = async () => {
     try {
-      // Note: api.get() returns data directly, not wrapped in .data property
-      const [usageRes, workspaces] = await Promise.all([
+      // Fetch usage data and plan limits
+      const [usageRes, workspaces, forecast] = await Promise.all([
         api.get(`/api/organizations/${orgId}/usage?period=${timeRange}`),
         api.get(`/api/organizations/${orgId}/workspaces`),
+        api.get(`/api/organizations/${orgId}/usage/forecast`).catch(() => null),
       ]);
 
-      // Map backend data structure to frontend expected format
-      // Backend returns: { total_documents, total_checks, by_workspace: [], period, start_date, end_date }
-      // Frontend expects: { uploads: { current, limit, percentage, history }, checks: {...}, period_start, period_end }
+      // Get actual limits from forecast API (uses subscription plan limits)
+      const limits = forecast?.plan_limits || {
+        max_documents: 0,
+        max_checks: 0,
+        max_messages: 0,
+        max_storage_gb: 0,
+      };
 
+      console.log('Usage data:', usageRes);
+      console.log('Plan limits from forecast:', limits);
+
+      // Map backend data structure to frontend expected format
       const mappedUsage: UsageData = {
         uploads: {
           current: usageRes?.total_documents || 0,
-          limit: 100, // Default limit - TODO: get from subscription
-          percentage: ((usageRes?.total_documents || 0) / 100) * 100,
-          history: [], // TODO: Map historical data if available
+          limit: limits.max_documents,
+          percentage: limits.max_documents > 0 ? ((usageRes?.total_documents || 0) / limits.max_documents) * 100 : 0,
+          history: [],
         },
         checks: {
           current: usageRes?.total_checks || 0,
-          limit: 50, // Default limit - TODO: get from subscription
-          percentage: ((usageRes?.total_checks || 0) / 50) * 100,
-          history: [], // TODO: Map historical data if available
+          limit: limits.max_checks,
+          percentage: limits.max_checks > 0 ? ((usageRes?.total_checks || 0) / limits.max_checks) * 100 : 0,
+          history: [],
         },
         messages: {
           current: usageRes?.total_messages || 0,
-          limit: 1000, // Default limit - TODO: get from subscription
-          percentage: ((usageRes?.total_messages || 0) / 1000) * 100,
-          history: [], // TODO: Map historical data if available
+          limit: limits.max_messages,
+          percentage: limits.max_messages > 0 ? ((usageRes?.total_messages || 0) / limits.max_messages) * 100 : 0,
+          history: [],
         },
         storage: {
           current_bytes: usageRes?.total_storage_bytes || 0,
-          limit_gb: 10, // Default limit - TODO: get from subscription
-          percentage: ((usageRes?.total_storage_bytes || 0) / (10 * 1024 * 1024 * 1024)) * 100,
+          limit_gb: limits.max_storage_gb,
+          percentage: limits.max_storage_gb > 0 ? ((usageRes?.total_storage_bytes || 0) / (limits.max_storage_gb * 1024 * 1024 * 1024)) * 100 : 0,
           current_gb: (usageRes?.total_storage_bytes || 0) / (1024 * 1024 * 1024),
         },
         period_start: usageRes?.start_date ? new Date(usageRes.start_date).getTime() : Date.now() - 30 * 24 * 60 * 60 * 1000,
@@ -119,29 +128,29 @@ export default function OrganizationUsagePage() {
       setWorkspaceUsage(mappedWorkspaces);
     } catch (error) {
       console.error('Failed to fetch usage data:', error);
-      // Set safe defaults
+      // Set safe defaults (no limits)
       setUsage({
         uploads: {
           current: 0,
-          limit: 100,
+          limit: 0,
           percentage: 0,
           history: [],
         },
         checks: {
           current: 0,
-          limit: 50,
+          limit: 0,
           percentage: 0,
           history: [],
         },
         messages: {
           current: 0,
-          limit: 1000,
+          limit: 0,
           percentage: 0,
           history: [],
         },
         storage: {
           current_bytes: 0,
-          limit_gb: 10,
+          limit_gb: 0,
           percentage: 0,
           current_gb: 0,
         },

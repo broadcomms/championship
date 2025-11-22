@@ -79,18 +79,26 @@ export default function OrganizationOverviewPage() {
         setOrganization(orgData || null);
         setWorkspaces(Array.isArray(workspacesList) ? workspacesList : []);
 
-        // Build stats from organization data
+        // Fetch usage forecast to get accurate limits from backend
         if (orgData) {
+          const forecast = await api.get(`/api/organizations/${orgId}/usage/forecast`).catch(err => {
+            console.error('Failed to fetch usage forecast:', err);
+            return null;
+          });
+
+          console.log('Usage forecast:', forecast);
+
+          // Build stats with actual usage data from forecast
           setStats({
             total_workspaces: orgData.workspace_count || 0,
             total_members: orgData.member_count || 0,
-            total_documents: 0, // Will be calculated from workspaces
-            total_compliance_checks: 0, // Will be calculated from workspaces
+            total_documents: forecast?.current_usage?.documents || 0,
+            total_compliance_checks: forecast?.current_usage?.checks || 0,
             subscription_tier: orgData.subscription_plan || 'free',
-            uploads_used: 0,
-            uploads_limit: 100,
-            checks_used: 0,
-            checks_limit: 50,
+            uploads_used: forecast?.current_usage?.documents || 0,
+            uploads_limit: forecast?.plan_limits?.max_documents || 0,
+            checks_used: forecast?.current_usage?.checks || 0,
+            checks_limit: forecast?.plan_limits?.max_checks || 0,
           });
         }
       } catch (error) {

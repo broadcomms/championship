@@ -1098,6 +1098,21 @@ export default class extends Service<Env> {
         });
       }
 
+      // Match /api/organizations/:id/subscription - Get subscription details
+      const orgSubscriptionMatch = path.match(/^\/api\/organizations\/([^\/]+)\/subscription$/);
+      if (orgSubscriptionMatch && orgSubscriptionMatch[1] && request.method === 'GET') {
+        const organizationId = orgSubscriptionMatch[1];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.ORGANIZATION_SERVICE.getOrganizationSubscription(
+          organizationId,
+          user.userId
+        );
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/organizations/:id/sso/config - SSO configuration endpoints
       const ssoConfigMatch = path.match(/^\/api\/organizations\/([^\/]+)\/sso\/config$/);
       if (ssoConfigMatch && ssoConfigMatch[1]) {
