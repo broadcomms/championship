@@ -10,9 +10,16 @@ import { useAuth } from '@/contexts/AuthContext';
 interface Organization {
   id: string;
   name: string;
-  role: string;
-  subscription_tier: string;
+  slug: string;
+  owner_user_id: string;
+  billing_email: string | null;
+  stripe_customer_id: string | null;
   created_at: number;
+  updated_at: number;
+  member_count: number;
+  workspace_count: number;
+  subscription_plan: string | null;
+  subscription_status: string | null;
 }
 
 interface Workspace {
@@ -50,33 +57,42 @@ export default function OrganizationOverviewPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch each endpoint separately to avoid one failure affecting others
+        // Fetch organization data (includes subscription info)
         const orgRes = await api.get(`/api/organizations/${orgId}`).catch(err => {
           console.error('Failed to fetch organization:', err);
           return null;
         });
 
+        // Backend wraps response in { data: ... }
+        const orgData = orgRes?.data || orgRes;
+        console.log('Organization data:', orgData);
+
+        // Fetch workspaces
         const workspacesRes = await api.get(`/api/organizations/${orgId}/workspaces`).catch(err => {
           console.error('Failed to fetch workspaces:', err);
           return [];
         });
 
-        const statsRes = await api.get(`/api/organizations/${orgId}/stats`).catch(err => {
-          console.error('Failed to fetch stats:', err);
-          return null;
-        });
-
-        console.log('Organization data:', orgRes);
-        console.log('Workspaces response:', workspacesRes);
-        console.log('Workspaces is array?', Array.isArray(workspacesRes));
-        console.log('Workspaces wrapped in data?', workspacesRes?.data);
-        console.log('Stats data:', statsRes);
-
-        setOrganization(orgRes || null);
-        // Check if workspaces is wrapped in a data property
         const workspacesList = workspacesRes?.data || workspacesRes;
+        console.log('Workspaces:', workspacesList);
+
+        setOrganization(orgData || null);
         setWorkspaces(Array.isArray(workspacesList) ? workspacesList : []);
-        setStats(statsRes || null);
+
+        // Build stats from organization data
+        if (orgData) {
+          setStats({
+            total_workspaces: orgData.workspace_count || 0,
+            total_members: orgData.member_count || 0,
+            total_documents: 0, // Will be calculated from workspaces
+            total_compliance_checks: 0, // Will be calculated from workspaces
+            subscription_tier: orgData.subscription_plan || 'free',
+            uploads_used: 0,
+            uploads_limit: 100,
+            checks_used: 0,
+            checks_limit: 50,
+          });
+        }
       } catch (error) {
         console.error('Failed to fetch organization data:', error);
       } finally {
@@ -102,11 +118,43 @@ export default function OrganizationOverviewPage() {
       <div className="max-w-7xl mx-auto p-8">
           {/* Header */}
           <div className="mb-8">
+            {/* Trial Banner */}
+            {organization?.subscription_status === 'trialing' && (
+              <div className="mb-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">🚀</span>
+                    <div>
+                      <h3 className="font-semibold text-blue-900">
+                        Your 14-Day Professional Trial is Active!
+                      </h3>
+                      <p className="text-sm text-blue-700">
+                        Full access to all Professional features until December 6, 2025
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => router.push(`/org/${orgId}/billing`)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    Upgrade Now
+                  </button>
+                </div>
+              </div>
+            )}
+
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               {organization?.name}
             </h1>
             <p className="text-gray-600">
-              Organization Overview · {organization?.subscription_tier} Plan
+              Organization Overview · {organization?.subscription_plan ? 
+                organization.subscription_plan.charAt(0).toUpperCase() + organization.subscription_plan.slice(1) : 
+                'Free'} Plan
+              {organization?.subscription_status === 'trialing' && (
+                <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                  Trial Active
+                </span>
+              )}
             </p>
           </div>
 

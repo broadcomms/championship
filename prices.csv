@@ -1,0 +1,14 @@
+Price ID,Product ID,Product Name,Product Statement Descriptor,Product Tax Code,Description,Created (UTC),Amount,Currency,Interval,Interval Count,Usage Type,Aggregate Usage,Billing Scheme,Trial Period Days,Tax Behavior
+price_1SW82mHSX3RgJL1c0EMB7byV,prod_TQHtdJqvHj7onj,AuditGuardX Business,,,,2025-11-22 04:03,3830.00,cad,year,1,licensed,,per_unit,,unspecified
+price_1SW82PHSX3RgJL1cns5wmNXd,prod_TQHtdJqvHj7onj,AuditGuardX Business,,,,2025-11-22 04:03,399.00,usd,month,1,licensed,,per_unit,,unspecified
+price_1SW7yKHSX3RgJL1ckDhuicM2,prod_TQHxByFbMl3CJA,AuditGuardX Professional,,,,2025-11-22 03:58,1430.00,cad,year,1,licensed,,per_unit,,unspecified
+price_1SW7xkHSX3RgJL1cMtmSkpZO,prod_TQHxByFbMl3CJA,AuditGuardX Professional,,,,2025-11-22 03:58,149.00,cad,month,1,licensed,,per_unit,,unspecified
+price_1SW7tDHSX3RgJL1cgrkfZfLs,prod_TQHzQ8j979Oz19,AuditGuardX Starter,,,,2025-11-22 03:53,470.00,cad,year,1,licensed,,per_unit,,unspecified
+price_1SW7smHSX3RgJL1cA7gl8KoL,prod_TQHzQ8j979Oz19,AuditGuardX Starter,,,,2025-11-22 03:53,49.00,cad,month,1,licensed,,per_unit,,unspecified
+price_1STRW4HSX3RgJL1cj0yeyuq3,prod_TQHtdJqvHj7onj,AuditGuardX Business,,,Apply 20% Discount,2025-11-14 18:14,2870.00,cad,year,1,licensed,,per_unit,,unspecified
+price_1STRVZHSX3RgJL1csyuIcej8,prod_TQHxByFbMl3CJA,AuditGuardX Professional,,,Apply 20% Discount,2025-11-14 18:14,950.00,usd,year,1,licensed,,per_unit,,unspecified
+price_1STRV1HSX3RgJL1crkUDoEnr,prod_TQHzQ8j979Oz19,AuditGuardX Starter,,,Apply 20% Discount,2025-11-14 18:13,278.00,cad,year,1,licensed,,per_unit,,unspecified
+price_1STRPIHSX3RgJL1cNxEJB1Zu,prod_TQHzQ8j979Oz19,AuditGuardX Starter,,,,2025-11-14 18:07,29.00,usd,month,1,licensed,,per_unit,,unspecified
+price_1STRNnHSX3RgJL1cSjc8tuNG,prod_TQHxByFbMl3CJA,AuditGuardX Professional,,,,2025-11-14 18:06,99.00,usd,month,1,licensed,,per_unit,,unspecified
+price_1STRK2HSX3RgJL1cMXV95vrl,prod_TQHtdJqvHj7onj,AuditGuardX Business,,,,2025-11-14 18:02,299.00,usd,month,1,licensed,,per_unit,,unspecified
+price_1STREQHSX3RgJL1cIfj5gcBq,prod_TQHoMqxJu1XoNg,AuditGuardX Enterprise,,,,2025-11-14 17:56,1999.00,usd,month,1,licensed,,per_unit,,unspecified

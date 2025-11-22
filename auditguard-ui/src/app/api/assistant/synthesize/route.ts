@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
       try {
         // Map friendly voice IDs to actual ElevenLabs voice IDs
         const voiceIdMap: Record<string, string> = {
+          'patrick': 'C4eyCB721V3UgxQfSJYJ',
           'rachel': '21m00Tcm4TlvDq8ikWAM',
           'adam': 'pNInz6obpgDQGcFmaJgB',
           'bella': 'EXAVITQu4vr4xnSDxMaL',
@@ -202,7 +203,7 @@ export async function GET() {
     },
     availableVoices: [
       { id: 'rachel', name: 'Rachel', description: 'Clear and professional American female voice', elevenlabs_id: '21m00Tcm4TlvDq8ikWAM' },
-      { id: 'adam', name: 'Adam', description: 'Deep and resonant American male voice', elevenlabs_id: 'pNInz6obpgDQGcFmaJgB' },
+      { id: 'patrick', name: 'Patrick', description: 'Dynamic resonate Canadian African male voice', elevenlabs_id: 'C4eyCB721V3UgxQfSJYJ' },
       { id: 'bella', name: 'Bella', description: 'Soft and warm American female voice', elevenlabs_id: 'EXAVITQu4vr4xnSDxMaL' },
       { id: 'domi', name: 'Domi', description: 'Strong and confident American female voice', elevenlabs_id: 'AZnzlk1XvdvUeBnXmlld' },
       { id: 'arnold', name: 'Arnold', description: 'Crisp and authoritative American male voice', elevenlabs_id: 'VR6AewLTigWG4xSOukaG' },

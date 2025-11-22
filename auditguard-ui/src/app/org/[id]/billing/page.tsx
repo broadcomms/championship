@@ -8,12 +8,17 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Subscription {
-  tier: 'Free' | 'Professional' | 'Enterprise';
-  status: 'active' | 'trialing' | 'past_due' | 'canceled';
+  plan_id: string;
+  plan_name: string;
+  status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete';
   current_period_start: number;
   current_period_end: number;
   cancel_at_period_end: boolean;
+  trial_start?: number;
   trial_end?: number;
+  billing_cycle?: 'monthly' | 'yearly';
+  price_monthly?: number;
+  price_yearly?: number;
 }
 
 interface UsageMetrics {
@@ -174,6 +179,15 @@ export default function OrganizationBillingPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch organization data to get subscription info
+        const orgResponse = await api.get(`/api/organizations/${orgId}`).catch(err => {
+          console.error('Failed to fetch organization:', err);
+          return null;
+        });
+
+        const orgData = orgResponse?.data || orgResponse;
+        console.log('Organization data for billing:', orgData);
+
         // Fetch subscription plans from API
         const plansResponse = await api.get('/api/billing/plans');
         const fetchedPlans: PlanTier[] = plansResponse.plans.map((plan: any) => ({
@@ -191,18 +205,58 @@ export default function OrganizationBillingPage() {
         }));
         setPlans(fetchedPlans);
 
+        // Get subscription from organization data
+        if (orgData) {
+          // Find subscription details from database
+          const subRes = await api.post('/api/admin/database/query', {
+            sql: `SELECT * FROM subscriptions WHERE organization_id = "${orgId}" AND status IN ('active', 'trialing', 'past_due') ORDER BY created_at DESC LIMIT 1`
+          }).catch(() => null);
+
+          const subData = subRes?.rows?.[0];
+          console.log('Subscription data:', subData);
+
+          if (subData) {
+            // Find the plan details
+            const planDetails = fetchedPlans.find(p => p.id === subData.plan_id);
+            
+            setSubscription({
+              plan_id: subData.plan_id,
+              plan_name: planDetails?.displayName || subData.plan_id,
+              status: subData.status,
+              current_period_start: subData.current_period_start,
+              current_period_end: subData.current_period_end,
+              cancel_at_period_end: subData.cancel_at_period_end === 1,
+              trial_start: subData.trial_start,
+              trial_end: subData.trial_end,
+              billing_cycle: subData.billing_cycle,
+              price_monthly: planDetails?.priceMonthly,
+              price_yearly: planDetails?.priceYearly,
+            });
+          } else {
+            // Default to free plan
+            setSubscription({
+              plan_id: 'plan_free',
+              plan_name: 'Free',
+              status: 'active',
+              current_period_start: Date.now(),
+              current_period_end: Date.now() + 30 * 24 * 60 * 60 * 1000,
+              cancel_at_period_end: false,
+            });
+          }
+        }
+
         // Fetch usage forecast (includes current usage + plan limits)
         // Note: api.get() returns data directly, not wrapped in .data property
-        const forecast = await api.get(`/api/organizations/${orgId}/usage/forecast`);
+        const forecast = await api.get(`/api/organizations/${orgId}/usage/forecast`).catch(() => null);
 
         // Check if forecast data is valid
         if (forecast && typeof forecast === 'object' && forecast.current_usage && forecast.plan_limits) {
           // Map backend data structure to frontend expected format
           setUsage({
             uploads_used: forecast.current_usage?.documents || 0,
-            uploads_limit: forecast.plan_limits?.max_documents || 10,
+            uploads_limit: forecast.plan_limits?.documents || 3,
             checks_used: forecast.current_usage?.checks || 0,
-            checks_limit: forecast.plan_limits?.max_checks || 5,
+            checks_limit: forecast.plan_limits?.compliance_checks || 5,
             period_start: Date.now() - 30 * 24 * 60 * 60 * 1000, // 30 days ago
             period_end: Date.now(),
           });
@@ -210,22 +264,13 @@ export default function OrganizationBillingPage() {
           // No forecast data available, use defaults
           setUsage({
             uploads_used: 0,
-            uploads_limit: 10,
+            uploads_limit: 3,
             checks_used: 0,
             checks_limit: 5,
             period_start: Date.now() - 30 * 24 * 60 * 60 * 1000,
             period_end: Date.now(),
           });
         }
-
-        // Set default subscription (Free tier) - subscription management not yet implemented
-        setSubscription({
-          tier: 'Free',
-          status: 'active',
-          current_period_start: Date.now() - 30 * 24 * 60 * 60 * 1000,
-          current_period_end: Date.now() + 30 * 24 * 60 * 60 * 1000,
-          cancel_at_period_end: false,
-        });
 
         // Invoices not yet implemented
         setInvoices([]);
@@ -278,8 +323,8 @@ export default function OrganizationBillingPage() {
 
   // Find current plan from fetched plans
   const currentPlan = plans.find(p => 
-    subscription ? p.displayName.toLowerCase() === subscription.tier.toLowerCase() : p.name === 'free'
-  ) || plans[0]; // Fallback to first plan (Free)
+    subscription ? p.id === subscription.plan_id : p.name === 'free'
+  ) || plans.find(p => p.name === 'free') || plans[0]; // Fallback to free plan
   
   const usagePercentUploads = usage
     ? (usage.uploads_used / usage.uploads_limit) * 100
@@ -291,6 +336,24 @@ export default function OrganizationBillingPage() {
   return (
     <OrganizationLayout accountId={accountId} orgId={orgId}>
       <div className="p-8">
+          {/* Trial Banner */}
+          {subscription && subscription.status === 'trialing' && subscription.trial_end && (
+            <div className="mb-6 bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-lg shadow-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">🎉 {subscription.plan_name} Trial Active</h3>
+                  <p className="text-blue-100">
+                    Your trial ends on {new Date(subscription.trial_end).toLocaleDateString()}. 
+                    Scroll down to view available plans and add a payment method to continue after your trial.
+                  </p>
+                </div>
+                <div className="bg-white text-blue-600 px-6 py-2 rounded-lg font-semibold">
+                  {Math.ceil((subscription.trial_end - Date.now()) / (24 * 60 * 60 * 1000))} Days Left
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -305,9 +368,21 @@ export default function OrganizationBillingPage() {
           <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-1">
-                  Current Plan: {currentPlan?.displayName || 'Free'}
-                </h2>
+                <div className="flex items-center gap-3 mb-1">
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Current Plan: {currentPlan?.displayName || 'Free'}
+                  </h2>
+                  {subscription?.status === 'trialing' && (
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
+                      TRIAL
+                    </span>
+                  )}
+                  {subscription?.status === 'active' && subscription.plan_id !== 'plan_free' && (
+                    <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
+                      ACTIVE
+                    </span>
+                  )}
+                </div>
                 <p className="text-gray-600">
                   {subscription?.status === 'trialing' && subscription.trial_end
                     ? `Trial ends ${new Date(subscription.trial_end).toLocaleDateString()}`

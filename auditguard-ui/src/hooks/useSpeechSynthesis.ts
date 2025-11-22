@@ -28,7 +28,7 @@ interface SpeechSynthesisState {
 // Available ElevenLabs voices (mapped to actual ElevenLabs voice IDs)
 export const AVAILABLE_VOICES = [
   { id: 'rachel', name: 'Rachel', description: 'Clear and professional' },
-  { id: 'adam', name: 'Adam', description: 'Deep and resonant' },
+  { id: 'patrick', name: 'Patrick', description: 'Dynamic resonate' },
   { id: 'bella', name: 'Bella', description: 'Soft and warm' },
   { id: 'domi', name: 'Domi', description: 'Strong and confident' },
   { id: 'arnold', name: 'Arnold', description: 'Crisp and authoritative' },
