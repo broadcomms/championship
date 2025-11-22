@@ -27,6 +27,17 @@ export function VoiceInputPanel({
 }: VoiceInputPanelProps) {
   const [transcribedText, setTranscribedText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [lastSpokenMessage, setLastSpokenMessage] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Debug: Log component mount
+  React.useEffect(() => {
+    const instanceId = Math.random().toString(36).substring(7);
+    console.log(`🎤 VoiceInputPanel [${instanceId}] mounted`);
+    return () => {
+      console.log(`🎤 VoiceInputPanel [${instanceId}] unmounted`);
+    };
+  }, []);
 
   // Audio capture hook
   const audioCapture = useAudioCapture({
@@ -61,12 +72,37 @@ export function VoiceInputPanel({
     },
   });
 
-  // Auto-play assistant responses
+  // Initialize: mark current message as already spoken (don't replay old messages)
   useEffect(() => {
-    if (lastAssistantMessage && voiceSettings.autoPlay) {
-      speechSynthesis.speak(lastAssistantMessage);
+    if (!isInitialized && lastAssistantMessage) {
+      console.log('🎤 VoiceInputPanel initialized - marking current message as spoken (no replay)');
+      setLastSpokenMessage(lastAssistantMessage);
+      setIsInitialized(true);
+    } else if (!isInitialized) {
+      setIsInitialized(true);
     }
-  }, [lastAssistantMessage, voiceSettings.autoPlay]);
+  }, [isInitialized, lastAssistantMessage]);
+
+  // Auto-play NEW assistant responses only (messages that arrive AFTER voice mode is active)
+  useEffect(() => {
+    if (!isInitialized) return; // Wait for initialization
+
+    if (lastAssistantMessage && voiceSettings.autoPlay && lastAssistantMessage !== lastSpokenMessage) {
+      console.log('🔊 Speaking NEW message:', lastAssistantMessage.substring(0, 50));
+      speechSynthesis.speak(lastAssistantMessage);
+      setLastSpokenMessage(lastAssistantMessage);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastAssistantMessage, voiceSettings.autoPlay, lastSpokenMessage, isInitialized]);
+
+  // Cleanup: stop speech when component unmounts
+  useEffect(() => {
+    return () => {
+      console.log('VoiceInputPanel unmounting - stopping speech');
+      speechSynthesis.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount/unmount
 
   const handleSend = () => {
     if (transcribedText.trim()) {

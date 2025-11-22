@@ -48,6 +48,9 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const isSpeakingRef = useRef(false);
+  const lastTextRef = useRef<string | null>(null);
+  const lastSpeakTimeRef = useRef<number>(0);
 
   // Convert text to speech using ElevenLabs API
   const synthesizeSpeech = useCallback(
@@ -106,6 +109,7 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
         };
 
         audio.onended = () => {
+          isSpeakingRef.current = false;
           setState((prev) => ({
             ...prev,
             isSpeaking: false,
@@ -116,6 +120,7 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
         };
 
         audio.onerror = (error) => {
+          isSpeakingRef.current = false;
           setState((prev) => ({
             ...prev,
             isSpeaking: false,
@@ -144,9 +149,23 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
   // Speak text
   const speak = useCallback(
     async (text: string) => {
-      if (state.isSpeaking) {
-        stop();
+      // Prevent duplicate calls within 500ms (React strict mode / multiple instances)
+      const now = Date.now();
+      if (lastTextRef.current === text && (now - lastSpeakTimeRef.current) < 500) {
+        console.log('⏭️ Skipping duplicate speak call for same text within 500ms');
+        return;
       }
+
+      // Prevent concurrent speak calls
+      if (isSpeakingRef.current) {
+        console.log('⏸️ Already speaking, stopping previous...');
+        stop();
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+
+      lastTextRef.current = text;
+      lastSpeakTimeRef.current = now;
+      isSpeakingRef.current = true;
 
       setState((prev) => ({
         ...prev,
@@ -157,7 +176,7 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
 
       try {
         const audioBlob = await synthesizeSpeech(text);
-        
+
         // If server TTS returned null, use browser TTS fallback
         if (!audioBlob) {
           console.log('Using browser TTS fallback');
@@ -170,20 +189,23 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
               onStart?.();
             };
             utterance.onend = () => {
+              isSpeakingRef.current = false;
               setState((prev) => ({ ...prev, isSpeaking: false, currentText: null }));
               onEnd?.();
             };
             utterance.onerror = (error) => {
+              isSpeakingRef.current = false;
               setState((prev) => ({ ...prev, isSpeaking: false, isLoading: false, error: 'Browser TTS failed' }));
               onError?.(new Error('Browser TTS failed'));
             };
             window.speechSynthesis.speak(utterance);
           } else {
+            isSpeakingRef.current = false;
             throw new Error('Speech synthesis not supported');
           }
           return;
         }
-        
+
         if (voiceSettings.autoPlay) {
           await playAudio(audioBlob);
         } else {
@@ -193,6 +215,7 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
           }));
         }
       } catch (error) {
+        isSpeakingRef.current = false;
         const errorMessage = error instanceof Error ? error.message : 'Speech synthesis failed';
         setState((prev) => ({
           ...prev,
@@ -202,15 +225,25 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
         onError?.(error instanceof Error ? error : new Error(errorMessage));
       }
     },
-    [state.isSpeaking, voiceSettings.autoPlay, synthesizeSpeech, playAudio, onError]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [voiceSettings.autoPlay, voiceSettings.speed, synthesizeSpeech, playAudio, onStart, onEnd, onError]
   );
 
   // Stop speaking
   const stop = useCallback(() => {
+    // Reset speaking flag
+    isSpeakingRef.current = false;
+
+    // Stop audio element if it exists
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       audioRef.current = null;
+    }
+
+    // Stop browser TTS if it's running
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
 
     setState((prev) => ({

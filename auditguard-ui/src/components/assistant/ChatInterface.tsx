@@ -49,6 +49,7 @@ export function ChatInterface({
 
   // Sync external messages to local state
   useEffect(() => {
+    console.log('📥 ChatInterface: Received external messages:', externalMessages.length, 'messages');
     setMessages(externalMessages);
   }, [externalMessages]);
 

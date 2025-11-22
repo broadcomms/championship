@@ -63,22 +63,26 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
         // 1. Check localStorage for existing session
         const storageKey = getStorageKey(workspaceId);
         const storedSessionId = localStorage.getItem(storageKey);
-        console.log('🔍 Initializing session - stored:', storedSessionId);
+        console.log('🔍 AIAssistantPage: Initializing session - stored:', storedSessionId);
 
         if (storedSessionId) {
           // 2. Set sessionId in context SYNCHRONOUSLY via the new pattern
+          console.log('📍 AIAssistantPage: Setting sessionId in context:', storedSessionId);
           chatWidget.setSessionId(storedSessionId);
           setCurrentConversationId(storedSessionId);
 
           // 3. Load conversation history
+          console.log('📚 AIAssistantPage: Loading session history...');
           await loadSessionHistory(storedSessionId);
+          console.log('✅ AIAssistantPage: Session initialization complete');
         } else {
           // No stored session - start fresh
+          console.log('🆕 AIAssistantPage: No stored session, starting fresh');
           chatWidget.setSessionId(null);
           setMessages([]);
         }
       } catch (error) {
-        console.error('Error initializing session:', error);
+        console.error('❌ AIAssistantPage: Error initializing session:', error);
         chatWidget.setSessionId(null);
         setMessages([]);
       } finally {
