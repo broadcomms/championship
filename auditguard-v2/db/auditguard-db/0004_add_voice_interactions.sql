@@ -190,7 +190,8 @@ INSERT INTO available_voices (id, name, category, description, gender, age, acce
 ('ErXwobaYiN019PkySvjV', 'Antoni', 'premade', 'Well-rounded American male voice', 'male', 'middle_aged', 'american', 'narration', 1, 0),
 ('VR6AewLTigWG4xSOukaG', 'Arnold', 'premade', 'Crisp and authoritative American male voice', 'male', 'middle_aged', 'american', 'conversational', 1, 0),
 ('pNInz6obpgDQGcFmaJgB', 'Adam', 'premade', 'Deep and resonant American male voice', 'male', 'middle_aged', 'american', 'narration', 1, 0),
-('yoZ06aMxZJJ28mfd3POQ', 'Sam', 'premade', 'Dynamic and engaging American male voice', 'male', 'young', 'american', 'conversational', 1, 0);
+('yoZ06aMxZJJ28mfd3POQ', 'Sam', 'premade', 'Dynamic and engaging American male voice', 'male', 'young', 'american', 'conversational', 1, 0),
+('C4eyCB721V3UgxQfSJYJ', 'Patrick', 'premade', 'Dynamic Canadian African male voice', 'male', 'middle_aged', 'canadian', 'conversational', 1, 0);
 
 -- ============================================
 -- TRIGGERS (DISABLED FOR D1 COMPATIBILITY)

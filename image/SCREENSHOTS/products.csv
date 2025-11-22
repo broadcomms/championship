@@ -1,0 +1,5 @@
+id,Name,Date (UTC),Description,Url,Tax Code,organization (metadata),workspaces (metadata),email_support (metadata),version_control (metadata),custom_frameworks (metadata),documents_limit (metadata),dedicated_support (metadata),team_members (metadata),api_access (metadata),sso (metadata),compliance_checks (metadata),ai_messages (metadata),plan_type (metadata),priority_support (metadata),sla (metadata),storage_gb (metadata)
+prod_TQHzQ8j979Oz19,AuditGuardX Starter,2025-11-14 18:07,"Perfect for solo consultants, and small business",,,1,5,true,7,,50,,3,,,100,200,starter,,,1
+prod_TQHxByFbMl3CJA,AuditGuardX Professional,2025-11-14 18:06,For growing compliance teams up to 20 people,,,1,20,,30,,1000,,20,10000,,1000,2000,professional,24,,10
+prod_TQHtdJqvHj7onj,AuditGuardX Business,2025-11-14 18:02,Established companies 20-100 employees,,,1,50,,,TRUE,5000,,50,100000,,10000,10000,business,4,99.9,100
+prod_TQHoMqxJu1XoNg,AuditGuardX Enterprise,2025-11-14 17:56,"Custom compliance solution for medium to large enterprises, including unlimited cloud resources, dedicated support, SLA and SSO.",,,,,,,TRUE,-1,TRUE,-1,-1,TRUE,-1,-1,enterprise,-1,99.99,-1

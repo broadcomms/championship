@@ -34,95 +34,129 @@ interface Invoice {
 }
 
 interface PlanTier {
+  id: string;
   name: string;
-  price: number;
+  displayName: string;
+  description: string;
+  price: number; // in dollars
+  priceMonthly: number; // in cents
+  priceYearly: number; // in cents
   uploads: number;
   checks: number;
   features: string[];
+  limits: {
+    documents: number;
+    compliance_checks: number;
+    assistant_messages: number;
+    storage_gb: number;
+    team_members: number;
+    api_calls: number;
+  };
 }
 
-// Default plan tiers (will be replaced by API data)
-const DEFAULT_PLAN_TIERS: Record<string, PlanTier> = {
-  Free: {
-    name: 'Free',
-    price: 0,
-    uploads: 10,
-    checks: 20,
-    features: [
-      '10 document uploads total',
-      '20 compliance checks/month',
-      '3 workspaces',
-      'Basic compliance frameworks',
-      'Community support',
-    ],
-  },
-  Starter: {
-    name: 'Starter',
-    price: 29,
-    uploads: 10,
-    checks: 50,
-    features: [
-      '10 document uploads',
-      '50 compliance checks/month',
-      '5 workspaces',
-      'All compliance frameworks',
-      'Email support',
-    ],
-  },
-  Professional: {
-    name: 'Professional',
-    price: 99,
-    uploads: 50,
-    checks: 200,
-    features: [
-      '50 document uploads',
-      '200 compliance checks/month',
-      '20 workspaces',
-      'All compliance frameworks',
-      'Priority support',
-      'Advanced analytics',
-      'API access',
-      'Slack integration',
-      'Custom branding',
-    ],
-  },
-  Business: {
-    name: 'Business',
-    price: 299,
-    uploads: 1000,
-    checks: 2000,
-    features: [
-      '1,000 document uploads',
-      '2,000 compliance checks/month',
-      '50 workspaces',
-      'All frameworks',
-      'Priority support',
-      'Advanced analytics',
-      'API access',
-      'SSO',
-      'Audit trails',
-      'Custom frameworks',
-    ],
-  },
-  Enterprise: {
-    name: 'Enterprise',
-    price: 1999,
-    uploads: -1, // unlimited
-    checks: -1, // unlimited
-    features: [
-      'Unlimited document uploads',
-      'Unlimited compliance checks',
-      'Unlimited workspaces',
-      'All compliance frameworks',
-      '24/7 premium support',
-      'Advanced analytics & reporting',
-      'API access',
-      'SSO & advanced security',
-      'Custom integrations',
-      'Dedicated account manager',
-    ],
-  },
-};
+// Helper function to format plan features into human-readable list
+function formatPlanFeatures(plan: any): string[] {
+  const features: string[] = [];
+  
+  // Add document limit
+  const docLimit = plan.limits.documents;
+  if (docLimit === -1) {
+    features.push('Unlimited document uploads');
+  } else {
+    features.push(`${docLimit} document upload${docLimit !== 1 ? 's' : ''}`);
+  }
+  
+  // Add compliance checks limit
+  const checkLimit = plan.limits.compliance_checks;
+  if (checkLimit === -1) {
+    features.push('Unlimited compliance checks');
+  } else {
+    features.push(`${checkLimit} compliance checks/month`);
+  }
+  
+  // Add AI messages limit
+  const msgLimit = plan.limits.assistant_messages;
+  if (msgLimit === -1) {
+    features.push('Unlimited AI messages');
+  } else if (msgLimit > 0) {
+    features.push(`${msgLimit} AI messages/month`);
+  }
+  
+  // Add team members limit
+  const teamLimit = plan.limits.team_members;
+  if (teamLimit === -1) {
+    features.push('Unlimited team members');
+  } else if (teamLimit > 0) {
+    features.push(`${teamLimit} team member${teamLimit !== 1 ? 's' : ''}`);
+  }
+  
+  // Add storage limit
+  const storageLimit = plan.limits.storage_gb;
+  if (storageLimit === -1) {
+    features.push('Unlimited storage');
+  } else if (storageLimit > 0) {
+    features.push(`${storageLimit} GB storage`);
+  }
+  
+  // Add API calls if available
+  const apiLimit = plan.limits.api_calls;
+  if (apiLimit === -1) {
+    features.push('Unlimited API calls');
+  } else if (apiLimit > 0) {
+    features.push(`${apiLimit.toLocaleString()} API calls/month`);
+  }
+  
+  // Map feature codes to readable names
+  const featureMap: Record<string, string> = {
+    'basic_frameworks': 'Basic compliance frameworks',
+    'all_frameworks': 'All compliance frameworks',
+    'community_support': 'Community support',
+    'email_support': 'Email support',
+    'priority_support': 'Priority support',
+    'phone_support': 'Phone support',
+    'dedicated_support': 'Dedicated support',
+    '24_7_support': '24/7 premium support',
+    'pdf_export': 'Export to PDF',
+    'version_control_7days': 'Version control (7 days)',
+    'version_control_30days': 'Version control (30 days)',
+    'unlimited_version_control': 'Unlimited version control',
+    'basic_analytics': 'Basic analytics',
+    'advanced_analytics': 'Advanced analytics & reporting',
+    'team_collaboration': 'Team collaboration',
+    'api_access': 'API access',
+    'slack_integration': 'Slack/Teams integration',
+    'custom_branding': 'Custom branding',
+    'automation': 'Compliance automation',
+    'document_templates': 'Document templates',
+    'sso': 'SSO (SAML/OIDC)',
+    'audit_trails': 'Audit trails & activity logs',
+    'custom_frameworks': 'Custom compliance frameworks',
+    'advanced_permissions': 'Advanced team management & roles',
+    'white_label': 'White-label capabilities',
+    'on_premise': 'On-premise deployment',
+    'dedicated_infrastructure': 'Dedicated infrastructure',
+    'custom_sla': 'Custom SLA',
+    'dedicated_account_manager': 'Dedicated account manager',
+    'training_onboarding': 'Training & onboarding',
+    'custom_development': 'Custom feature development',
+    'volume_discounts': 'Volume discounts',
+    'quarterly_reviews': 'Quarterly business reviews',
+    'sla_99_9': 'SLA guarantees (99.9% uptime)',
+    'sla_99_99': 'SLA guarantees (99.99% uptime)',
+  };
+  
+  // Add feature flags
+  if (plan.features && Array.isArray(plan.features)) {
+    plan.features.forEach((feature: string) => {
+      const readable = featureMap[feature];
+      if (readable) {
+        features.push(readable);
+      }
+    });
+  }
+  
+  return features;
+}
 
 export default function OrganizationBillingPage() {
   const params = useParams();
@@ -134,11 +168,29 @@ export default function OrganizationBillingPage() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [usage, setUsage] = useState<UsageMetrics | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [plans, setPlans] = useState<PlanTier[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch subscription plans from API
+        const plansResponse = await api.get('/api/billing/plans');
+        const fetchedPlans: PlanTier[] = plansResponse.plans.map((plan: any) => ({
+          id: plan.id,
+          name: plan.name,
+          displayName: plan.displayName,
+          description: plan.description,
+          price: plan.priceMonthly / 100, // Convert cents to dollars
+          priceMonthly: plan.priceMonthly,
+          priceYearly: plan.priceYearly,
+          uploads: plan.limits.documents,
+          checks: plan.limits.compliance_checks,
+          features: formatPlanFeatures(plan),
+          limits: plan.limits,
+        }));
+        setPlans(fetchedPlans);
+
         // Fetch usage forecast (includes current usage + plan limits)
         // Note: api.get() returns data directly, not wrapped in .data property
         const forecast = await api.get(`/api/organizations/${orgId}/usage/forecast`);
@@ -224,7 +276,11 @@ export default function OrganizationBillingPage() {
     );
   }
 
-  const currentPlan = subscription ? DEFAULT_PLAN_TIERS[subscription.tier] : DEFAULT_PLAN_TIERS.Free;
+  // Find current plan from fetched plans
+  const currentPlan = plans.find(p => 
+    subscription ? p.displayName.toLowerCase() === subscription.tier.toLowerCase() : p.name === 'free'
+  ) || plans[0]; // Fallback to first plan (Free)
+  
   const usagePercentUploads = usage
     ? (usage.uploads_used / usage.uploads_limit) * 100
     : 0;
@@ -250,7 +306,7 @@ export default function OrganizationBillingPage() {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900 mb-1">
-                  Current Plan: {currentPlan.name}
+                  Current Plan: {currentPlan?.displayName || 'Free'}
                 </h2>
                 <p className="text-gray-600">
                   {subscription?.status === 'trialing' && subscription.trial_end
@@ -264,7 +320,7 @@ export default function OrganizationBillingPage() {
               </div>
               <div className="text-right">
                 <div className="text-3xl font-bold text-gray-900">
-                  ${currentPlan.price}
+                  ${currentPlan?.price || 0}
                 </div>
                 <div className="text-sm text-gray-600">/month</div>
               </div>
@@ -363,67 +419,71 @@ export default function OrganizationBillingPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Available Plans
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {Object.entries(DEFAULT_PLAN_TIERS).map(([tier, plan]) => {
-                const isCurrent = subscription?.tier === tier;
+            {plans.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">Loading plans...</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {plans.map((plan) => {
+                  const isCurrent = currentPlan?.id === plan.id;
 
-                return (
-                  <div
-                    key={tier}
-                    className={`rounded-lg border-2 p-6 ${
-                      isCurrent
-                        ? 'border-blue-600 bg-blue-50'
-                        : 'border-gray-200 bg-white'
-                    }`}
-                  >
-                    {isCurrent && (
-                      <span className="inline-block px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full mb-4">
-                        Current Plan
-                      </span>
-                    )}
+                  return (
+                    <div
+                      key={plan.id}
+                      className={`rounded-lg border-2 p-6 ${
+                        isCurrent
+                          ? 'border-blue-600 bg-blue-50'
+                          : 'border-gray-200 bg-white'
+                      }`}
+                    >
+                      {isCurrent && (
+                        <span className="inline-block px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full mb-4">
+                          Current Plan
+                        </span>
+                      )}
 
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">
-                      {plan.name}
-                    </h3>
-                    <div className="mb-4">
-                      <span className="text-3xl font-bold text-gray-900">
-                        ${plan.price}
-                      </span>
-                      <span className="text-gray-600">/month</span>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">
+                        {plan.displayName}
+                      </h3>
+                      <div className="mb-4">
+                        <span className="text-3xl font-bold text-gray-900">
+                          ${plan.price}
+                        </span>
+                        <span className="text-gray-600">/month</span>
+                      </div>
+
+                      <ul className="space-y-3 mb-6">
+                        {plan.features.map((feature, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-sm">
+                            <span className="text-green-600 mt-0.5">✓</span>
+                            <span className="text-gray-700">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+
+                      {!isCurrent && (
+                        <Button
+                          onClick={() => handleUpgrade(plan.id)}
+                          variant={plan.name === 'enterprise' ? 'primary' : 'outline'}
+                          className="w-full"
+                        >
+                          {plan.name === 'free' ? 'Downgrade' : 'Upgrade'}
+                        </Button>
+                      )}
+
+                      {isCurrent && !subscription?.cancel_at_period_end && plan.name !== 'free' && (
+                        <Button
+                          onClick={handleCancelSubscription}
+                          variant="outline"
+                          className="w-full text-red-600 border-red-300 hover:bg-red-50"
+                        >
+                          Cancel Plan
+                        </Button>
+                      )}
                     </div>
-
-                    <ul className="space-y-3 mb-6">
-                      {plan.features.map((feature, idx) => (
-                        <li key={idx} className="flex items-start gap-2 text-sm">
-                          <span className="text-green-600 mt-0.5">✓</span>
-                          <span className="text-gray-700">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {!isCurrent && (
-                      <Button
-                        onClick={() => handleUpgrade(tier)}
-                        variant={tier === 'Enterprise' ? 'primary' : 'outline'}
-                        className="w-full"
-                      >
-                        {tier === 'Free' ? 'Downgrade' : 'Upgrade'}
-                      </Button>
-                    )}
-
-                    {isCurrent && !subscription?.cancel_at_period_end && tier !== 'Free' && (
-                      <Button
-                        onClick={handleCancelSubscription}
-                        variant="outline"
-                        className="w-full text-red-600 border-red-300 hover:bg-red-50"
-                      >
-                        Cancel Plan
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Invoice History */}
