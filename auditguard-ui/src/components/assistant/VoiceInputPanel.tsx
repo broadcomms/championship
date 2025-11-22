@@ -115,7 +115,16 @@ export function VoiceInputPanel({
   return (
     <div className={`flex flex-col space-y-4 ${className}`}>
       {/* Voice Visualization Area */}
-      <div className="flex flex-col items-center justify-center py-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg">
+      <div className="relative flex flex-col items-center justify-center py-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg">
+        {/* Settings Button - Top Right */}
+        <button
+          onClick={onSettingsClick}
+          className="absolute top-3 right-3 p-2 text-gray-600 hover:bg-white/80 rounded-lg transition-colors"
+          title="Voice settings"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+
         {/* Error Display */}
         {audioCapture.error && (
           <div className="w-full px-4 mb-4">
@@ -141,8 +150,8 @@ export function VoiceInputPanel({
         {/* Recording Status */}
         <div className="text-center space-y-1">
           <p className={`text-sm font-medium ${
-            audioCapture.isRecording ? 'text-red-600' : 
-            audioCapture.isProcessing ? 'text-blue-600' : 
+            audioCapture.isRecording ? 'text-red-600' :
+            audioCapture.isProcessing ? 'text-blue-600' :
             'text-gray-600'
           }`}>
             {audioCapture.isRecording
@@ -151,7 +160,7 @@ export function VoiceInputPanel({
               ? '⏳ Processing...'
               : '✓ Ready'}
           </p>
-          
+
           {audioCapture.duration > 0 && audioCapture.isRecording && (
             <p className="text-xs font-mono text-gray-500">
               {Math.floor(audioCapture.duration / 60)}:{(audioCapture.duration % 60).toString().padStart(2, '0')}
@@ -173,7 +182,7 @@ export function VoiceInputPanel({
       </div>
 
       {/* Recording Controls */}
-      <div className="flex items-center justify-center gap-3">
+      <div className="flex items-center justify-center">
         <button
           onClick={audioCapture.toggleRecording}
           disabled={audioCapture.isProcessing}
@@ -186,7 +195,7 @@ export function VoiceInputPanel({
           {audioCapture.isRecording ? (
             <>
               <Square className="w-4 h-4" />
-              Stop
+              Send
             </>
           ) : audioCapture.isProcessing ? (
             <>
@@ -196,17 +205,9 @@ export function VoiceInputPanel({
           ) : (
             <>
               <Mic className="w-4 h-4" />
-              Record
+              Talk
             </>
           )}
-        </button>
-
-        <button
-          onClick={onSettingsClick}
-          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-          title="Voice settings"
-        >
-          <Settings className="w-4 h-4" />
         </button>
       </div>
 
@@ -266,7 +267,7 @@ export function VoiceInputPanel({
       {!audioCapture.error && !transcribedText && (
         <div className="text-center text-xs text-gray-500">
           {inputMode === 'push-to-talk' && (
-            <p>Click Record or hold <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">SPACE</kbd> to talk</p>
+            <p>Click Talk or hold <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">SPACE</kbd> to speak</p>
           )}
           {inputMode === 'voice-activation' && (
             <p>Voice activation is on - speak naturally</p>
