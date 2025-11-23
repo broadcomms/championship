@@ -674,6 +674,23 @@ export default class extends Service<Env> {
   }
 
   /**
+   * Mark notification as read (Public method for inter-service communication)
+   */
+  async markNotificationAsRead(notificationId: string): Promise<void> {
+    const db = this.getDb();
+    const now = Date.now();
+
+    await db
+      .updateTable('notifications')
+      .set({
+        read: 1,
+        read_at: now
+      })
+      .where('id', '=', notificationId)
+      .execute();
+  }
+
+  /**
    * Create a new notification (Private implementation)
    */
   private async _createNotification(req: CreateNotificationRequest): Promise<Response> {

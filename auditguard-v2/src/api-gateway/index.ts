@@ -5150,11 +5150,11 @@ export default class extends Service<Env> {
       if (notifReadMatch && notifReadMatch[1] && request.method === 'PATCH') {
         await this.validateSession(request);
         const notificationId = notifReadMatch[1];
-        return await this.env.NOTIFICATION_SERVICE.fetch(
-          new Request(`${url.origin}/api/notifications/${notificationId}/read`, {
-            method: 'PATCH',
-          })
-        );
+        await this.env.NOTIFICATION_SERVICE.markNotificationAsRead(notificationId);
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
       }
 
       // POST /api/notifications/read-all - Mark all as read
