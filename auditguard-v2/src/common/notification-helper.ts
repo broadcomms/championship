@@ -8,7 +8,7 @@
 // Generic Env type that works across all services
 interface NotificationEnv {
   NOTIFICATION_SERVICE: {
-    fetch(request: Request): Promise<Response>;
+    createNotification(params: any): Promise<Response>;
   };
   logger: {
     info(message: string, data?: any): void;
@@ -90,22 +90,17 @@ export async function createNotification(
       action_url: params.actionUrl,
       workspace_id: params.workspaceId,
       metadata: params.metadata,
-      send_email: params.sendEmail ?? true,
+      send_email: params.sendEmail ?? false, // Don't send email by default (already sent)
       send_realtime: params.sendRealtime ?? true,
       actions: params.actions
     };
 
-    // Call notification service via fetch
-    const response = await env.NOTIFICATION_SERVICE.fetch(
-      new Request('https://internal/notifications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      })
-    );
+    // Call notification service method directly
+    const response = await env.NOTIFICATION_SERVICE.createNotification(requestBody);
 
     if (!response.ok) {
-      throw new Error(`Failed to create notification: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Failed to create notification: ${response.status} - ${errorText}`);
     }
 
     env.logger.info('Notification created successfully', {
