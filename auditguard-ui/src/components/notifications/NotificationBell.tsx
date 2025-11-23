@@ -89,9 +89,8 @@ export function NotificationBell() {
       const response = await api.get('/api/notifications/count');
       setCounts(response);
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Notifications count not available');
-      }
+      // Silently handle errors - notifications are optional
+      // Default counts are already set in state
     }
   };
 
@@ -111,9 +110,7 @@ export function NotificationBell() {
       const response = await api.post('/api/notifications', { filter });
       setNotifications(response.notifications || []);
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Notifications list not available');
-      }
+      // Silently handle errors - notifications are optional
       setNotifications([]);
     } finally {
       setLoading(false);
@@ -161,9 +158,7 @@ export function NotificationBell() {
         unread: Math.max(0, prev.unread - 1)
       }));
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Failed to mark notification as read');
-      }
+      // Silently handle errors
     }
   };
 
@@ -172,14 +167,12 @@ export function NotificationBell() {
     try {
       const category = activeCategory === 'all' ? undefined : activeCategory;
       await api.post('/api/notifications/read-all', { category });
-      
+
       // Refresh notifications and counts
       fetchNotifications(category);
       fetchCounts();
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Failed to mark all as read');
-      }
+      // Silently handle errors
     }
   };
 

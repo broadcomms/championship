@@ -35,21 +35,29 @@ export default class extends Service<Env> {
       const signature = request.headers.get('stripe-signature');
 
       if (!signature) {
-        this.env.logger.error('Missing Stripe signature header');
+        this.env.logger.error('Missing stripe-signature header');
         return new Response('Missing signature', { status: 400 });
       }
 
       // Verify webhook signature
       let event: Stripe.Event;
       try {
-        // Use environment webhook secret (production) or fall back to stripe listen secret (development)
-        // For production: Set STRIPE_WEBHOOK_SECRET in Stripe Dashboard after creating webhook endpoint
-        // For development: This matches the secret from `stripe listen` command
-        const webhookSecret = this.env.STRIPE_WEBHOOK_SECRET || 
-          'whsec_ec6166a03ec5f61b17017039dd78e8e94951d56a5fde2ea6964dae284e240689';
+        // CRITICAL: Use the webhook secret from stripe listen CLI
+        const webhookSecret = 'whsec_ec6166a03ec5f61b17017039dd78e8e94951d56a5fde2ea6964dae284e240689';
         
-        // Use constructEventAsync for Cloudflare Workers compatibility
-        event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
+        this.env.logger.info(`Attempting signature verification`, {
+          signatureLength: signature.length,
+          bodyLength: body.length,
+          secretPrefix: webhookSecret.substring(0, 10),
+        });
+        
+        // Use constructEvent (synchronous) instead of constructEventAsync
+        event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+        
+        this.env.logger.info(`Webhook signature verified successfully`, {
+          eventType: event.type,
+          eventId: event.id,
+        });
       } catch (err) {
         this.env.logger.error(`Webhook signature verification failed: ${err instanceof Error ? err.message : String(err)}`);
         return new Response('Invalid signature', { status: 400 });
@@ -140,6 +148,11 @@ export default class extends Service<Env> {
     const db = this.getDb();
 
     switch (event.type) {
+      // Checkout events
+      case 'checkout.session.completed':
+        await this.handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+
       // Customer events
       case 'customer.created':
         await this.handleCustomerCreated(event.data.object as Stripe.Customer);
@@ -224,14 +237,63 @@ export default class extends Service<Env> {
     this.env.logger.info(`Customer ${customer.id} created for workspace ${workspaceId}`);
   }
 
-  private async handleSubscriptionUpdate(subscription: Stripe.Subscription): Promise<void> {
+  private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session): Promise<void> {
     const db = this.getDb();
-    const workspaceId = subscription.metadata.workspace_id;
+    const stripe = this.getStripeClient();
 
-    if (!workspaceId) {
-      this.env.logger.error(`Subscription ${subscription.id} missing workspace_id in metadata`);
+    this.env.logger.info(`Checkout session completed: ${session.id}`);
+
+    // Get organization_id from metadata
+    const organizationId = session.metadata?.organization_id;
+    if (!organizationId) {
+      this.env.logger.error(`Checkout session ${session.id} missing organization_id in metadata`);
       return;
     }
+
+    // Update organization with Stripe customer ID if not already set
+    if (session.customer && typeof session.customer === 'string') {
+      await db
+        .updateTable('organizations')
+        .set({
+          stripe_customer_id: session.customer,
+          updated_at: Date.now(),
+        })
+        .where('id', '=', organizationId)
+        .where('stripe_customer_id', 'is', null)  // Only update if not already set
+        .execute();
+
+      this.env.logger.info(`Updated organization ${organizationId} with customer ${session.customer}`);
+    }
+
+    // If there's a subscription, retrieve it and process it
+    if (session.subscription && typeof session.subscription === 'string') {
+      try {
+        // Retrieve the full subscription object from Stripe
+        const subscription = await stripe.subscriptions.retrieve(session.subscription);
+
+        // Process the subscription (this will handle creating/updating the subscription record)
+        await this.handleSubscriptionUpdate(subscription);
+
+        this.env.logger.info(`Processed subscription ${subscription.id} from checkout session ${session.id}`);
+      } catch (error) {
+        this.env.logger.error(`Failed to retrieve subscription ${session.subscription}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+
+  private async handleSubscriptionUpdate(subscription: Stripe.Subscription): Promise<void> {
+    const db = this.getDb();
+
+    // Support both organization-based and workspace-based billing
+    const organizationId = subscription.metadata.organization_id;
+    const workspaceId = subscription.metadata.workspace_id;
+
+    if (!organizationId && !workspaceId) {
+      this.env.logger.error(`Subscription ${subscription.id} missing organization_id or workspace_id in metadata`);
+      return;
+    }
+
+    this.env.logger.info(`Processing subscription ${subscription.id} for ${organizationId ? `organization ${organizationId}` : `workspace ${workspaceId}`}`);
 
     // Get the plan_id from the price
     const priceId = subscription.items.data[0]?.price.id;
@@ -278,11 +340,12 @@ export default class extends Service<Env> {
         .where('stripe_subscription_id', '=', subscription.id)
         .execute();
 
-      this.env.logger.info(`Updated subscription ${subscription.id} for workspace ${workspaceId}`);
+      this.env.logger.info(`Updated subscription ${subscription.id} for ${organizationId ? `organization ${organizationId}` : `workspace ${workspaceId}`}`);
     } else {
       // Get organization_id from Stripe metadata or lookup from workspace
-      let organizationId = subscription.metadata?.organization_id;
-      if (!organizationId) {
+      let orgId = organizationId;  // Use organizationId from top of function
+      if (!orgId && workspaceId) {
+        // If we have workspace_id but not organization_id, look it up
         const workspace = await db
           .selectFrom('workspaces')
           .select(['organization_id'])
@@ -291,7 +354,12 @@ export default class extends Service<Env> {
         if (!workspace || !workspace.organization_id) {
           throw new Error('Workspace organization not found');
         }
-        organizationId = workspace.organization_id;
+        orgId = workspace.organization_id;
+      }
+
+      if (!orgId) {
+        this.env.logger.error(`Cannot create subscription ${subscription.id}: no organization_id found`);
+        return;
       }
 
       // Create new subscription
@@ -299,7 +367,7 @@ export default class extends Service<Env> {
         .insertInto('subscriptions')
         .values({
           id: subscription.id,
-          organization_id: organizationId,
+          organization_id: orgId,
           plan_id: plan.id,
           stripe_customer_id: subscription.customer as string,
           stripe_subscription_id: subscription.id,
@@ -315,7 +383,7 @@ export default class extends Service<Env> {
         })
         .execute();
 
-      this.env.logger.info(`Created subscription ${subscription.id} for workspace ${workspaceId}`);
+      this.env.logger.info(`Created subscription ${subscription.id} for organization ${orgId}`);
     }
   }
 

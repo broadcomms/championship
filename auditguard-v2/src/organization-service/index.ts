@@ -972,4 +972,216 @@ export default class extends Service<Env> {
       cancel_at_period_end: subscription.cancel_at_period_end === 1,
     };
   }
+
+  /**
+   * Create a Stripe Checkout session for organization subscription upgrade
+   */
+  async createCheckoutSession(
+    organizationId: string,
+    userId: string,
+    planId: string
+  ): Promise<{
+    url: string;
+    sessionId: string;
+  }> {
+    const db = this.getDb();
+
+    // Check permission - only owner can manage billing
+    const member = await db
+      .selectFrom('organization_members')
+      .select('role')
+      .where('organization_id', '=', organizationId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!member || member.role !== 'owner') {
+      throw new Error('Only organization owner can manage subscriptions');
+    }
+
+    // Get organization details
+    const org = await db
+      .selectFrom('organizations')
+      .select(['id', 'name', 'billing_email', 'stripe_customer_id'])
+      .where('id', '=', organizationId)
+      .executeTakeFirst();
+
+    if (!org) {
+      throw new Error('Organization not found');
+    }
+
+    // Get user email for Stripe customer creation
+    const user = await db
+      .selectFrom('users')
+      .select('email')
+      .where('id', '=', userId)
+      .executeTakeFirst();
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Get plan details
+    const plan = await db
+      .selectFrom('subscription_plans')
+      .select(['id', 'name', 'display_name', 'stripe_price_id_monthly'])
+      .where('id', '=', planId)
+      .executeTakeFirst();
+
+    if (!plan || !plan.stripe_price_id_monthly) {
+      throw new Error('Invalid plan or Stripe price not configured');
+    }
+
+    // Initialize Stripe
+    const stripe = new (await import('stripe')).default(
+      'sk_test_51ISqyeHSX3RgJL1cYATfAtUz2mTheWpXfHE6CarZVJlLAsthLPSkMywCU4R4igxVYYtP2YDNCMq15ACNNewhnudb005xDmDDxm',
+      { apiVersion: '2025-10-29.clover', typescript: true }
+    );
+
+    // Create or get Stripe customer
+    let customerId = org.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: org.billing_email || user.email,
+        name: org.name,
+        metadata: {
+          organization_id: organizationId,
+        },
+      });
+      customerId = customer.id;
+
+      // Update organization with customer ID
+      await db
+        .updateTable('organizations')
+        .set({
+          stripe_customer_id: customerId,
+          updated_at: Date.now(),
+        })
+        .where('id', '=', organizationId)
+        .execute();
+    }
+
+    // Create Stripe Checkout session
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      line_items: [
+        {
+          price: plan.stripe_price_id_monthly,
+          quantity: 1,
+        },
+      ],
+      success_url: `https://localhost:3000/org/${organizationId}/billing?session_id={CHECKOUT_SESSION_ID}&success=true`,
+      cancel_url: `https://localhost:3000/org/${organizationId}/billing?canceled=true`,
+      metadata: {
+        organization_id: organizationId,
+        plan_id: planId,
+      },
+      subscription_data: {
+        metadata: {
+          organization_id: organizationId,
+          plan_id: planId,
+        },
+      },
+    });
+
+    this.env.logger.info(`Stripe Checkout session created for org ${organizationId}: ${session.id}`);
+
+    return {
+      url: session.url!,
+      sessionId: session.id,
+    };
+  }
+
+  /**
+   * Cancel organization subscription
+   */
+  async cancelSubscription(
+    organizationId: string,
+    userId: string,
+    cancelAtPeriodEnd: boolean = true
+  ): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    const db = this.getDb();
+
+    // Check permission - only owner can manage billing
+    const member = await db
+      .selectFrom('organization_members')
+      .select('role')
+      .where('organization_id', '=', organizationId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    if (!member || member.role !== 'owner') {
+      throw new Error('Only organization owner can manage subscriptions');
+    }
+
+    // Get current subscription
+    const subscription = await db
+      .selectFrom('subscriptions')
+      .select(['id', 'stripe_subscription_id', 'status'])
+      .where('organization_id', '=', organizationId)
+      .where('status', 'in', ['active', 'trialing'])
+      .executeTakeFirst();
+
+    if (!subscription) {
+      throw new Error('No active subscription found');
+    }
+
+    if (!subscription.stripe_subscription_id) {
+      throw new Error('No Stripe subscription ID found');
+    }
+
+    // Initialize Stripe
+    const stripe = new (await import('stripe')).default(
+      'sk_test_51ISqyeHSX3RgJL1cYATfAtUz2mTheWpXfHE6CarZVJlLAsthLPSkMywCU4R4igxVYYtP2YDNCMq15ACNNewhnudb005xDmDDxm',
+      { apiVersion: '2025-10-29.clover', typescript: true }
+    );
+
+    if (cancelAtPeriodEnd) {
+      // Schedule cancellation at period end
+      await stripe.subscriptions.update(subscription.stripe_subscription_id, {
+        cancel_at_period_end: true,
+      });
+
+      // Update database
+      await db
+        .updateTable('subscriptions')
+        .set({
+          cancel_at_period_end: 1,
+          updated_at: Date.now(),
+        })
+        .where('id', '=', subscription.id)
+        .execute();
+
+      this.env.logger.info(`Subscription ${subscription.id} scheduled for cancellation at period end`);
+
+      return {
+        success: true,
+        message: 'Subscription will be canceled at the end of the current billing period',
+      };
+    } else {
+      // Cancel immediately
+      await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
+
+      // Update database
+      await db
+        .updateTable('subscriptions')
+        .set({
+          status: 'canceled',
+          canceled_at: Date.now(),
+          updated_at: Date.now(),
+        })
+        .where('id', '=', subscription.id)
+        .execute();
+
+      this.env.logger.info(`Subscription ${subscription.id} canceled immediately`);
+
+      return {
+        success: true,
+        message: 'Subscription has been canceled immediately',
+      };
+    }
+  }
 }

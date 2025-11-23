@@ -1113,6 +1113,62 @@ export default class extends Service<Env> {
         });
       }
 
+      // Match /api/organizations/:id/checkout - Create Stripe Checkout session for organization
+      const orgCheckoutMatch = path.match(/^\/api\/organizations\/([^\/]+)\/checkout$/);
+      if (orgCheckoutMatch && orgCheckoutMatch[1] && request.method === 'POST') {
+        const organizationId = orgCheckoutMatch[1];
+        const user = await this.validateSession(request);
+
+        // Parse request body
+        const parseResult = await this.safeParseJSON<{
+          planId: string;
+          priceId?: string;
+        }>(request, ['planId']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        // Forward to organization service which will create Stripe Checkout session
+        const result = await this.env.ORGANIZATION_SERVICE.createCheckoutSession(
+          organizationId,
+          user.userId,
+          body.planId
+        );
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // Match /api/organizations/:id/subscription - DELETE to cancel subscription
+      if (orgSubscriptionMatch && orgSubscriptionMatch[1] && request.method === 'DELETE') {
+        const organizationId = orgSubscriptionMatch[1];
+        const user = await this.validateSession(request);
+
+        // Parse optional body for cancelAtPeriodEnd flag
+        let cancelAtPeriodEnd = true; // Default to cancel at period end
+        try {
+          const body = await request.json() as { cancelAtPeriodEnd?: boolean };
+          if (typeof body.cancelAtPeriodEnd === 'boolean') {
+            cancelAtPeriodEnd = body.cancelAtPeriodEnd;
+          }
+        } catch {
+          // No body or invalid JSON, use default
+        }
+
+        const result = await this.env.ORGANIZATION_SERVICE.cancelSubscription(
+          organizationId,
+          user.userId,
+          cancelAtPeriodEnd
+        );
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/organizations/:id/sso/config - SSO configuration endpoints
       const ssoConfigMatch = path.match(/^\/api\/organizations\/([^\/]+)\/sso\/config$/);
       if (ssoConfigMatch && ssoConfigMatch[1]) {

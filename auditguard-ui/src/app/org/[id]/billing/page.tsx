@@ -177,10 +177,37 @@ export default function OrganizationBillingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [plans, setPlans] = useState<PlanTier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+
+  // Check for successful payment redirect
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    const success = urlParams.get('success');
+
+    if (sessionId && success === 'true') {
+      setShowSuccessMessage(true);
+
+      // Clean up URL parameters
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+
+      // Auto-hide success message after 10 seconds
+      setTimeout(() => setShowSuccessMessage(false), 10000);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // If we just came back from Stripe checkout, wait a bit for webhook to process
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session_id');
+        if (sessionId) {
+          // Wait 3 seconds for Stripe webhook to process the subscription
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+
         // Fetch organization data to get subscription info
         const orgResponse = await api.get(`/api/organizations/${orgId}`).catch(err => {
           console.error('Failed to fetch organization:', err);
@@ -333,14 +360,91 @@ export default function OrganizationBillingPage() {
     fetchData();
   }, [orgId]);
 
-  const handleUpgrade = async (tier: string) => {
-    // Subscription upgrades not yet implemented
-    alert('Subscription management is coming soon! Please contact support to upgrade your plan.');
+  const handleUpgrade = async (planId: string) => {
+    try {
+      setLoading(true);
+
+      // Get the target plan details
+      const targetPlan = plans.find(p => p.id === planId);
+      if (!targetPlan) {
+        alert('Invalid plan selected');
+        return;
+      }
+
+      // If user is downgrading to free, handle specially
+      if (planId === 'plan_free') {
+        const confirmed = confirm(
+          'Are you sure you want to downgrade to the Free plan? You will lose access to premium features immediately.'
+        );
+        if (!confirmed) return;
+
+        try {
+          // Cancel subscription (will downgrade at period end or immediately)
+          const result = await api.delete(`/api/organizations/${orgId}/subscription`);
+          alert('Your subscription will be canceled at the end of the current billing period.');
+          window.location.reload();
+        } catch (error: any) {
+          alert(`Failed to cancel subscription: ${error.error || 'Unknown error'}`);
+        }
+        return;
+      }
+
+      // For paid plans, redirect to Stripe Checkout
+      const confirmed = confirm(
+        `Upgrade to ${targetPlan.displayName} for $${targetPlan.price}/month?\n\n` +
+        `You'll be redirected to Stripe to complete the payment.`
+      );
+
+      if (!confirmed) return;
+
+      try {
+        // Create Stripe Checkout session
+        const result = await api.post(`/api/organizations/${orgId}/checkout`, {
+          planId: planId,
+        });
+
+        // Result is already parsed JSON: { url: string, sessionId: string }
+        if (result && result.url) {
+          // Redirect to Stripe Checkout
+          window.location.href = result.url;
+        } else {
+          alert('Failed to create checkout session: Invalid response from server');
+        }
+      } catch (error: any) {
+        console.error('Checkout error:', error);
+        alert(`Failed to create checkout session: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Upgrade error:', error);
+      alert('Failed to process upgrade. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancelSubscription = async () => {
-    // Subscription management not yet implemented
-    alert('Subscription management is coming soon! Please contact support to cancel your plan.');
+    const confirmed = confirm(
+      'Are you sure you want to cancel your subscription?\n\n' +
+      'Your subscription will remain active until the end of the current billing period, ' +
+      'then you\'ll be downgraded to the Free plan.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+
+      // API client already returns parsed JSON or throws error
+      const result = await api.delete(`/api/organizations/${orgId}/subscription`);
+
+      alert('Your subscription has been canceled and will end at the current billing period.');
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Cancellation error:', error);
+      alert(`Failed to cancel subscription: ${error.error || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (loading) {
@@ -371,6 +475,35 @@ export default function OrganizationBillingPage() {
   return (
     <OrganizationLayout accountId={accountId} orgId={orgId}>
       <div className="p-8">
+          {/* Success Message Banner */}
+          {showSuccessMessage && (
+            <div className="mb-6 bg-green-50 border-2 border-green-500 text-green-900 p-6 rounded-lg shadow-lg">
+              <div className="flex items-start gap-4">
+                <div className="text-3xl">✅</div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold mb-2">Payment Successful!</h3>
+                  <p className="text-green-800 mb-3">
+                    Your subscription has been activated. It may take a few moments for all changes to appear.
+                    If you still see your trial plan, please refresh the page.
+                  </p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition text-sm font-medium"
+                  >
+                    Refresh Page Now
+                  </button>
+                </div>
+                <button
+                  onClick={() => setShowSuccessMessage(false)}
+                  className="text-green-600 hover:text-green-800 text-xl font-bold"
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Trial Banner */}
           {subscription && subscription.status === 'trialing' && subscription.trial_end && (
             <div className="mb-6 bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-lg shadow-lg">
