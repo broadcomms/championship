@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings, LogOut, User, Shield, Building2, ChevronDown, Bell } from 'lucide-react';
+import { Settings, LogOut, User, Shield, Building2, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { RealtimeStatusIndicator } from '@/components/status/RealtimeStatusIndicator';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 interface Organization {
   id: string;
@@ -25,11 +26,8 @@ export function TopNavBar({ currentOrgId, showOrgSwitcher = true }: TopNavBarPro
   const pathname = usePathname();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isOrgMenuOpen, setIsOrgMenuOpen] = useState(false);
-  const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [currentOrg, setCurrentOrg] = useState<Organization | null>(null);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
 
   // Fetch organizations
   useEffect(() => {
@@ -51,30 +49,6 @@ export function TopNavBar({ currentOrgId, showOrgSwitcher = true }: TopNavBarPro
     fetchOrganizations();
   }, [currentOrgId]);
 
-  // Fetch notifications
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const response = await api.post('/api/notifications', { 
-          filter: { unreadOnly: true, limit: 5 }
-        });
-        const notifications = response.notifications || [];
-        setNotifications(Array.isArray(notifications) ? notifications : []);
-        setUnreadCount(response.unreadCount || 0);
-      } catch (error) {
-        // Silently fail - notifications endpoint may not be implemented yet
-        // Only log in development
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('Notifications not available:', error);
-        }
-        setNotifications([]);
-        setUnreadCount(0);
-      }
-    };
-
-    fetchNotifications();
-  }, []);
-
   const handleLogout = async () => {
     await logout();
     router.push('/login');
@@ -89,31 +63,6 @@ export function TopNavBar({ currentOrgId, showOrgSwitcher = true }: TopNavBarPro
       .join('')
       .toUpperCase()
       .slice(0, 2);
-  };
-
-  // Format relative time for notifications
-  const formatRelativeTime = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-    return new Date(timestamp).toLocaleDateString();
-  };
-
-  // Mark notification as read
-  const markAsRead = async (notificationId: string) => {
-    try {
-      await api.patch(`/notifications/${notificationId}/read`, {});
-      setNotifications(prev =>
-        prev.map(n =>
-          n.id === notificationId ? { ...n, read: true, read_at: Date.now() } : n
-        )
-      );
-      setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error);
-    }
   };
 
   // Navigate to home/account dashboard
@@ -242,106 +191,8 @@ export function TopNavBar({ currentOrgId, showOrgSwitcher = true }: TopNavBarPro
             {/* Real-time Status Indicator */}
             <RealtimeStatusIndicator position="inline" />
 
-            {/* Notifications Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setIsNotificationMenuOpen(!isNotificationMenuOpen)}
-                className={cn(
-                  'relative rounded-lg p-2 text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500',
-                  isNotificationMenuOpen && 'bg-gray-100'
-                )}
-                aria-label="Notifications"
-                aria-haspopup="true"
-                aria-expanded={isNotificationMenuOpen}
-              >
-                <Bell className="h-5 w-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {/* Notifications Dropdown Menu */}
-              {isNotificationMenuOpen && (
-                <>
-                  {/* Backdrop */}
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setIsNotificationMenuOpen(false)}
-                  />
-
-                  {/* Menu */}
-                  <div className="absolute right-0 z-20 mt-2 w-96 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg ring-1 ring-black ring-opacity-5">
-                    <div className="px-4 py-3 border-b border-gray-200">
-                      <h3 className="text-sm font-semibold text-gray-900">
-                        Notifications
-                      </h3>
-                    </div>
-
-                    <div className="max-h-96 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="px-4 py-8 text-center">
-                          <Bell className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                          <p className="text-sm text-gray-600">No new notifications</p>
-                        </div>
-                      ) : (
-                        <div className="py-2">
-                          {notifications.map((notification) => (
-                            <button
-                              key={notification.id}
-                              onClick={() => {
-                                setIsNotificationMenuOpen(false);
-                                if (!notification.read) markAsRead(notification.id);
-                                router.push(notification.action_url || '/notifications');
-                              }}
-                              className={cn(
-                                'w-full px-4 py-3 text-left hover:bg-gray-50 transition border-b border-gray-100 last:border-0',
-                                !notification.read && 'bg-blue-50'
-                              )}
-                            >
-                              <div className="flex items-start gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-start justify-between gap-2 mb-1">
-                                    <p className={cn(
-                                      'text-sm text-gray-900',
-                                      !notification.read && 'font-semibold'
-                                    )}>
-                                      {notification.title}
-                                    </p>
-                                    {!notification.read && (
-                                      <span className="flex-shrink-0 h-2 w-2 bg-blue-600 rounded-full mt-1" />
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-gray-600 line-clamp-2">
-                                    {notification.message}
-                                  </p>
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    {formatRelativeTime(notification.created_at)}
-                                  </p>
-                                </div>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
-                      <button
-                        onClick={() => {
-                          setIsNotificationMenuOpen(false);
-                          router.push('/notifications');
-                        }}
-                        className="w-full text-center text-sm font-medium text-blue-600 hover:text-blue-700"
-                      >
-                        View all notifications
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            {/* Notifications */}
+            <NotificationBell />
 
             {/* User menu dropdown */}
             <div className="relative">

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import NotificationDetailModal from './NotificationDetailModal';
 
 type NotificationCategory = 'ai' | 'workspace' | 'system';
 type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -81,6 +82,7 @@ export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeCategory, setActiveCategory] = useState<'all' | NotificationCategory>('all');
+  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Fetch notification counts
@@ -163,6 +165,8 @@ export function NotificationBell() {
         ...prev,
         unread: Math.max(0, prev.unread - 1)
       }));
+      // Refresh counts from server
+      await fetchCounts();
     } catch (error) {
       // Silently handle errors
     }
@@ -325,13 +329,8 @@ export function NotificationBell() {
                 <div
                   key={notification.id}
                   onClick={() => {
-                    if (!notification.read) {
-                      markAsRead(notification.id);
-                    }
-                    if (notification.action_url) {
-                      window.location.href = notification.action_url;
-                      setIsOpen(false);
-                    }
+                    setSelectedNotification(notification);
+                    setIsOpen(false);
                   }}
                   className={`px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition cursor-pointer ${
                     !notification.read ? 'bg-blue-50' : ''
@@ -429,6 +428,25 @@ export function NotificationBell() {
             </Link>
           </div>
         </div>
+      )}
+
+      {/* Notification Detail Modal */}
+      {selectedNotification && (
+        <NotificationDetailModal
+          notification={selectedNotification}
+          onClose={() => setSelectedNotification(null)}
+          onUpdate={(updated) => {
+            setNotifications(prev => prev.map(n => 
+              n.id === updated.id ? { ...n, read: updated.read, read_at: updated.read_at, archived: updated.archived } : n
+            ));
+            fetchCounts(); // Refresh counts when notification is updated
+          }}
+          onDelete={(id) => {
+            setNotifications(prev => prev.filter(n => n.id !== id));
+            setSelectedNotification(null);
+            fetchCounts(); // Refresh counts when notification is deleted
+          }}
+        />
       )}
     </div>
   );

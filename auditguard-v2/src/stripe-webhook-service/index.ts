@@ -494,6 +494,19 @@ export default class extends Service<Env> {
     const db = this.getDb();
     const customerId = invoice.customer as string;
 
+    // Check if this invoice has already been processed (deduplication)
+    // Stripe sends multiple events: invoice.payment_succeeded, invoice.paid, invoice.finalized
+    const existingInvoice = await db
+      .selectFrom('billing_history')
+      .select('id')
+      .where('stripe_invoice_id', '=', invoice.id)
+      .executeTakeFirst();
+
+    if (existingInvoice) {
+      this.env.logger.info(`Invoice ${invoice.id} already processed, skipping duplicate event`);
+      return;
+    }
+
     // Get organization and user data from customer
     const result = await db
       .selectFrom('subscriptions')
@@ -514,10 +527,41 @@ export default class extends Service<Env> {
       return;
     }
 
-    // Store billing history - update to use organization_id
-    // Note: billing_history table may need migration to support organization_id
-    // For now, we'll skip this or use workspace_id if available
+    // Store billing history
     const now = Date.now();
+    const billingHistoryId = `bh_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    try {
+      await db
+        .insertInto('billing_history')
+        .values({
+          id: billingHistoryId,
+          workspace_id: result.organization_id, // Note: column is workspace_id in schema but stores organization_id
+          stripe_invoice_id: invoice.id,
+          stripe_charge_id: (invoice as any).charge || null,
+          amount: invoice.total || 0,
+          currency: invoice.currency || 'usd',
+          status: 'paid',
+          description: invoice.description || `${result.plan_name} subscription`,
+          invoice_pdf: invoice.invoice_pdf || invoice.hosted_invoice_url || null,
+          period_start: invoice.period_start ? invoice.period_start * 1000 : null,
+          period_end: invoice.period_end ? invoice.period_end * 1000 : null,
+          created_at: now,
+        })
+        .execute();
+
+      this.env.logger.info(`Billing history created for invoice ${invoice.id}`, {
+        billingHistoryId,
+        organizationId: result.organization_id,
+      });
+    } catch (error) {
+      // If this fails due to duplicate stripe_invoice_id, another webhook already processed it
+      this.env.logger.warn(`Failed to insert billing history, invoice may have been processed by another event`, {
+        invoiceId: invoice.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
 
     // Send invoice receipt email
     const userName = result.owner_email.split('@')[0];
