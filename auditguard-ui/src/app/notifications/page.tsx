@@ -5,17 +5,27 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AccountLayout } from '@/components/layout/AccountLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
+import NotificationDetailModal from '@/components/notifications/NotificationDetailModal';
 
 interface Notification {
   id: string;
-  type: 'issue_assigned' | 'comment' | 'mention' | 'status_change' | 'workspace_invite' | 'due_date_reminder' | 'overdue_alert';
+  type: string;
+  category: string;
+  priority: string;
   title: string;
   message: string;
   read: boolean;
+  archived: boolean;
   action_url: string;
-  metadata: Record<string, any> | null;
+  actions?: Array<{
+    id: string;
+    label: string;
+    action: string;
+    style: 'primary' | 'secondary' | 'danger';
+  }>;
+  metadata?: Record<string, any>;
   created_at: number;
-  read_at: number | null;
+  read_at?: number;
 }
 
 const NOTIFICATION_TYPE_ICONS: Record<string, string> = {
@@ -45,6 +55,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -108,7 +119,7 @@ export default function NotificationsPage() {
   // Mark notification as read
   const markAsRead = async (notificationId: string) => {
     try {
-      await api.patch(`/notifications/${notificationId}/read`, {});
+      await api.patch(`/api/notifications/${notificationId}/read`, {});
 
       setNotifications(prev =>
         prev.map(n =>
@@ -123,7 +134,10 @@ export default function NotificationsPage() {
   // Mark all as read
   const markAllAsRead = async () => {
     try {
-      await api.patch('/notifications/mark-all-read', {});
+      // Fixed: Use correct endpoint POST /api/notifications/read-all
+      await api.post('/api/notifications/read-all', { 
+        category: filter === 'all' ? undefined : 'system' 
+      });
 
       setNotifications(prev =>
         prev.map(n => ({ ...n, read: true, read_at: Date.now() }))
@@ -212,8 +226,9 @@ export default function NotificationsPage() {
                     : 'bg-blue-50 border-blue-200'
                 }`}
                 onClick={() => {
+                  // Open detail modal instead of direct navigation
+                  setSelectedNotification(notification);
                   if (!notification.read) markAsRead(notification.id);
-                  window.location.href = notification.action_url;
                 }}
               >
                 <div className="flex items-start gap-3">
@@ -268,6 +283,21 @@ export default function NotificationsPage() {
           )}
         </div>
       </div>
+
+      {/* Notification Detail Modal */}
+      {selectedNotification && (
+        <NotificationDetailModal
+          notification={selectedNotification}
+          onClose={() => setSelectedNotification(null)}
+          onUpdate={(updated) => {
+            setNotifications(prev => prev.map(n => n.id === updated.id ? updated : n));
+          }}
+          onDelete={(id) => {
+            setNotifications(prev => prev.filter(n => n.id !== id));
+            setSelectedNotification(null);
+          }}
+        />
+      )}
     </AccountLayout>
   );
 }

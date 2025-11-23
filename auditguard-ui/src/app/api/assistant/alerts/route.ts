@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Mark this route as dynamic to prevent static generation warnings
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/assistant/alerts
  * Get proactive alerts from the backend

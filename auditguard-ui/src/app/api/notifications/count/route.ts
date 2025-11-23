@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Mark this route as dynamic to prevent static generation warnings
+export const dynamic = 'force-dynamic';
+
 async function getSession(request: NextRequest) {
   const sessionCookie = request.cookies.get('session');
   if (!sessionCookie?.value) return null;

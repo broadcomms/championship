@@ -5138,31 +5138,36 @@ export default class extends Service<Env> {
       // GET /api/notifications/count - Get notification counts
       if (path === '/api/notifications/count' && request.method === 'GET') {
         const user = await this.validateSession(request);
-        const countRequest = new Request(
-          `${url.origin}/api/notifications/count?userId=${encodeURIComponent(user.userId)}`,
-          { method: 'GET' }
+        return await this.env.NOTIFICATION_SERVICE.fetch(
+          new Request(`${url.origin}/api/notifications/count?userId=${encodeURIComponent(user.userId)}`, {
+            method: 'GET',
+          })
         );
-        return await this.env.NOTIFICATION_SERVICE.fetch.call(this.env.NOTIFICATION_SERVICE, countRequest);
       }
 
       // PATCH /api/notifications/:id/read - Mark as read
       const notifReadMatch = path.match(/^\/api\/notifications\/([^\/]+)\/read$/);
       if (notifReadMatch && notifReadMatch[1] && request.method === 'PATCH') {
         await this.validateSession(request);
-        const readRequest = new Request(request.url, { method: 'PATCH' });
-        return await this.env.NOTIFICATION_SERVICE.fetch.call(this.env.NOTIFICATION_SERVICE, readRequest);
+        const notificationId = notifReadMatch[1];
+        return await this.env.NOTIFICATION_SERVICE.fetch(
+          new Request(`${url.origin}/api/notifications/${notificationId}/read`, {
+            method: 'PATCH',
+          })
+        );
       }
 
       // POST /api/notifications/read-all - Mark all as read
       if (path === '/api/notifications/read-all' && request.method === 'POST') {
         const user = await this.validateSession(request);
         const body = await request.json().catch(() => ({})) as { category?: string };
-        const readAllRequest = new Request(request.url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.userId, category: body.category }),
-        });
-        return await this.env.NOTIFICATION_SERVICE.fetch.call(this.env.NOTIFICATION_SERVICE, readAllRequest);
+        return await this.env.NOTIFICATION_SERVICE.fetch(
+          new Request(`${url.origin}/api/notifications/read-all`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.userId, category: body.category }),
+          })
+        );
       }
 
       // ==========================================================================

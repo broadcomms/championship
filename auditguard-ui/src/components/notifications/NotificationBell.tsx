@@ -324,7 +324,16 @@ export function NotificationBell() {
               notifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition ${
+                  onClick={() => {
+                    if (!notification.read) {
+                      markAsRead(notification.id);
+                    }
+                    if (notification.action_url) {
+                      window.location.href = notification.action_url;
+                      setIsOpen(false);
+                    }
+                  }}
+                  className={`px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition cursor-pointer ${
                     !notification.read ? 'bg-blue-50' : ''
                   } ${notification.priority === 'critical' ? 'border-l-4 border-l-red-500' : ''}`}
                 >
