@@ -445,7 +445,7 @@ export function AIChatWidget({
 
             {/* Messages */}
             {mode==='chat' && (
-            <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${mode === 'voice' ? 'max-h-64' : ''}`}>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.length === 0 && (
                 <div className="text-center text-gray-500 mt-8">
                   <Bot className="w-12 h-12 mx-auto mb-4 text-gray-400" />

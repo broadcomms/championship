@@ -86,8 +86,14 @@ export function NotificationBell() {
   // Fetch notification counts
   const fetchCounts = async () => {
     try {
-      const response = await api.get('/api/notifications/count');
-      setCounts(response);
+      const response = await api.post('/api/notifications', { filter: {} });
+      // Extract counts from response
+      setCounts({
+        total: response.total || 0,
+        unread: response.unreadCount || 0,
+        by_category: { ai: 0, workspace: 0, system: 0 },
+        by_priority: { critical: 0, high: 0, medium: 0, low: 0 }
+      });
     } catch (error) {
       // Silently handle errors - notifications are optional
       // Default counts are already set in state

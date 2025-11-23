@@ -54,10 +54,15 @@ export default function NotificationsPage() {
       const offset = reset ? 0 : notifications.length;
       const unreadOnly = filter === 'unread';
 
-      // Note: api.get() returns data directly, not wrapped in .data property
-      const newNotifications = await api.get(
-        `/notifications?unread=${unreadOnly}&limit=20&offset=${offset}`
-      );
+      // Use POST to match backend API
+      const response = await api.post('/api/notifications', {
+        filter: {
+          unreadOnly,
+          limit: 20,
+          offset
+        }
+      });
+      const newNotifications = response.notifications || [];
 
       if (reset) {
         setNotifications(Array.isArray(newNotifications) ? newNotifications : []);

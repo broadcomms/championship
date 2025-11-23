@@ -55,9 +55,12 @@ export function TopNavBar({ currentOrgId, showOrgSwitcher = true }: TopNavBarPro
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
-        const response = await api.get('/notifications?unread=true&limit=5');
-        setNotifications(Array.isArray(response) ? response : []);
-        setUnreadCount(Array.isArray(response) ? response.length : 0);
+        const response = await api.post('/api/notifications', { 
+          filter: { unreadOnly: true, limit: 5 }
+        });
+        const notifications = response.notifications || [];
+        setNotifications(Array.isArray(notifications) ? notifications : []);
+        setUnreadCount(response.unreadCount || 0);
       } catch (error) {
         // Silently fail - notifications endpoint may not be implemented yet
         // Only log in development
