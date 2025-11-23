@@ -51,8 +51,8 @@ export default class extends Service<Env> {
           secretPrefix: webhookSecret.substring(0, 10),
         });
         
-        // Use constructEvent (synchronous) instead of constructEventAsync
-        event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+        // Use constructEventAsync for Cloudflare Workers (SubtleCrypto is async)
+        event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
         
         this.env.logger.info(`Webhook signature verified successfully`, {
           eventType: event.type,
