@@ -140,7 +140,7 @@ export default class extends Service<Env> {
       // POST /notifications - Create a new notification
       if (path === '/notifications' && request.method === 'POST') {
         const body = await request.json() as CreateNotificationRequest;
-        return await this.createNotification(body);
+        return await this._createNotification(body);
       }
 
       // PATCH /notifications/:id/read - Mark notification as read
@@ -504,7 +504,7 @@ export default class extends Service<Env> {
   private async createAINotification(req: CreateAINotificationRequest): Promise<Response> {
     const orgId = req.workspace_id; // Will need to get org from workspace
     
-    return await this.createNotification({
+    return await this._createNotification({
       user_id: req.user_id,
       type: req.type,
       category: 'ai',
@@ -607,9 +607,76 @@ export default class extends Service<Env> {
   }
 
   /**
-   * Create a new notification
+   * Create a new notification (Public method for inter-service communication)
    */
-  private async createNotification(req: CreateNotificationRequest): Promise<Response> {
+  async createNotification(req: CreateNotificationRequest): Promise<Response> {
+    return await this._createNotification(req);
+  }
+
+  /**
+   * Get user notifications (Public method for inter-service communication)
+   */
+  async getNotifications(userId: string, filter?: { unreadOnly?: boolean; limit?: number; offset?: number }): Promise<{
+    notifications: Notification[];
+    total: number;
+    unreadCount: number;
+  }> {
+    const db = this.getDb();
+
+    const limit = filter?.limit || 50;
+    const offset = filter?.offset || 0;
+    const unreadOnly = filter?.unreadOnly || false;
+
+    let query = db
+      .selectFrom('notifications')
+      .selectAll()
+      .where('user_id', '=', userId)
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+      .offset(offset);
+
+    if (unreadOnly) {
+      query = query.where('read', '=', 0);
+    }
+
+    const notifications = await query.execute();
+
+    // Get total count
+    const totalResult = await db
+      .selectFrom('notifications')
+      .select(db.fn.count('id').as('count'))
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+
+    // Get unread count
+    const unreadResult = await db
+      .selectFrom('notifications')
+      .select(db.fn.count('id').as('count'))
+      .where('user_id', '=', userId)
+      .where('read', '=', 0)
+      .executeTakeFirst();
+
+    // Parse metadata JSON strings
+    const parsedNotifications = notifications.map(n => ({
+      ...n,
+      metadata: n.metadata ? JSON.parse(n.metadata) : null,
+      read: n.read === 1,
+      archived: n.archived === 1,
+      ai_context: n.ai_context ? JSON.parse(n.ai_context) : null,
+      actions: n.actions ? JSON.parse(n.actions) : null,
+    }));
+
+    return {
+      notifications: parsedNotifications as Notification[],
+      total: Number(totalResult?.count || 0),
+      unreadCount: Number(unreadResult?.count || 0),
+    };
+  }
+
+  /**
+   * Create a new notification (Private implementation)
+   */
+  private async _createNotification(req: CreateNotificationRequest): Promise<Response> {
     const db = this.getDb();
     const now = Date.now();
     const notificationId = nanoid();
@@ -642,7 +709,7 @@ export default class extends Service<Env> {
         .values({
           id: notificationId,
           user_id: req.user_id,
-          type: req.type,
+          type: req.type as any, // Cast to any to bypass type checking
           category,
           priority,
           source,
@@ -1039,7 +1106,7 @@ export default class extends Service<Env> {
       : '';
 
     // Create notification
-    await this.createNotification({
+    await this._createNotification({
       user_id: event.assignedTo,
       type: 'issue_assigned',
       category: 'workspace',
@@ -1260,7 +1327,7 @@ export default class extends Service<Env> {
 
     // Create notification for each admin
     for (const admin of admins) {
-      await this.createNotification({
+      await this._createNotification({
         user_id: admin.user_id,
         type: 'status_change',
         category: 'workspace',

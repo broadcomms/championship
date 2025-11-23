@@ -4,6 +4,12 @@ import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 import Stripe from 'stripe';
+import {
+  createSubscriptionCreatedNotification,
+  createPaymentSucceededNotification,
+  createPaymentFailedNotification,
+  createSubscriptionCanceledNotification
+} from '../common/notification-helper';
 
 export default class extends Service<Env> {
   private getDb(): Kysely<DB> {
@@ -384,12 +390,68 @@ export default class extends Service<Env> {
         .execute();
 
       this.env.logger.info(`Created subscription ${subscription.id} for organization ${orgId}`);
+
+      // Create subscription notification for organization owner
+      try {
+        // Get organization owner
+        const organization = await db
+          .selectFrom('organizations')
+          .select(['owner_user_id'])
+          .where('id', '=', orgId)
+          .executeTakeFirst();
+
+        if (organization) {
+          // Get plan details for notification
+          const planDetails = await db
+            .selectFrom('subscription_plans')
+            .select(['display_name', 'price_monthly'])
+            .where('id', '=', plan.id)
+            .executeTakeFirst();
+
+          if (planDetails) {
+            const nextBillingDate = new Date((subscription as any).current_period_end * 1000).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            });
+
+            await createSubscriptionCreatedNotification(
+              this.env as any,
+              organization.owner_user_id,
+              orgId,
+              planDetails.display_name,
+              planDetails.price_monthly,
+              nextBillingDate
+            );
+          }
+        }
+      } catch (notificationError) {
+        // Don't fail if notification fails
+        this.env.logger.error('Failed to create subscription notification', {
+          error: notificationError instanceof Error ? notificationError.message : String(notificationError),
+          subscriptionId: subscription.id
+        });
+      }
     }
   }
 
   private async handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
     const db = this.getDb();
     const now = Date.now();
+
+    // Get subscription and organization details before deletion
+    const subscriptionDetails = await db
+      .selectFrom('subscriptions')
+      .innerJoin('organizations', 'organizations.id', 'subscriptions.organization_id')
+      .innerJoin('subscription_plans', 'subscription_plans.id', 'subscriptions.plan_id')
+      .select([
+        'subscriptions.organization_id',
+        'subscriptions.current_period_end',
+        'organizations.owner_user_id',
+        'subscription_plans.display_name'
+      ])
+      .where('stripe_subscription_id', '=', subscription.id)
+      .executeTakeFirst();
 
     await db
       .updateTable('subscriptions')
@@ -402,6 +464,30 @@ export default class extends Service<Env> {
       .execute();
 
     this.env.logger.info(`Subscription ${subscription.id} marked as canceled`);
+
+    // Create subscription canceled notification
+    if (subscriptionDetails) {
+      try {
+        const endDate = new Date(subscriptionDetails.current_period_end).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+
+        await createSubscriptionCanceledNotification(
+          this.env as any,
+          subscriptionDetails.owner_user_id,
+          subscriptionDetails.organization_id,
+          subscriptionDetails.display_name,
+          endDate
+        );
+      } catch (notificationError) {
+        this.env.logger.error('Failed to create subscription canceled notification', {
+          error: notificationError instanceof Error ? notificationError.message : String(notificationError),
+          subscriptionId: subscription.id
+        });
+      }
+    }
   }
 
   private async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
@@ -468,6 +554,30 @@ export default class extends Service<Env> {
     }
 
     this.env.logger.info(`Invoice ${invoice.id} payment succeeded for organization ${result.organization_id}`);
+
+    // Create payment success notification for organization owner
+    try {
+      const ownerUser = await db
+        .selectFrom('organizations')
+        .select(['owner_user_id'])
+        .where('id', '=', result.organization_id)
+        .executeTakeFirst();
+
+      if (ownerUser) {
+        await createPaymentSucceededNotification(
+          this.env as any,
+          ownerUser.owner_user_id,
+          result.organization_id,
+          invoice.total || 0,
+          invoice.hosted_invoice_url || undefined
+        );
+      }
+    } catch (notificationError) {
+      this.env.logger.error('Failed to create payment notification', {
+        error: notificationError instanceof Error ? notificationError.message : String(notificationError),
+        invoiceId: invoice.id
+      });
+    }
   }
 
   private async handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
@@ -564,6 +674,30 @@ export default class extends Service<Env> {
     }
 
     this.env.logger.info(`Invoice ${invoice.id} payment failed for organization ${result.organization_id}`);
+
+    // Create payment failed notification for organization owner
+    try {
+      const ownerUser = await db
+        .selectFrom('organizations')
+        .select(['owner_user_id'])
+        .where('id', '=', result.organization_id)
+        .executeTakeFirst();
+
+      if (ownerUser) {
+        await createPaymentFailedNotification(
+          this.env as any,
+          ownerUser.owner_user_id,
+          result.organization_id,
+          invoice.amount_due || 0,
+          'Payment method declined. Please update your payment information.'
+        );
+      }
+    } catch (notificationError) {
+      this.env.logger.error('Failed to create payment failed notification', {
+        error: notificationError instanceof Error ? notificationError.message : String(notificationError),
+        invoiceId: invoice.id
+      });
+    }
   }
 
   private async handlePaymentMethodAttached(paymentMethod: Stripe.PaymentMethod): Promise<void> {

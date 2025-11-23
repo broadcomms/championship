@@ -18,7 +18,18 @@ export type NotificationType =
     | 'status_change'
     | 'workspace_invite'
     | 'due_date_reminder'
-    | 'overdue_alert';
+    | 'overdue_alert'
+    // System & Billing Types
+    | 'welcome'
+    | 'trial_started'
+    | 'trial_warning'
+    | 'trial_expired'
+    | 'subscription_created'
+    | 'subscription_updated'
+    | 'subscription_canceled'
+    | 'payment_succeeded'
+    | 'payment_failed'
+    | 'invoice_ready';
 
 export type NotificationCategory = 'ai' | 'workspace' | 'system';
 export type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';

@@ -4,6 +4,7 @@ import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 import bcrypt from 'bcryptjs';
+import { createWelcomeNotification, createTrialStartedNotification } from '../common/notification-helper';
 
 interface RegisterInput {
   email: string;
@@ -168,6 +169,43 @@ export default class extends Service<Env> {
       this.env.logger.error('Failed to queue welcome email', {
         error: emailError,
         email: input.email,
+      });
+    }
+
+    // Create welcome and trial started in-app notifications
+    try {
+      const trialEndDateFormatted = new Date(trialEnd).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+
+      // Welcome notification
+      await createWelcomeNotification(
+        this.env,
+        userId,
+        organizationId,
+        trialEndDateFormatted
+      );
+
+      // Trial started notification
+      await createTrialStartedNotification(
+        this.env,
+        userId,
+        organizationId,
+        TRIAL_DAYS,
+        trialEndDateFormatted
+      );
+
+      this.env.logger.info('Welcome and trial notifications created', {
+        userId,
+        organizationId
+      });
+    } catch (notificationError) {
+      // Don't fail registration if notifications fail
+      this.env.logger.error('Failed to create welcome notifications', {
+        error: notificationError,
+        userId,
       });
     }
 
