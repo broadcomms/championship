@@ -12,6 +12,8 @@ interface ComplianceIssue {
   recommendation: string;
   location?: string;
   confidence?: number;
+  // Complete LLM response for this specific issue
+  llm_response?: any;
 }
 
 interface IssueProcessingResult {
@@ -103,6 +105,7 @@ async function updateExistingIssue(
     confidence: newIssueData.confidence || 70,
     updated_at: now,
     priority,
+    llm_response: newIssueData.llm_response ? JSON.stringify(newIssueData.llm_response) : null,
   };
 
   let newStatus = existingIssue.status;
@@ -184,6 +187,7 @@ async function createNewIssue(
       confidence: issue.confidence || 70,
       priority,
       created_at: now,
+      llm_response: issue.llm_response ? JSON.stringify(issue.llm_response) : null,
       // Fingerprinting fields
       issue_fingerprint: fingerprint,
       is_active: 1,

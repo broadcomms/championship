@@ -642,10 +642,10 @@ Return JSON with all the found issues array. If fully compliant, return empty ar
       "impact_assessment": "How this violation impacts the organization",
       "original_text": "The specific problematic text from the document that caused the issue",
       "framework": "${framework}",
+      "framework_article": "specific article violated. e.g., Article 5(1)(a)",
       "framework_section": "specific section violated",
       "framework_subsection": "specific subsection violated if applicable",
-      "framework_article": "specific article violated",
-      "framework_requirement": "full requirement text",
+      "framework_requirement": "full framework requirement text",
       "recommendation": "how to fix the issue",
       "current_state": "What is currently being done that is insufficient",
       "required_state": "What needs to be done to achieve compliance",
@@ -743,7 +743,9 @@ Return JSON with all the found issues array. If fully compliant, return empty ar
       if (result.issues && Array.isArray(result.issues)) {
         const issues = result.issues.map((issue: any) => ({
           ...issue,
-          confidence: issue.confidence || 75
+          confidence: issue.confidence || 75,
+          // Store the complete LLM response for this issue
+          llm_response: issue
         }));
         
         this.env.logger.info('🎉 Returning issues', { 
@@ -1004,6 +1006,7 @@ Return JSON with all the found issues array. If fully compliant, return empty ar
       confidence: number | null;
       isNew: boolean;
       wasReopened: boolean;
+      llmResponse: any;
     }>;
   }> {
     const db = this.getDb();
@@ -1032,7 +1035,7 @@ Return JSON with all the found issues array. If fully compliant, return empty ar
       throw new Error('Compliance check not found');
     }
 
-    // Get issues with deduplication metadata
+    // Get issues with deduplication metadata and llm_response
     const issues = await db
       .selectFrom('compliance_issues')
       .select([
@@ -1048,30 +1051,48 @@ Return JSON with all the found issues array. If fully compliant, return empty ar
         'first_detected_check_id',
         'last_confirmed_check_id',
         'confidence',
+        'llm_response',
       ])
       .where('check_id', '=', checkId)
       .orderBy('created_at', 'desc')
       .execute();
 
     return {
-      issues: issues.map((issue) => ({
-        id: issue.id,
-        severity: issue.severity,
-        category: issue.category,
-        title: issue.title,
-        description: issue.description,
-        recommendation: issue.recommendation,
-        location: issue.location,
-        createdAt: issue.created_at,
-        status: issue.status,
-        firstDetectedCheckId: issue.first_detected_check_id,
-        lastConfirmedCheckId: issue.last_confirmed_check_id,
-        confidence: issue.confidence,
-        // An issue is "new" if it was first detected in this check
-        isNew: issue.first_detected_check_id === checkId,
-        // An issue was "reopened" if it's in reopened status and last confirmed in this check
-        wasReopened: issue.status === 'reopened' && issue.last_confirmed_check_id === checkId,
-      })),
+      issues: issues.map((issue) => {
+        // Parse llmResponse from JSON string to object
+        let parsedLlmResponse = null;
+        if (issue.llm_response) {
+          try {
+            parsedLlmResponse = JSON.parse(issue.llm_response);
+          } catch (error) {
+            this.env.logger.warn('Failed to parse issue llm_response as JSON', {
+              issueId: issue.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            parsedLlmResponse = issue.llm_response;
+          }
+        }
+
+        return {
+          id: issue.id,
+          severity: issue.severity,
+          category: issue.category,
+          title: issue.title,
+          description: issue.description,
+          recommendation: issue.recommendation,
+          location: issue.location,
+          createdAt: issue.created_at,
+          status: issue.status,
+          firstDetectedCheckId: issue.first_detected_check_id,
+          lastConfirmedCheckId: issue.last_confirmed_check_id,
+          confidence: issue.confidence,
+          // An issue is "new" if it was first detected in this check
+          isNew: issue.first_detected_check_id === checkId,
+          // An issue was "reopened" if it's in reopened status and last confirmed in this check
+          wasReopened: issue.status === 'reopened' && issue.last_confirmed_check_id === checkId,
+          llmResponse: parsedLlmResponse,
+        };
+      }),
     };
   }
 

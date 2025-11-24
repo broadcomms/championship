@@ -39,8 +39,31 @@ export interface ComplianceIssue {
   resolutionNotes: string | null;
   createdAt: number;
   updatedAt: number | null;
+  // Complete LLM response for this issue with enhanced details
+  llmResponse?: LLMIssueResponse | null;
   // Populated fields (from joins)
   documentName?: string;
+}
+
+export interface LLMIssueResponse {
+  severity: IssueSeverity;
+  category: string;
+  title: string;
+  description: string;
+  impact?: string;
+  impact_assessment?: string;
+  original_text?: string;
+  framework?: string;
+  framework_section?: string;
+  framework_subsection?: string;
+  framework_article?: string;
+  framework_requirement?: string;
+  recommendation: string;
+  current_state?: string;
+  required_state?: string;
+  fix?: string;
+  suggested_text?: string;
+  confidence: number;
 }
 
 export interface ComplianceIssueDetails extends ComplianceIssue {
