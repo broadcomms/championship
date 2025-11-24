@@ -191,6 +191,7 @@ export type compliance_checks = {
     created_at: number;
     completed_at: number | null;
     created_by: string;
+    llm_response: string | null;
 };
 
 export type compliance_frameworks = {

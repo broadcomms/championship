@@ -268,7 +268,7 @@ export default class extends Service<Env> {
         textLength: documentText.length,
       });
       
-      const issues = await this.performAIComplianceAnalysis(documentText, framework);
+      const issues = await this.performAIComplianceAnalysis(documentText, framework, checkId);
       
       this.env.logger.info('✅ AI analysis completed', {
         issuesFound: issues.length,
@@ -602,7 +602,7 @@ export default class extends Service<Env> {
     return rules;
   }
 
-  private async performAIComplianceAnalysis(documentText: string, framework: string): Promise<ComplianceIssue[]> {
+  private async performAIComplianceAnalysis(documentText: string, framework: string, checkId: string): Promise<ComplianceIssue[]> {
     this.env.logger.info('🎯 === STARTING AI COMPLIANCE ANALYSIS ===', { framework });
     
     try {
@@ -704,6 +704,16 @@ Return JSON with issues array. If fully compliant, return empty array:
         issueCount: result.issues?.length || 0,
         parsedResult: JSON.stringify(result, null, 2)
       });
+      
+      // Store the complete LLM response for audit trail
+      const db = this.getDb();
+      await db
+        .updateTable('compliance_checks')
+        .set({
+          llm_response: JSON.stringify(result),
+        } as any)
+        .where('id', '=', checkId)
+        .execute();
       
       if (result.issues && Array.isArray(result.issues)) {
         const issues = result.issues.map((issue: any) => ({
@@ -888,6 +898,7 @@ Return JSON with issues array. If fully compliant, return empty array:
     issuesFound: number;
     createdAt: number;
     completedAt: number | null;
+    llmResponse: any;
   }> {
     const db = this.getDb();
 
@@ -915,6 +926,7 @@ Return JSON with issues array. If fully compliant, return empty array:
         'issues_found',
         'created_at',
         'completed_at',
+        'llm_response',
       ])
       .where('id', '=', checkId)
       .where('workspace_id', '=', workspaceId)
@@ -922,6 +934,20 @@ Return JSON with issues array. If fully compliant, return empty array:
 
     if (!check) {
       throw new Error('Compliance check not found');
+    }
+
+    // Parse llmResponse from JSON string to object
+    let parsedLlmResponse = null;
+    if (check.llm_response) {
+      try {
+        parsedLlmResponse = JSON.parse(check.llm_response);
+      } catch (error) {
+        this.env.logger.warn('Failed to parse llm_response as JSON', {
+          checkId: check.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        parsedLlmResponse = check.llm_response; // Return as string if parsing fails
+      }
     }
 
     return {
@@ -933,6 +959,7 @@ Return JSON with issues array. If fully compliant, return empty array:
       issuesFound: check.issues_found,
       createdAt: check.created_at,
       completedAt: check.completed_at,
+      llmResponse: parsedLlmResponse,
     };
   }
 
