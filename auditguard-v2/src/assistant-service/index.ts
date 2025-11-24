@@ -315,21 +315,41 @@ KNOWLEDGE BASE ACCESS:
 - MANDATORY: Always use search_knowledge for questions about frameworks, regulations, or "what are the requirements"
 - DO NOT answer compliance questions from memory - always check the knowledge base first`;
 
-    // Get recent conversation history from SmartMemory
-    // SKIP FOR NOW - Using simple single-turn conversation to avoid blocking
+    // Get recent conversation history from D1 database (excluding the current user message which was just stored)
     let conversationHistory: ChatMessage[] = [];
-    console.log('🔍 SKIPPING working memory retrieval - using empty conversation history');
-    this.env.logger.info('🔍 SKIPPING working memory retrieval');
     
-    // Skip storing user message in SmartMemory for now
-    console.log('🔍 SKIPPING putMemory call - not storing in SmartMemory');
-    this.env.logger.info('🔍 SKIPPING putMemory call');
+    try {
+      const recentMessages = await db
+        .selectFrom('conversation_messages')
+        .select(['role', 'content'])
+        .where('session_id', '=', session.id)
+        .where('id', '!=', userMsgId) // Exclude the message we just stored above
+        .orderBy('created_at', 'asc')
+        .limit(20) // Last 10 turns (20 messages: 10 user + 10 assistant)
+        .execute();
 
-    // Build messages for AI
+      conversationHistory = recentMessages.map(m => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content
+      }));
+      
+      console.log(`✅ Retrieved ${conversationHistory.length} messages from conversation history (excluding current message)`);
+      this.env.logger.info(`✅ Retrieved ${conversationHistory.length} messages from D1 conversation history`, {
+        sessionId: session.id,
+        messageCount: conversationHistory.length,
+        excludedMessageId: userMsgId
+      });
+    } catch (error) {
+      console.error('⚠️ Failed to retrieve conversation history:', error);
+      this.env.logger.error(`⚠️ Failed to retrieve conversation history: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Continue with empty history - single-turn conversation
+    }
+
+    // Build messages for AI (current user message added at the end, not duplicated from history)
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
       ...conversationHistory.map(msg => ({ ...msg, role: msg.role as 'user' | 'assistant' })),
-      { role: 'user', content: request.message },
+      { role: 'user', content: request.message }, // Current message - not in conversationHistory
     ];
 
     // Use multiple logging methods to ensure visibility

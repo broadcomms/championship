@@ -53,20 +53,21 @@ export async function POST(request: NextRequest) {
     const backendUrl = process.env.NEXT_PUBLIC_API_URL;
     
     console.log(`[AI Assistant] Calling backend: ${backendUrl}/api/workspaces/${workspaceId}/assistant/chat`);
+    console.log(`[AI Assistant] SessionId being sent: ${sessionId || 'NEW SESSION'}`);
+    
+    // Forward session cookie to backend (backend expects Cookie header, not Bearer token)
+    const cookieHeader = request.headers.get('cookie');
     
     const response = await fetch(`${backendUrl}/api/workspaces/${workspaceId}/assistant/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.token}`
+        ...(cookieHeader && { 'Cookie': cookieHeader })
       },
       body: JSON.stringify({
         message,
         sessionId,
-        context: {
-          ...context,
-          userId: session.userId
-        }
+        context
       })
     });
 
