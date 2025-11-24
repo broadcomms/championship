@@ -32,6 +32,7 @@ interface ComplianceIssue {
   lastConfirmedCheckId?: string;
   issueFingerprint?: string;
   isActive?: boolean;
+  framework?: string | null;
 }
 
 export default function ComplianceCheckDetailPage() {
@@ -251,6 +252,11 @@ export default function ComplianceCheckDetailPage() {
                         {issue.severity.charAt(0).toUpperCase() + issue.severity.slice(1)}
                       </span>
                       <span className="text-sm text-gray-600">{issue.category}</span>
+                      {check.framework && (
+                        <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded border border-purple-200">
+                          {check.framework}
+                        </span>
+                      )}
                       {getIssueStatusBadge(issue)}
                     </div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">{issue.title}</h3>
