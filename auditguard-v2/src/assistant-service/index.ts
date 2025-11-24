@@ -315,41 +315,49 @@ KNOWLEDGE BASE ACCESS:
 - MANDATORY: Always use search_knowledge for questions about frameworks, regulations, or "what are the requirements"
 - DO NOT answer compliance questions from memory - always check the knowledge base first`;
 
-    // Get recent conversation history from D1 database (excluding the current user message which was just stored)
+    // Get recent conversation history from SmartMemory (working memory)
+    console.log('🧠 Retrieving conversation history from SmartMemory');
+    this.env.logger.info('🧠 Retrieving conversation history from SmartMemory', {
+      sessionId: session.id,
+      memorySessionId
+    });
+
     let conversationHistory: ChatMessage[] = [];
     
     try {
-      const recentMessages = await db
-        .selectFrom('conversation_messages')
-        .select(['role', 'content'])
-        .where('session_id', '=', session.id)
-        .where('id', '!=', userMsgId) // Exclude the message we just stored above
-        .orderBy('created_at', 'asc')
-        .limit(20) // Last 10 turns (20 messages: 10 user + 10 assistant)
-        .execute();
-
-      conversationHistory = recentMessages.map(m => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content
-      }));
-      
-      console.log(`✅ Retrieved ${conversationHistory.length} messages from conversation history (excluding current message)`);
-      this.env.logger.info(`✅ Retrieved ${conversationHistory.length} messages from D1 conversation history`, {
-        sessionId: session.id,
-        messageCount: conversationHistory.length,
-        excludedMessageId: userMsgId
+      const workingMemory = await this.env.ASSISTANT_MEMORY.getWorkingMemorySession(memorySessionId);
+      const memoryEntries = await workingMemory.getMemory({
+        timeline: 'conversation',
+        nMostRecent: 20, // Last 10 turns (20 messages: 10 user + 10 assistant)
       });
+
+      if (memoryEntries && memoryEntries.length > 0) {
+        conversationHistory = memoryEntries.map(entry => ({
+          role: entry.agent === 'user' ? 'user' : 'assistant',
+          content: entry.content
+        }));
+        
+        console.log(`✅ Retrieved ${conversationHistory.length} messages from SmartMemory`);
+        this.env.logger.info(`✅ Retrieved ${conversationHistory.length} messages from SmartMemory`, {
+          sessionId: session.id,
+          memorySessionId,
+          messageCount: conversationHistory.length
+        });
+      } else {
+        console.log('ℹ️ No conversation history found in SmartMemory (new conversation)');
+        this.env.logger.info('ℹ️ No conversation history found in SmartMemory');
+      }
     } catch (error) {
-      console.error('⚠️ Failed to retrieve conversation history:', error);
-      this.env.logger.error(`⚠️ Failed to retrieve conversation history: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('⚠️ Failed to retrieve conversation history from SmartMemory:', error);
+      this.env.logger.error(`⚠️ Failed to retrieve SmartMemory: ${error instanceof Error ? error.message : 'Unknown error'}`);
       // Continue with empty history - single-turn conversation
     }
 
-    // Build messages for AI (current user message added at the end, not duplicated from history)
+    // Build messages for AI (SmartMemory already excludes the current message since we haven't stored it yet)
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
-      ...conversationHistory.map(msg => ({ ...msg, role: msg.role as 'user' | 'assistant' })),
-      { role: 'user', content: request.message }, // Current message - not in conversationHistory
+      ...conversationHistory,
+      { role: 'user', content: request.message }, // Current message - will be stored in SmartMemory after AI response
     ];
 
     // Use multiple logging methods to ensure visibility
@@ -498,6 +506,7 @@ User: "thank you"
       this.env.logger.info('🎯 STAGE 1 INPUT:', {
         userQuestion: lastUserMessage?.content?.substring(0, 200),
         messageCount: messages.length,
+        fullConversation: true, // Now passing full conversation history
         lastThreeMessages: messages.slice(-3).map(m => ({
           role: m.role,
           content: m.content?.substring(0, 100)
@@ -510,7 +519,7 @@ User: "thank you"
           model: 'llama-3.3-70b',
           messages: [
             decisionPrompt,
-            ...messages.slice(-3) // Last 3 messages for context
+            ...messages // FIXED: Pass full conversation history from SmartMemory, not just last 3 messages
           ] as any,
           response_format: { type: 'json_object' },
           temperature: 0.3,
@@ -570,7 +579,7 @@ User: "thank you"
           model: 'llama-3.3-70b',
           messages: [
             systemMessage,
-            ...messages.slice(-5),
+            ...messages, // FIXED: Use full conversation history from SmartMemory
             {
               role: 'assistant',
               content: decision.userFacingMessage
@@ -599,7 +608,7 @@ User: "thank you"
           // Fallback: generate conversational response
           const simpleResponse = await this.env.AI.run('llama-3.3-70b', {
             model: 'llama-3.3-70b',
-            messages: [systemMessage, ...messages.slice(-5)] as any,
+            messages: [systemMessage, ...messages] as any, // FIXED: Use full conversation history
             temperature: 0.7,
             max_tokens: 1000,
           });
@@ -657,17 +666,35 @@ User: "thank you"
       this.env.logger.error(`Failed to track assistant message usage: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
 
-    // Store assistant message in SmartMemory
+    // Store both user and assistant messages in SmartMemory (working memory)
     try {
       const workingMemory = await this.env.ASSISTANT_MEMORY.getWorkingMemorySession(memorySessionId);
+      
+      // Store user message first
+      await workingMemory.putMemory({
+        content: request.message,
+        timeline: 'conversation',
+        key: 'user',
+        agent: 'user',
+      });
+      
+      // Then store assistant message
       await workingMemory.putMemory({
         content: assistantMessage,
         timeline: 'conversation',
         key: 'assistant',
         agent: 'assistant',
       });
+      
+      console.log('✅ Stored conversation turn in SmartMemory');
+      this.env.logger.info('✅ Stored conversation turn in SmartMemory', {
+        memorySessionId,
+        userMessage: request.message.substring(0, 50),
+        assistantMessage: assistantMessage.substring(0, 50)
+      });
     } catch (error) {
-      this.env.logger.error(`Failed to store assistant message in memory: ${error instanceof Error ? error.message : 'Unknown'}`);
+      console.error('⚠️ Failed to store messages in SmartMemory:', error);
+      this.env.logger.error(`Failed to store messages in SmartMemory: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
 
     // Update session activity
@@ -878,7 +905,7 @@ Respond with this exact JSON structure:
               model: 'llama-3.3-70b',
               messages: [
                 decisionPrompt,
-                ...messages.slice(-3) // Last 3 messages for context
+                ...messages // FIXED: Use full conversation history from SmartMemory
               ] as any,
               response_format: { type: 'json_object' },
               temperature: 0.3,
@@ -938,11 +965,11 @@ Respond with this exact JSON structure:
           
           // Build final messages array with tool results
           const finalMessages = decision.needsTools && toolResultMessages.length > 0
-            ? [...messages.slice(-5), ...toolResultMessages, { 
+            ? [...messages, ...toolResultMessages, { // FIXED: Use full conversation history
                 role: 'user', 
                 content: 'Based on the tool results above, provide a comprehensive, helpful answer to my original question.' 
               }]
-            : messages.slice(-6);
+            : messages; // FIXED: Use full conversation history
 
           // Call AI with streaming
           try {
