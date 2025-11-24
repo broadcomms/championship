@@ -321,6 +321,160 @@ export default function IssueDetailsPage() {
                 )}
               </div>
 
+              {/* Enhanced LLM Response Sections */}
+              {issue.llmResponse && (
+                <>
+                  {/* Impact Assessment */}
+                  {issue.llmResponse.impact_assessment && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-6 shadow-sm">
+                      <h2 className="text-xl font-semibold text-red-900 mb-3 flex items-center gap-2">
+                        ⚠️ Impact Assessment
+                      </h2>
+                      <p className="text-red-800 leading-relaxed mb-3">
+                        {issue.llmResponse.impact_assessment}
+                      </p>
+                      {issue.llmResponse.impact && (
+                        <div className="mt-3 pt-3 border-t border-red-200">
+                          <p className="text-sm font-medium text-red-900 mb-1">Potential Consequences:</p>
+                          <p className="text-sm text-red-700">{issue.llmResponse.impact}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Problematic Content */}
+                  {issue.llmResponse.original_text && issue.llmResponse.original_text !== 'None' && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 shadow-sm">
+                      <h2 className="text-xl font-semibold text-yellow-900 mb-3 flex items-center gap-2">
+                        📄 Problematic Content from Document
+                      </h2>
+                      <div className="bg-white border border-yellow-300 rounded-md p-4">
+                        <p className="text-gray-800 italic leading-relaxed font-mono text-sm">
+                          "{issue.llmResponse.original_text}"
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Framework Requirements */}
+                  {(issue.llmResponse.framework_section || issue.llmResponse.framework_requirement) && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 shadow-sm">
+                      <h2 className="text-xl font-semibold text-purple-900 mb-4 flex items-center gap-2">
+                        🛡️ Framework Requirements
+                      </h2>
+                      <div className="space-y-3">
+                        {issue.llmResponse.framework && (
+                          <div>
+                            <p className="text-sm font-medium text-purple-900 mb-1">Framework:</p>
+                            <p className="text-purple-800 font-semibold">{issue.llmResponse.framework}</p>
+                          </div>
+                        )}
+                        {issue.llmResponse.framework_section && (
+                          <div>
+                            <p className="text-sm font-medium text-purple-900 mb-1">Section:</p>
+                            <p className="text-purple-800">{issue.llmResponse.framework_section}</p>
+                          </div>
+                        )}
+                        {issue.llmResponse.framework_subsection && (
+                          <div>
+                            <p className="text-sm font-medium text-purple-900 mb-1">Subsection:</p>
+                            <p className="text-purple-800">{issue.llmResponse.framework_subsection}</p>
+                          </div>
+                        )}
+                        {issue.llmResponse.framework_article && (
+                          <div>
+                            <p className="text-sm font-medium text-purple-900 mb-1">Article:</p>
+                            <p className="text-purple-800">{issue.llmResponse.framework_article}</p>
+                          </div>
+                        )}
+                        {issue.llmResponse.framework_requirement && (
+                          <div className="mt-3 pt-3 border-t border-purple-200">
+                            <p className="text-sm font-medium text-purple-900 mb-2">Full Requirement:</p>
+                            <div className="bg-white border border-purple-300 rounded-md p-4">
+                              <p className="text-purple-800 leading-relaxed">
+                                {issue.llmResponse.framework_requirement}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Gap Analysis */}
+                  {(issue.llmResponse.current_state || issue.llmResponse.required_state) && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 shadow-sm">
+                      <h2 className="text-xl font-semibold text-blue-900 mb-4 flex items-center gap-2">
+                        🔄 Gap Analysis
+                      </h2>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {issue.llmResponse.current_state && (
+                          <div>
+                            <p className="text-sm font-medium text-blue-900 mb-2">Current State:</p>
+                            <div className="bg-white border border-blue-300 rounded-md p-4">
+                              <p className="text-blue-800 leading-relaxed">
+                                {issue.llmResponse.current_state}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        {issue.llmResponse.required_state && (
+                          <div>
+                            <p className="text-sm font-medium text-blue-900 mb-2">Required State:</p>
+                            <div className="bg-white border border-green-300 rounded-md p-4">
+                              <p className="text-green-800 leading-relaxed font-medium">
+                                {issue.llmResponse.required_state}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Remediation Steps */}
+                  {issue.llmResponse.fix && (
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-6 shadow-sm">
+                      <h2 className="text-xl font-semibold text-indigo-900 mb-3 flex items-center gap-2">
+                        🔧 Detailed Remediation Steps
+                      </h2>
+                      <div className="bg-white border border-indigo-300 rounded-md p-4">
+                        <p className="text-indigo-800 leading-relaxed whitespace-pre-wrap">
+                          {issue.llmResponse.fix}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Suggested Text Correction */}
+                  {issue.llmResponse.suggested_text && (
+                    <div className="bg-teal-50 border border-teal-200 rounded-lg p-6 shadow-sm">
+                      <h2 className="text-xl font-semibold text-teal-900 mb-3 flex items-center gap-2">
+                        🎯 Suggested Text Correction
+                      </h2>
+                      <div className="bg-white border border-teal-300 rounded-md p-4">
+                        <p className="text-teal-800 leading-relaxed font-mono text-sm whitespace-pre-wrap">
+                          {issue.llmResponse.suggested_text}
+                        </p>
+                      </div>
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          onClick={() => {
+                            if (issue.llmResponse?.suggested_text) {
+                              navigator.clipboard.writeText(issue.llmResponse.suggested_text);
+                              alert('Suggested text copied to clipboard!');
+                            }
+                          }}
+                          className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium text-sm flex items-center gap-2"
+                        >
+                          📋 Copy Suggested Text
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
               {/* Comments & Activity */}
               <div className="bg-white rounded-lg shadow-sm border p-6">
                 <h2 className="text-xl font-semibold mb-4">Activity Timeline</h2>

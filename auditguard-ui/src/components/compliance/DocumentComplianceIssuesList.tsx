@@ -9,7 +9,7 @@ import {
   STATUS_LABELS,
 } from '@/types';
 import { IssueCard } from './IssueCard';
-import { IssueDetailsModal } from './IssueDetailsModal';
+import { EnhancedIssueDetailPanel } from './EnhancedIssueDetailPanel';
 
 interface DocumentComplianceIssuesListProps {
   workspaceId: string;
@@ -285,16 +285,16 @@ export function DocumentComplianceIssuesList({
         </div>
       )}
 
-      {/* Issue Details Modal */}
-      {selectedIssueId && (
-        <IssueDetailsModal
-          workspaceId={workspaceId}
-          issueId={selectedIssueId}
-          isOpen={isModalOpen}
-          onClose={handleModalClose}
-          onUpdate={handleIssueUpdate}
-        />
-      )}
+      {/* Enhanced Issue Details Panel */}
+      <EnhancedIssueDetailPanel
+        workspaceId={workspaceId}
+        issueId={selectedIssueId}
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        onStatusChange={(id, status) => {
+          handleIssueUpdate();
+        }}
+      />
     </div>
   );
 }

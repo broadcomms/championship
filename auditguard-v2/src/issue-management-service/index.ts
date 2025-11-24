@@ -188,6 +188,7 @@ export default class extends Service<Env> {
     resolutionNotes: string | null;
     createdAt: number;
     updatedAt: number | null;
+    llmResponse: any | null;
   }> {
     const db = this.getDb();
 
@@ -238,6 +239,7 @@ export default class extends Service<Env> {
         'ci.resolution_notes',
         'ci.created_at',
         'ci.updated_at',
+        'ci.llm_response',
       ])
       .where('ci.id', '=', input.issueId)
       .where('ci.workspace_id', '=', input.workspaceId)
@@ -245,6 +247,17 @@ export default class extends Service<Env> {
 
     if (!issue) {
       throw new Error('Issue not found');
+    }
+
+    // Parse llm_response JSON if present
+    let llmResponse = null;
+    if (issue.llm_response) {
+      try {
+        llmResponse = JSON.parse(issue.llm_response);
+      } catch (error) {
+        console.error('Failed to parse llm_response:', error);
+        llmResponse = null;
+      }
     }
 
     return {
@@ -279,6 +292,7 @@ export default class extends Service<Env> {
       resolutionNotes: issue.resolution_notes || null,
       createdAt: issue.created_at,
       updatedAt: issue.updated_at || null,
+      llmResponse: llmResponse,
     };
   }
 
