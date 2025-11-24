@@ -177,8 +177,12 @@ export default class extends Service<Env> {
       // Invoice events
       case 'invoice.payment_succeeded':
       case 'invoice.paid':  // Also handle manual Dashboard payments
-      case 'invoice.finalized':  // Also handle finalized invoices (creates record immediately)
         await this.handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
+        break;
+
+      case 'invoice.finalized':
+        // Finalized invoices are not yet paid - don't send notifications
+        this.env.logger.info(`Invoice ${(event.data.object as Stripe.Invoice).id} finalized, waiting for payment`);
         break;
 
       case 'invoice.payment_failed':
@@ -536,7 +540,7 @@ export default class extends Service<Env> {
         .insertInto('billing_history')
         .values({
           id: billingHistoryId,
-          workspace_id: result.organization_id, // Note: column is workspace_id in schema but stores organization_id
+          organization_id: result.organization_id, // Fixed: use organization_id (matches DB schema)
           stripe_invoice_id: invoice.id,
           stripe_charge_id: (invoice as any).charge || null,
           amount: invoice.total || 0,

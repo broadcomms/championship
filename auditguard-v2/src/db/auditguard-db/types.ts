@@ -508,7 +508,7 @@ export type stripe_payment_methods = {
 
 export type billing_history = {
     id: string;
-    workspace_id: string;
+    organization_id: string; // Fixed: matches actual DB schema
     stripe_invoice_id: string | null;
     stripe_charge_id: string | null;
     amount: number;

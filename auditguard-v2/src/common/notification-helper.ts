@@ -296,6 +296,7 @@ export async function createPaymentSucceededNotification(
     title: '✅ Payment Received',
     message: `Your payment of $${formattedAmount} has been processed successfully. Thank you!`,
     actionUrl: invoiceUrl || `/org/${organizationId}/billing`,
+    workspaceId: organizationId,  // Set workspaceId to prevent D1_TYPE_ERROR
     organizationId,
     metadata: {
       amount,

@@ -1194,7 +1194,7 @@ export default class extends Service<Env> {
     const history = await (db as any)
       .selectFrom('billing_history')
       .selectAll()
-      .where('workspace_id', '=', workspaceId)
+      .where('organization_id', '=', workspaceId) // Fixed: use organization_id (matches DB schema)
       .orderBy('created_at', 'desc')
       .limit(50)
       .execute();
