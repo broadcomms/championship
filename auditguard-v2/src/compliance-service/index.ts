@@ -624,7 +624,7 @@ export default class extends Service<Env> {
       });
 
       // Build prompt
-      const prompt = `Analyze this document for ${framework} compliance violations.
+      const prompt = ` Analyze the document thoroughly for ALL ${framework} compliance violations.
 
 Framework Requirements:
 ${rules.slice(0, 5).join('\n')}
@@ -632,8 +632,33 @@ ${rules.slice(0, 5).join('\n')}
 Document:
 ${truncatedText}
 
-Return JSON with issues array. If fully compliant, return empty array:
-{"issues": [{"severity": "critical|high|medium|low", "category": "requirement name", "title": "violation", "description": "details", "recommendation": "fix", "confidence": 80}]}`;
+Return JSON with all the found issues array. If fully compliant, return empty array:
+{"issues": [{
+      "severity": "critical|high|medium|low", 
+      "category": "requirement name", 
+      "title": "violation", 
+      "description": "details", 
+      "impact": "data breach, legal risk, fines, etc.",
+      "impact_assessment": "How this violation impacts the organization",
+      "original_text": "The specific problematic text from the document that caused the issue",
+      "framework": "${framework}",
+      "framework_section": "specific section violated",
+      "framework_subsection": "specific subsection violated if applicable",
+      "framework_article": "specific article violated",
+      "framework_requirement": "full requirement text",
+      "recommendation": "how to fix the issue",
+      "current_state": "What is currently being done that is insufficient",
+      "required_state": "What needs to be done to achieve compliance",
+      "fix": "specific steps to remediate the issue", 
+      "suggested_text": "The exact correction of how the problematic orgininal_text or phrase should have been written if applicable",
+      "confidence": 0-100
+      
+      }]}`;
+
+
+
+
+
 
       this.env.logger.info('💬 Prompt created', { 
         promptLength: prompt.length,
