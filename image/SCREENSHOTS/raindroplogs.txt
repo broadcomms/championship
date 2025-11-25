@@ -1,0 +1,1494 @@
+patrick@DESKTOP-PC01:~/championship/auditguard-v2$ raindrop logs tail --follow
+Using organization: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+Using user: user_01K8RV423SG75TDJC3014RQN9B
+Following logs for auditguard-v2@01kap308m7dyxr5eftpgtn6epz...
+📜 Showing last 10 log events:
+
+[11/24/2025, 7:23:20 PM] 🔗 Trace: db84647a51c0a713ea6f7167633c61d4 (35ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: notification-service
+  1. ✅ sql.all (35ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ? and "read" = ?
+     📊 meta: 0.2116ms, 4 rows read, ENAM, DB: 2404.0KB
+
+[11/24/2025, 7:23:50 PM] 🔗 Trace: 1a9d80997110658fc175e4af7c4838c1 (138ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: api-gateway
+  1. ✅ fetch (137ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01kap308m7dyxr5eftpgtn6epz
+     http.method: POST
+     http.url: https://svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/notifications
+     http.scheme: https
+     http.host: svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: undici
+     http.content_type: application/json
+     http.content_length: 48
+     http.referer: undefined
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: *
+     http.authorization: [REDACTED]
+     http.cf_ray: 9a3cffeadbbe94e3
+     http.cf_connecting_ip: 142.180.185.49
+     http.cf_country: CA
+     http.status: ✅ 200
+  2. ✅ validateSession (47ms)
+     service: AUTH_SERVICE
+  3. ✅ validateSession (43ms)
+  4. ✅ sql.all (43ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2893ms, 2 rows read, ENAM, DB: 2404.0KB
+  5. ✅ getNotifications (89ms)
+  6. ✅ sql.all (35ms)
+     🗄️  SQL Query: select * from "notifications" where "user_id" = ? order by "created_at" desc limit ? offset ?
+     📊 meta: 0.2967ms, 4 rows read, ENAM, DB: 2404.0KB
+  7. ✅ getNotifications (90ms)
+     service: NOTIFICATION_SERVICE
+  8. ✅ sql.all (28ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ?
+     📊 meta: 0.287ms, 4 rows read, ENAM, DB: 2404.0KB
+  9. ✅ sql.all (26ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ? and "read" = ?
+     📊 meta: 0.2151ms, 4 rows read, ENAM, DB: 2404.0KB
+
+
+────────────────────────────────────────────────────────────────────────────────
+🔴 Live stream starting...
+────────────────────────────────────────────────────────────────────────────────
+
+Press Ctrl+C to stop following
+
+🔄 Started streaming logs for auditguard-v2@01kap308m7dyxr5eftpgtn6epz
+   Organization: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+   User: user_01K8RV423SG75TDJC3014RQN9B
+   Time: 11/24/2025, 7:24:09 PM
+[11/24/2025, 7:24:19 PM] 🔗 Trace: 08b2394bcc7b8d17ab6fc01d9163718b (101ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (38ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.3754ms, 2 rows read, ENAM, DB: 2404.0KB
+  2. ✅ validateSession (38ms)
+  3. ✅ validateSession (43ms)
+     service: AUTH_SERVICE
+  4. ✅ console.log
+     severity: info
+     message: [
+  "🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥"
+]
+  5. ✅ log
+     level: INFO
+     message: 🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥
+     fields: {}
+  6. ✅ log
+     level: INFO
+     message: 🚨 CHAT METHOD CALLED (non-streaming)
+     fields: {"workspaceId":"wks_1764017189103_x0x84d","userId":"usr_1763944524573_96ho2hd","message":"Hello my name is Patrick","hasSessionId":false}
+  7. ✅ log
+     level: INFO
+     message: 🚀 CHAT REQUEST STARTED
+     fields: {"workspaceId":"wks_1764017189103_x0x84d","userId":"usr_1763944524573_96ho2hd","message":"Hello my name is Patrick"}
+  8. ✅ sql.all (57ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.6855ms, 1 rows read, ENAM, DB: 2404.0KB
+
+[11/24/2025, 7:24:19 PM] 🔗 Trace: 8c3ef786ca68a60d386d85c9ead23220 (199ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2844ms, 2 rows read, ENAM, DB: 2404.0KB
+  2. ✅ validateSession (35ms)
+  3. ✅ sql.all (40ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2221ms, 1 rows read, ENAM, DB: 2404.0KB
+  4. ✅ listComplianceChecks (73ms)
+  5. ✅ validateSession (43ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (201ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01kap308m7dyxr5eftpgtn6epz
+     http.method: GET
+     http.url: https://svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1764017189103_x0x84d/compliance
+     http.scheme: https
+     http.host: svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: https://localhost:3000/org/org_1763944524573_1r288s/workspace/wks_1764017189103_x0x84d/assistant
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.5
+     http.authorization: undefined
+     http.cf_ray: 9a3d009fde79aaca
+     http.cf_connecting_ip: 142.180.185.49
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (33ms)
+     🗄️  SQL Query: select "compliance_checks"."id", "compliance_checks"."document_id", "documents"."filename" as "document_name", "compliance_checks"."framework", "compliance_checks"."status", "compliance_checks"."overall_score", "compliance_checks"."issues_found", "compliance_checks"."created_at", "compliance_checks"."completed_at" from "compliance_checks" inner join "documents" on "documents"."id" = "compliance_checks"."document_id" where "compliance_checks"."workspace_id" = ? order by "compliance_checks"."created_at" desc
+     📊 meta: 1.4427ms, 3 rows read, ENAM, DB: 2404.0KB
+  8. ✅ listComplianceChecks (158ms)
+     service: COMPLIANCE_SERVICE
+
+[11/24/2025, 7:24:19 PM] 🔗 Trace: 47fbf06c5489b774b6db1a938bb157cd (113ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (29ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2131ms, 2 rows read, ENAM, DB: 2404.0KB
+  2. ✅ validateSession (29ms)
+  3. ✅ validateSession (33ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (128ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01kap308m7dyxr5eftpgtn6epz
+     http.method: GET
+     http.url: https://svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/workspaces/wks_1764017189103_x0x84d/documents?limit=3&sort=recent
+     http.scheme: https
+     http.host: svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0
+     http.content_type: undefined
+     http.content_length: undefined
+     http.referer: https://localhost:3000/org/org_1763944524573_1r288s/workspace/wks_1764017189103_x0x84d/assistant
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: en-US,en;q=0.5
+     http.authorization: undefined
+     http.cf_ray: 9a3d00a209107769
+     http.cf_connecting_ip: 142.180.185.49
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (41ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.3032ms, 1 rows read, ENAM, DB: 2404.0KB
+  6. ✅ listDocuments (81ms)
+  7. ✅ listDocuments (95ms)
+     service: DOCUMENT_SERVICE
+  8. ✅ sql.all (40ms)
+     🗄️  SQL Query: select "documents"."id", "documents"."filename", "documents"."title", "documents"."description", "documents"."file_size", "documents"."content_type", "documents"."category", "documents"."uploaded_by", "users"."email" as "uploader_email", "documents"."uploaded_at", "documents"."updated_at", "documents"."processing_status", "documents"."text_extracted", "documents"."chunk_count" from "documents" inner join "users" on "users"."id" = "documents"."uploaded_by" where "documents"."workspace_id" = ? order by "documents"."uploaded_at" desc
+     📊 meta: 0.6457ms, 3 rows read, ENAM, DB: 2404.0KB
+
+[11/24/2025, 7:24:19 PM] 🔗 Trace: 4a13a8d73095eea03e51e01d1dfd81ba (151ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (37ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2285ms, 2 rows read, ENAM, DB: 2404.0KB
+  2. ✅ validateSession (37ms)
+  3. ✅ sql.all (45ms)
+     🗄️  SQL Query: select * from "notifications" where "user_id" = ? order by "created_at" desc limit ? offset ?
+     📊 meta: 0.3263ms, 4 rows read, ENAM, DB: 2404.0KB
+  4. ✅ getNotifications (110ms)
+  5. ✅ validateSession (42ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (155ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01kap308m7dyxr5eftpgtn6epz
+     http.method: POST
+     http.url: https://svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/notifications
+     http.scheme: https
+     http.host: svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: undici
+     http.content_type: application/json
+     http.content_length: 48
+     http.referer: undefined
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: *
+     http.authorization: [REDACTED]
+     http.cf_ray: 9a3d00a478a2ee2f
+     http.cf_connecting_ip: 142.180.185.49
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (39ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ?
+     📊 meta: 0.199ms, 4 rows read, ENAM, DB: 2404.0KB
+  8. ✅ getNotifications (113ms)
+     service: NOTIFICATION_SERVICE
+  9. ✅ sql.all (26ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ? and "read" = ?
+     📊 meta: 0.5049ms, 4 rows read, ENAM, DB: 2404.0KB
+
+[11/24/2025, 7:24:22 PM] 🔗 Trace: 08b2394bcc7b8d17ab6fc01d9163718b (123ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: usage-service
+  1. ✅ sql.all (47ms)
+     🗄️  SQL Query: insert into "usage_tracking" ("id", "workspace_id", "resource_type", "resource_id", "user_id", "meta_info", "tracked_at") values (?, ?, ?, ?, ?, ?, ?)
+     📊 meta: 1.2393ms, 5 rows written, ENAM, DB: 2404.0KB
+  2. ✅ trackUsage (123ms)
+  3. ✅ ai.run (103ms)
+  4. ✅ putMemory (709ms)
+  5. ✅ ai.run (130ms)
+  6. ✅ putMemory (752ms)
+  7. ✅ sql.all (35ms)
+     🗄️  SQL Query: select * from "usage_summaries" where "workspace_id" = ? and "date" = ?
+     📊 meta: 0.7354ms, 1 rows read, ENAM, DB: 2404.0KB
+  8. ✅ vector_index.upsert (606ms)
+     count: 1
+     index: MEMORY_SEARCH
+  9. ✅ vector_index.upsert (622ms)
+     count: 1
+     index: MEMORY_SEARCH
+  10. ✅ sql.all (41ms)
+     🗄️  SQL Query: update "usage_summaries" set "assistant_messages" = ?, "updated_at" = ? where "workspace_id" = ? and "date" = ?
+     📊 meta: 0.2606ms, 1 rows read, 1 rows written, ENAM, DB: 2404.0KB
+
+[11/24/2025, 7:24:42 PM] 🔗 Trace: 9cdd73827a1d024bcd5d445f678777a0 (394ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: assistant-memory:memory-actor
+  1. ✅ getMemory (0ms)
+  2. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.292ms, 2 rows read, ENAM, DB: 2404.0KB
+  3. ✅ validateSession (32ms)
+  4. ✅ validateSession (36ms)
+     service: AUTH_SERVICE
+  5. ✅ console.log
+     severity: info
+     message: [
+  "🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥"
+]
+  6. ✅ log
+     level: INFO
+     message: 🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥
+     fields: {}
+  7. ✅ log
+     level: INFO
+     message: 🚨 CHAT METHOD CALLED (non-streaming)
+     fields: {"workspaceId":"wks_1764017189103_x0x84d","userId":"usr_1763944524573_96ho2hd","message":"what is my compliance score","hasSessionId":true}
+  8. ✅ log
+     level: INFO
+     message: 🚀 CHAT REQUEST STARTED
+     fields: {"workspaceId":"wks_1764017189103_x0x84d","userId":"usr_1763944524573_96ho2hd","message":"what is my compliance score"}
+  9. ✅ sql.all (39ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.3256ms, 1 rows read, ENAM, DB: 2404.0KB
+  10. ✅ sql.all (35ms)
+     🗄️  SQL Query: select * from "conversation_sessions" where "id" = ? and "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.3125ms, 1 rows read, ENAM, DB: 2404.0KB
+  11. ✅ sql.all (46ms)
+     🗄️  SQL Query: insert into "conversation_messages" ("id", "session_id", "role", "content", "created_at") values (?, ?, ?, ?, ?)
+     📊 meta: 0.2746ms, 4 rows written, ENAM, DB: 2404.0KB
+  12. ✅ sql.all (28ms)
+     🗄️  SQL Query: select "name", "description" from "workspaces" where "id" = ?
+     📊 meta: 0.257ms, 1 rows read, ENAM, DB: 2404.0KB
+  13. ✅ sql.all (37ms)
+     🗄️  SQL Query: select * from "workspace_scores" where "workspace_id" = ? order by "calculated_at" desc limit ?
+     📊 meta: 0.4315ms, 2 rows read, ENAM, DB: 2404.0KB
+  14. ✅ sql.all (34ms)
+     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
+     📊 meta: 0.2006ms, 1 rows read, ENAM, DB: 2404.0KB
+  15. ✅ sql.all (80ms)
+     🗄️  SQL Query: select count("compliance_issues"."id") as "count" from "compliance_issues" inner join "compliance_checks" on "compliance_issues"."check_id" = "compliance_checks"."id" where "compliance_checks"."workspace_id" = ? and "compliance_issues"."status" = ?
+     📊 meta: 0.3131ms, 24 rows read, ENAM, DB: 2404.0KB
+  16. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT A: Before episodic memory search"
+]
+  17. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT A: Before episodic memory search
+     fields: {}
+  18. ✅ console.log
+     severity: info
+     message: [
+  "🔍 SKIPPING episodic memory search temporarily"
+]
+  19. ✅ log
+     level: INFO
+     message: 🔍 SKIPPING episodic memory search - moving to procedural memory
+     fields: {}
+  20. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT B: Skipped episodic memory (disabled)"
+]
+  21. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT B: Skipped episodic memory
+     fields: {}
+  22. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT C: Before procedural memory retrieval"
+]
+  23. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT C: Before procedural memory retrieval
+     fields: {}
+  24. ✅ console.log
+     severity: info
+     message: [
+  "🔍 SKIPPING procedural memory - using default prompt"
+]
+  25. ✅ log
+     level: INFO
+     message: 🔍 SKIPPING procedural memory - using default prompt
+     fields: {}
+  26. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT D: Skipped procedural memory (disabled)"
+]
+  27. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT E: Skipped getProcedure call (disabled)"
+]
+  28. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT F: After procedural memory section"
+]
+  29. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT F: After procedural memory section
+     fields: {}
+  30. ✅ console.log
+     severity: info
+     message: [
+  "🧠 Retrieving conversation history from SmartMemory"
+]
+  31. ✅ log
+     level: INFO
+     message: 🧠 Retrieving conversation history from SmartMemory
+     fields: {"sessionId":"conv_1764030259223_uhpqbr","memorySessionId":"01kaw6b80q05c8mraq3w5vd80z"}
+  32. ✅ smartmemory.getWorkingMemorySession (0ms)
+     smartMemory: ASSISTANT_MEMORY
+     sessionId: 01kaw6b80q05c8mraq3w5vd80z
+  33. ✅ agent_working_memory.getMemory (78ms)
+     smartMemory: ASSISTANT_MEMORY
+     sessionId: 01kaw6b80q05c8mraq3w5vd80z
+     timeline: conversation
+     hasKey: false
+     nMostRecent: 20
+     hasTimeRange: false
+     resultCount: 2
+  34. ✅ console.log
+     severity: info
+     message: [
+  "✅ Retrieved 2 messages from SmartMemory"
+]
+  35. ✅ log
+     level: INFO
+     message: ✅ Retrieved 2 messages from SmartMemory
+     fields: {"sessionId":"conv_1764030259223_uhpqbr","memorySessionId":"01kaw6b80q05c8mraq3w5vd80z","messageCount":2}
+  36. ✅ console.log
+     severity: info
+     message: [
+  "📝 Messages built (console.log)",
+  "{\"messageCount\":4}"
+]
+  37. ✅ log
+     level: INFO
+     message: 📝 Messages built
+     fields: {"messageCount":4}
+  38. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT: About to start AI pipeline - line 357 reached!"
+]
+  39. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT: About to start AI pipeline - if you see this, code reached line 357!
+     fields: {}
+  40. ✅ log
+     level: INFO
+     message: 🤖 Starting 4-stage AI pipeline
+     fields: {}
+  41. ✅ log
+     level: INFO
+     message: Stage 1: Analyzing user request
+     fields: {"messageCount":4,"model":"llama-3.3-70b"}
+  42. ✅ log
+     level: INFO
+     message: 🎯 STAGE 1 INPUT:
+     fields: {"userQuestion":"what is my compliance score","messageCount":4,"fullConversation":true,"lastThreeMessages":[{"role":"user","content":"Hello my name is Patrick"},{"role":"assistant","content":"Hello Patrick, welcome to AuditGuard! How can I help you with compliance today?"},{"role":"user","content":"what is my compliance score"}]}
+  43. ✅ ai.run (365ms)
+  44. ✅ log
+     level: INFO
+     message: Decision stage completed
+     fields: {"hasResponse":true}
+  45. ✅ log
+     level: INFO
+     message: 🎯 STAGE 1 DECISION (FULL):
+     fields: {"needsTools":true,"toolCalls":[{"name":"get_compliance_status","arguments":{}}],"reasoning":"User asking for current compliance score","userFacingMessage":"Let me check your current compliance status...","rawDecisionJson":"{\"needsTools\":true,\"toolCalls\":[{\"name\":\"get_compliance_status\",\"arguments\":{}}],\"reasoning\":\"User asking for current compliance score\",\"userFacingMessage\":\"Let me check your current compliance status...\"}"}
+  46. ✅ log
+     level: INFO
+     message: Stage 2: Executing tools
+     fields: {"toolCount":1,"tools":["get_compliance_status"]}
+  47. ✅ sql.all (28ms)
+     🗄️  SQL Query: select * from "workspace_scores" where "workspace_id" = ? order by "calculated_at" desc limit ?
+     📊 meta: 0.3366ms, 2 rows read, ENAM, DB: 2404.0KB
+  48. ✅ log
+     level: INFO
+     message: Tools executed
+     fields: {"toolCount":1,"rawDataCount":1}
+  49. ✅ log
+     level: INFO
+     message: Stage 3: Generating final response with tool results
+     fields: {}
+
+[11/24/2025, 7:24:44 PM] 🔗 Trace: 9cdd73827a1d024bcd5d445f678777a0 (1100ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (268ms)
+  2. ✅ putMemory (1100ms)
+  3. ✅ vector_index.upsert (832ms)
+     count: 1
+     index: MEMORY_SEARCH
+
+[11/24/2025, 7:24:48 PM] 🔗 Trace: 5f261c98ead9c169f165020ac046386c (152ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (41ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.301ms, 2 rows read, ENAM, DB: 2404.0KB
+  2. ✅ validateSession (41ms)
+  3. ✅ validateSession (45ms)
+     service: AUTH_SERVICE
+  4. ✅ fetch (155ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01kap308m7dyxr5eftpgtn6epz
+     http.method: POST
+     http.url: https://svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/notifications
+     http.scheme: https
+     http.host: svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: undici
+     http.content_type: application/json
+     http.content_length: 48
+     http.referer: undefined
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: *
+     http.authorization: [REDACTED]
+     http.cf_ray: 9a3d0154eddecf1c
+     http.cf_connecting_ip: 142.180.185.49
+     http.cf_country: CA
+     http.status: ✅ 200
+  5. ✅ sql.all (37ms)
+     🗄️  SQL Query: select * from "notifications" where "user_id" = ? order by "created_at" desc limit ? offset ?
+     📊 meta: 0.3511ms, 4 rows read, ENAM, DB: 2404.0KB
+  6. ✅ getNotifications (107ms)
+  7. ✅ getNotifications (110ms)
+     service: NOTIFICATION_SERVICE
+  8. ✅ sql.all (29ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ?
+     📊 meta: 0.3031ms, 4 rows read, ENAM, DB: 2404.0KB
+  9. ✅ sql.all (41ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ? and "read" = ?
+     📊 meta: 0.3101ms, 4 rows read, ENAM, DB: 2404.0KB
+
+[11/24/2025, 7:25:09 PM] 🔗 Trace: 274f0b0c4a39f6659344292a16076dbb (39ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (39ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2637ms, 2 rows read, ENAM, DB: 2404.0KB
+  2. ✅ validateSession (39ms)
+
+[11/24/2025, 7:25:10 PM] 🔗 Trace: 274f0b0c4a39f6659344292a16076dbb (1923ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (309ms)
+  2. ✅ putMemory (1104ms)
+  3. ✅ ai.run (109ms)
+  4. ✅ putMemory (804ms)
+  5. ✅ vector_index.upsert (795ms)
+     count: 1
+     index: MEMORY_SEARCH
+  6. ✅ vector_index.upsert (695ms)
+     count: 1
+     index: MEMORY_SEARCH
+
+[11/24/2025, 7:25:18 PM] 🔗 Trace: 001de3cff187cb087122f537c87f8ffc (131ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (36ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2198ms, 2 rows read, ENAM, DB: 2404.0KB
+  2. ✅ validateSession (36ms)
+  3. ✅ sql.all (35ms)
+     🗄️  SQL Query: select * from "notifications" where "user_id" = ? order by "created_at" desc limit ? offset ?
+     📊 meta: 0.4054ms, 4 rows read, ENAM, DB: 2404.0KB
+  4. ✅ getNotifications (89ms)
+  5. ✅ validateSession (43ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (137ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01kap308m7dyxr5eftpgtn6epz
+     http.method: POST
+     http.url: https://svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/notifications
+     http.scheme: https
+     http.host: svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: undici
+     http.content_type: application/json
+     http.content_length: 48
+     http.referer: undefined
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: *
+     http.authorization: [REDACTED]
+     http.cf_ray: 9a3d021099ae880c
+     http.cf_connecting_ip: 142.180.185.49
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (27ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ?
+     📊 meta: 0.2069ms, 4 rows read, ENAM, DB: 2404.0KB
+  8. ✅ getNotifications (94ms)
+     service: NOTIFICATION_SERVICE
+  9. ✅ sql.all (27ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ? and "read" = ?
+     📊 meta: 0.4012ms, 4 rows read, ENAM, DB: 2404.0KB
+
+[11/24/2025, 7:25:28 PM] 🔗 Trace: 263ab84eebd6f089fea6441f65e71b3d (328ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2901ms, 2 rows read, ENAM, DB: 2404.0KB
+  2. ✅ validateSession (32ms)
+  3. ✅ getMemory (0ms)
+
+[11/24/2025, 7:25:30 PM] 🔗 Trace: 263ab84eebd6f089fea6441f65e71b3d (710ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (93ms)
+  2. ✅ putMemory (710ms)
+  3. ✅ vector_index.upsert (617ms)
+     count: 1
+     index: MEMORY_SEARCH
+
+[11/24/2025, 7:25:50 PM] 🔗 Trace: 646f7dac35f37d2b7ad6aab05054a7ce (1012ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (41ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2418ms, 2 rows read, ENAM, DB: 2408.0KB
+  2. ✅ validateSession (41ms)
+  3. ✅ getMemory (0ms)
+  4. ✅ console.log
+     severity: info
+     message: [
+  "🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥"
+]
+  5. ✅ validateSession (45ms)
+     service: AUTH_SERVICE
+  6. ✅ sql.all (52ms)
+     🗄️  SQL Query: insert into "usage_tracking" ("id", "workspace_id", "resource_type", "resource_id", "user_id", "meta_info", "tracked_at") values (?, ?, ?, ?, ?, ?, ?)
+     📊 meta: 1.3147ms, 5 rows written, ENAM, DB: 2408.0KB
+  7. ✅ trackUsage (134ms)
+  8. ✅ log
+     level: INFO
+     message: 🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥
+     fields: {}
+  9. ✅ sql.all (28ms)
+     🗄️  SQL Query: select * from "usage_summaries" where "workspace_id" = ? and "date" = ?
+     📊 meta: 0.3217ms, 1 rows read, ENAM, DB: 2408.0KB
+  10. ✅ log
+     level: INFO
+     message: 🚨 CHAT METHOD CALLED (non-streaming)
+     fields: {"workspaceId":"wks_1764017189103_x0x84d","userId":"usr_1763944524573_96ho2hd","message":"what was my first message?","hasSessionId":true}
+  11. ✅ sql.all (54ms)
+     🗄️  SQL Query: update "usage_summaries" set "assistant_messages" = ?, "updated_at" = ? where "workspace_id" = ? and "date" = ?
+     📊 meta: 0.2695ms, 1 rows read, 1 rows written, ENAM, DB: 2408.0KB
+  12. ✅ log
+     level: INFO
+     message: 🚀 CHAT REQUEST STARTED
+     fields: {"workspaceId":"wks_1764017189103_x0x84d","userId":"usr_1763944524573_96ho2hd","message":"what was my first message?"}
+  13. ✅ sql.all (43ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.5611ms, 1 rows read, ENAM, DB: 2408.0KB
+  14. ✅ sql.all (33ms)
+     🗄️  SQL Query: select * from "conversation_sessions" where "id" = ? and "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.3218ms, 1 rows read, ENAM, DB: 2408.0KB
+  15. ✅ sql.all (52ms)
+     🗄️  SQL Query: insert into "conversation_messages" ("id", "session_id", "role", "content", "created_at") values (?, ?, ?, ?, ?)
+     📊 meta: 1.7261ms, 4 rows written, ENAM, DB: 2408.0KB
+  16. ✅ sql.all (39ms)
+     🗄️  SQL Query: select "name", "description" from "workspaces" where "id" = ?
+     📊 meta: 0.3292ms, 1 rows read, ENAM, DB: 2408.0KB
+  17. ✅ sql.all (34ms)
+     🗄️  SQL Query: select * from "workspace_scores" where "workspace_id" = ? order by "calculated_at" desc limit ?
+     📊 meta: 0.3971ms, 2 rows read, ENAM, DB: 2408.0KB
+  18. ✅ sql.all (34ms)
+     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
+     📊 meta: 0.8143ms, 1 rows read, ENAM, DB: 2408.0KB
+  19. ✅ sql.all (33ms)
+     🗄️  SQL Query: select count("compliance_issues"."id") as "count" from "compliance_issues" inner join "compliance_checks" on "compliance_issues"."check_id" = "compliance_checks"."id" where "compliance_checks"."workspace_id" = ? and "compliance_issues"."status" = ?
+     📊 meta: 0.3851ms, 24 rows read, ENAM, DB: 2408.0KB
+  20. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT A: Before episodic memory search"
+]
+  21. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT A: Before episodic memory search
+     fields: {}
+  22. ✅ console.log
+     severity: info
+     message: [
+  "🔍 SKIPPING episodic memory search temporarily"
+]
+  23. ✅ log
+     level: INFO
+     message: 🔍 SKIPPING episodic memory search - moving to procedural memory
+     fields: {}
+  24. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT B: Skipped episodic memory (disabled)"
+]
+  25. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT B: Skipped episodic memory
+     fields: {}
+  26. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT C: Before procedural memory retrieval"
+]
+  27. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT C: Before procedural memory retrieval
+     fields: {}
+  28. ✅ console.log
+     severity: info
+     message: [
+  "🔍 SKIPPING procedural memory - using default prompt"
+]
+  29. ✅ log
+     level: INFO
+     message: 🔍 SKIPPING procedural memory - using default prompt
+     fields: {}
+  30. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT D: Skipped procedural memory (disabled)"
+]
+  31. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT E: Skipped getProcedure call (disabled)"
+]
+  32. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT F: After procedural memory section"
+]
+  33. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT F: After procedural memory section
+     fields: {}
+  34. ✅ console.log
+     severity: info
+     message: [
+  "🧠 Retrieving conversation history from SmartMemory"
+]
+  35. ✅ log
+     level: INFO
+     message: 🧠 Retrieving conversation history from SmartMemory
+     fields: {"sessionId":"conv_1764030259223_uhpqbr","memorySessionId":"01kaw6b80q05c8mraq3w5vd80z"}
+  36. ✅ smartmemory.getWorkingMemorySession (0ms)
+     smartMemory: ASSISTANT_MEMORY
+     sessionId: 01kaw6b80q05c8mraq3w5vd80z
+  37. ✅ agent_working_memory.getMemory (27ms)
+     smartMemory: ASSISTANT_MEMORY
+     sessionId: 01kaw6b80q05c8mraq3w5vd80z
+     timeline: conversation
+     hasKey: false
+     nMostRecent: 20
+     hasTimeRange: false
+     resultCount: 8
+  38. ✅ console.log
+     severity: info
+     message: [
+  "✅ Retrieved 8 messages from SmartMemory"
+]
+  39. ✅ log
+     level: INFO
+     message: ✅ Retrieved 8 messages from SmartMemory
+     fields: {"sessionId":"conv_1764030259223_uhpqbr","memorySessionId":"01kaw6b80q05c8mraq3w5vd80z","messageCount":8}
+  40. ✅ console.log
+     severity: info
+     message: [
+  "📝 Messages built (console.log)",
+  "{\"messageCount\":10}"
+]
+  41. ✅ log
+     level: INFO
+     message: 📝 Messages built
+     fields: {"messageCount":10}
+  42. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT: About to start AI pipeline - line 357 reached!"
+]
+  43. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT: About to start AI pipeline - if you see this, code reached line 357!
+     fields: {}
+  44. ✅ log
+     level: INFO
+     message: 🤖 Starting 4-stage AI pipeline
+     fields: {}
+  45. ✅ log
+     level: INFO
+     message: Stage 1: Analyzing user request
+     fields: {"messageCount":10,"model":"llama-3.3-70b"}
+  46. ✅ log
+     level: INFO
+     message: 🎯 STAGE 1 INPUT:
+     fields: {"userQuestion":"what was my first message?","messageCount":10,"fullConversation":true,"lastThreeMessages":[{"role":"user","content":"how many conversations have we had?"},{"role":"assistant","content":"We've had 4 conversations so far."},{"role":"user","content":"what was my first message?"}]}
+  47. ✅ ai.run (672ms)
+  48. ✅ log
+     level: INFO
+     message: Decision stage completed
+     fields: {"hasResponse":true}
+  49. ✅ log
+     level: INFO
+     message: 🎯 STAGE 1 DECISION (FULL):
+     fields: {"needsTools":false,"toolCalls":[],"reasoning":"User asking about conversation history","userFacingMessage":"Your first message was 'Hello my name is Patrick'.","rawDecisionJson":"{\"needsTools\":false,\"toolCalls\":[],\"reasoning\":\"User asking about conversation history\",\"userFacingMessage\":\"Your first message was 'Hello my name is Patrick'.\"}"}
+  50. ✅ log
+     level: INFO
+     message: Direct response (no tools needed)
+     fields: {"responseLength":50}
+
+[11/24/2025, 7:25:51 PM] 🔗 Trace: 969ac1a5d35ba6ebfc32d9f76dee3a1f (168ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.3276ms, 2 rows read, ENAM, DB: 2408.0KB
+  2. ✅ validateSession (32ms)
+  3. ✅ sql.all (42ms)
+     🗄️  SQL Query: select * from "notifications" where "user_id" = ? order by "created_at" desc limit ? offset ?
+     📊 meta: 0.4369ms, 4 rows read, ENAM, DB: 2408.0KB
+  4. ✅ getNotifications (131ms)
+  5. ✅ validateSession (36ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (170ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01kap308m7dyxr5eftpgtn6epz
+     http.method: POST
+     http.url: https://svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/notifications
+     http.scheme: https
+     http.host: svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: undici
+     http.content_type: application/json
+     http.content_length: 48
+     http.referer: undefined
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: *
+     http.authorization: [REDACTED]
+     http.cf_ray: 9a3d02df5ad439c6
+     http.cf_connecting_ip: 142.180.185.49
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (30ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ?
+     📊 meta: 0.2323ms, 4 rows read, ENAM, DB: 2408.0KB
+  8. ✅ getNotifications (134ms)
+     service: NOTIFICATION_SERVICE
+  9. ✅ sql.all (59ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ? and "read" = ?
+     📊 meta: 0.377ms, 4 rows read, ENAM, DB: 2408.0KB
+
+[11/24/2025, 7:26:08 PM] 🔗 Trace: 0168a55171e9f645a0fd73c3f3a3e1c2 (936ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (50ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.835ms, 2 rows read, ENAM, DB: 2408.0KB
+  2. ✅ validateSession (50ms)
+  3. ✅ getMemory (0ms)
+  4. ✅ sql.all (49ms)
+     🗄️  SQL Query: insert into "usage_tracking" ("id", "workspace_id", "resource_type", "resource_id", "user_id", "meta_info", "tracked_at") values (?, ?, ?, ?, ?, ?, ?)
+     📊 meta: 6.4192ms, 5 rows written, ENAM, DB: 2408.0KB
+  5. ✅ trackUsage (116ms)
+  6. ✅ validateSession (54ms)
+     service: AUTH_SERVICE
+  7. ✅ console.log
+     severity: info
+     message: [
+  "🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥"
+]
+  8. ✅ ai.run (197ms)
+  9. ✅ putMemory (874ms)
+  10. ✅ sql.all (31ms)
+     🗄️  SQL Query: select * from "usage_summaries" where "workspace_id" = ? and "date" = ?
+     📊 meta: 0.2953ms, 1 rows read, ENAM, DB: 2408.0KB
+  11. ✅ log
+     level: INFO
+     message: 🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥
+     fields: {}
+  12. ✅ vector_index.upsert (677ms)
+     count: 1
+     index: MEMORY_SEARCH
+  13. ✅ sql.all (36ms)
+     🗄️  SQL Query: update "usage_summaries" set "assistant_messages" = ?, "updated_at" = ? where "workspace_id" = ? and "date" = ?
+     📊 meta: 0.1979ms, 1 rows read, 1 rows written, ENAM, DB: 2408.0KB
+  14. ✅ log
+     level: INFO
+     message: 🚨 CHAT METHOD CALLED (non-streaming)
+     fields: {"workspaceId":"wks_1764017189103_x0x84d","userId":"usr_1763944524573_96ho2hd","message":"what is my name?","hasSessionId":true}
+  15. ✅ log
+     level: INFO
+     message: 🚀 CHAT REQUEST STARTED
+     fields: {"workspaceId":"wks_1764017189103_x0x84d","userId":"usr_1763944524573_96ho2hd","message":"what is my name?"}
+  16. ✅ sql.all (75ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.8457ms, 1 rows read, ENAM, DB: 2408.0KB
+  17. ✅ sql.all (43ms)
+     🗄️  SQL Query: select * from "conversation_sessions" where "id" = ? and "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.3196ms, 1 rows read, ENAM, DB: 2408.0KB
+  18. ✅ sql.all (65ms)
+     🗄️  SQL Query: insert into "conversation_messages" ("id", "session_id", "role", "content", "created_at") values (?, ?, ?, ?, ?)
+     📊 meta: 2.6014ms, 4 rows written, ENAM, DB: 2408.0KB
+  19. ✅ sql.all (40ms)
+     🗄️  SQL Query: select "name", "description" from "workspaces" where "id" = ?
+     📊 meta: 0.2327ms, 1 rows read, ENAM, DB: 2408.0KB
+  20. ✅ sql.all (31ms)
+     🗄️  SQL Query: select * from "workspace_scores" where "workspace_id" = ? order by "calculated_at" desc limit ?
+     📊 meta: 0.3268ms, 2 rows read, ENAM, DB: 2408.0KB
+  21. ✅ sql.all (37ms)
+     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
+     📊 meta: 0.3076ms, 1 rows read, ENAM, DB: 2408.0KB
+  22. ✅ sql.all (39ms)
+     🗄️  SQL Query: select count("compliance_issues"."id") as "count" from "compliance_issues" inner join "compliance_checks" on "compliance_issues"."check_id" = "compliance_checks"."id" where "compliance_checks"."workspace_id" = ? and "compliance_issues"."status" = ?
+     📊 meta: 0.4479ms, 24 rows read, ENAM, DB: 2408.0KB
+  23. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT A: Before episodic memory search"
+]
+  24. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT A: Before episodic memory search
+     fields: {}
+  25. ✅ console.log
+     severity: info
+     message: [
+  "🔍 SKIPPING episodic memory search temporarily"
+]
+  26. ✅ log
+     level: INFO
+     message: 🔍 SKIPPING episodic memory search - moving to procedural memory
+     fields: {}
+  27. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT B: Skipped episodic memory (disabled)"
+]
+  28. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT B: Skipped episodic memory
+     fields: {}
+  29. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT C: Before procedural memory retrieval"
+]
+  30. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT C: Before procedural memory retrieval
+     fields: {}
+  31. ✅ console.log
+     severity: info
+     message: [
+  "🔍 SKIPPING procedural memory - using default prompt"
+]
+  32. ✅ log
+     level: INFO
+     message: 🔍 SKIPPING procedural memory - using default prompt
+     fields: {}
+  33. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT D: Skipped procedural memory (disabled)"
+]
+  34. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT E: Skipped getProcedure call (disabled)"
+]
+  35. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT F: After procedural memory section"
+]
+  36. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT F: After procedural memory section
+     fields: {}
+  37. ✅ console.log
+     severity: info
+     message: [
+  "🧠 Retrieving conversation history from SmartMemory"
+]
+  38. ✅ log
+     level: INFO
+     message: 🧠 Retrieving conversation history from SmartMemory
+     fields: {"sessionId":"conv_1764030259223_uhpqbr","memorySessionId":"01kaw6b80q05c8mraq3w5vd80z"}
+  39. ✅ smartmemory.getWorkingMemorySession (0ms)
+     smartMemory: ASSISTANT_MEMORY
+     sessionId: 01kaw6b80q05c8mraq3w5vd80z
+  40. ✅ agent_working_memory.getMemory (23ms)
+     smartMemory: ASSISTANT_MEMORY
+     sessionId: 01kaw6b80q05c8mraq3w5vd80z
+     timeline: conversation
+     hasKey: false
+     nMostRecent: 20
+     hasTimeRange: false
+     resultCount: 10
+  41. ✅ console.log
+     severity: info
+     message: [
+  "✅ Retrieved 10 messages from SmartMemory"
+]
+  42. ✅ log
+     level: INFO
+     message: ✅ Retrieved 10 messages from SmartMemory
+     fields: {"sessionId":"conv_1764030259223_uhpqbr","memorySessionId":"01kaw6b80q05c8mraq3w5vd80z","messageCount":10}
+  43. ✅ console.log
+     severity: info
+     message: [
+  "📝 Messages built (console.log)",
+  "{\"messageCount\":12}"
+]
+  44. ✅ log
+     level: INFO
+     message: 📝 Messages built
+     fields: {"messageCount":12}
+  45. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT: About to start AI pipeline - line 357 reached!"
+]
+  46. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT: About to start AI pipeline - if you see this, code reached line 357!
+     fields: {}
+  47. ✅ log
+     level: INFO
+     message: 🤖 Starting 4-stage AI pipeline
+     fields: {}
+  48. ✅ log
+     level: INFO
+     message: Stage 1: Analyzing user request
+     fields: {"messageCount":12,"model":"llama-3.3-70b"}
+  49. ✅ log
+     level: INFO
+     message: 🎯 STAGE 1 INPUT:
+     fields: {"userQuestion":"what is my name?","messageCount":12,"fullConversation":true,"lastThreeMessages":[{"role":"user","content":"what was my first message?"},{"role":"assistant","content":"Your first message was 'Hello my name is Patrick'."},{"role":"user","content":"what is my name?"}]}
+  50. ✅ ai.run (365ms)
+  51. ✅ log
+     level: INFO
+     message: Decision stage completed
+     fields: {"hasResponse":true}
+  52. ✅ log
+     level: INFO
+     message: 🎯 STAGE 1 DECISION (FULL):
+     fields: {"needsTools":false,"toolCalls":[],"reasoning":"User's name is already known from previous conversation","userFacingMessage":"Your name is Patrick.","rawDecisionJson":"{\"needsTools\":false,\"toolCalls\":[],\"reasoning\":\"User's name is already known from previous conversation\",\"userFacingMessage\":\"Your name is Patrick.\"}"}
+  53. ✅ log
+     level: INFO
+     message: Direct response (no tools needed)
+     fields: {"responseLength":21}
+  54. ✅ sql.all (41ms)
+     🗄️  SQL Query: insert into "conversation_messages" ("id", "session_id", "role", "content", "created_at") values (?, ?, ?, ?, ?)
+     📊 meta: 0.2659ms, 4 rows written, ENAM, DB: 2408.0KB
+  55. ✅ trackUsage (122ms)
+     service: USAGE_SERVICE
+  56. ✅ log
+     level: INFO
+     message: ✅ Assistant message usage tracked
+     fields: {"workspaceId":"wks_1764017189103_x0x84d","messageId":"msg_1764030368963_5r083q"}
+  57. ✅ smartmemory.getWorkingMemorySession (0ms)
+     smartMemory: ASSISTANT_MEMORY
+     sessionId: 01kaw6b80q05c8mraq3w5vd80z
+
+[11/24/2025, 7:26:10 PM] 🔗 Trace: 0168a55171e9f645a0fd73c3f3a3e1c2 (3408ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (2776ms)
+  2. ✅ putMemory (3408ms)
+  3. ✅ vector_index.upsert (632ms)
+     count: 1
+     index: MEMORY_SEARCH
+
+[11/24/2025, 7:26:18 PM] 🔗 Trace: e289c7aa959af7bd8569f33e4e1d3ffa (129ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.32ms, 2 rows read, ENAM, DB: 2408.0KB
+  2. ✅ validateSession (35ms)
+  3. ✅ sql.all (32ms)
+     🗄️  SQL Query: select * from "notifications" where "user_id" = ? order by "created_at" desc limit ? offset ?
+     📊 meta: 0.482ms, 4 rows read, ENAM, DB: 2408.0KB
+  4. ✅ getNotifications (90ms)
+  5. ✅ validateSession (38ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (133ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01kap308m7dyxr5eftpgtn6epz
+     http.method: POST
+     http.url: https://svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/notifications
+     http.scheme: https
+     http.host: svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: undici
+     http.content_type: application/json
+     http.content_length: 48
+     http.referer: undefined
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: *
+     http.authorization: [REDACTED]
+     http.cf_ray: 9a3d0387ec9aac5a
+     http.cf_connecting_ip: 142.180.185.49
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (27ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ?
+     📊 meta: 0.242ms, 4 rows read, ENAM, DB: 2408.0KB
+  8. ✅ getNotifications (95ms)
+     service: NOTIFICATION_SERVICE
+  9. ✅ sql.all (31ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ? and "read" = ?
+     📊 meta: 0.2104ms, 4 rows read, ENAM, DB: 2408.0KB
+
+[11/24/2025, 7:26:42 PM] 🔗 Trace: 8d13447c10f71bcca9c93b198bcbe4c4
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: assistant-memory:memory-actor
+  1. ✅ getMemory (0ms)
+  2. ✅ sql.all (36ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2367ms, 2 rows read, ENAM, DB: 2408.0KB
+  3. ✅ validateSession (36ms)
+
+[11/24/2025, 7:26:43 PM] 🔗 Trace: 8d13447c10f71bcca9c93b198bcbe4c4 (1773ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (293ms)
+  2. ✅ putMemory (1069ms)
+  3. ✅ ai.run (110ms)
+  4. ✅ putMemory (689ms)
+  5. ✅ vector_index.upsert (776ms)
+     count: 1
+     index: MEMORY_SEARCH
+  6. ✅ vector_index.upsert (579ms)
+     count: 1
+     index: MEMORY_SEARCH
+
+[11/24/2025, 7:26:48 PM] 🔗 Trace: 5b5006564b9474db6c886295fb46ebe9 (132ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: api-gateway
+  1. ✅ validateSession (33ms)
+     service: AUTH_SERVICE
+  2. ✅ fetch (135ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01kap308m7dyxr5eftpgtn6epz
+     http.method: POST
+     http.url: https://svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/notifications
+     http.scheme: https
+     http.host: svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: undici
+     http.content_type: application/json
+     http.content_length: 48
+     http.referer: undefined
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: *
+     http.authorization: [REDACTED]
+     http.cf_ray: 9a3d04431c089113
+     http.cf_connecting_ip: 142.180.185.49
+     http.cf_country: CA
+     http.status: ✅ 200
+  3. ✅ sql.all (29ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2631ms, 2 rows read, ENAM, DB: 2408.0KB
+  4. ✅ validateSession (29ms)
+  5. ✅ sql.all (35ms)
+     🗄️  SQL Query: select * from "notifications" where "user_id" = ? order by "created_at" desc limit ? offset ?
+     📊 meta: 0.4758ms, 4 rows read, ENAM, DB: 2408.0KB
+  6. ✅ getNotifications (97ms)
+  7. ✅ getNotifications (102ms)
+     service: NOTIFICATION_SERVICE
+  8. ✅ sql.all (34ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ?
+     📊 meta: 0.165ms, 4 rows read, ENAM, DB: 2408.0KB
+  9. ✅ sql.all (28ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ? and "read" = ?
+     📊 meta: 0.3139ms, 4 rows read, ENAM, DB: 2408.0KB
+
+[11/24/2025, 7:27:01 PM] 🔗 Trace: 53a9acb52e48c8c63c5d44f64c5fa5d1 (459ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: assistant-memory:memory-actor
+  1. ✅ getMemory (0ms)
+  2. ✅ sql.all (69ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.3275ms, 2 rows read, ENAM, DB: 2408.0KB
+  3. ✅ validateSession (69ms)
+  4. ✅ console.log
+     severity: info
+     message: [
+  "🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥"
+]
+  5. ✅ validateSession (75ms)
+     service: AUTH_SERVICE
+  6. ✅ log
+     level: INFO
+     message: 🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥
+     fields: {}
+  7. ✅ log
+     level: INFO
+     message: 🚨 CHAT METHOD CALLED (non-streaming)
+     fields: {"workspaceId":"wks_1764017189103_x0x84d","userId":"usr_1763944524573_96ho2hd","message":"yes do that","hasSessionId":true}
+  8. ✅ log
+     level: INFO
+     message: 🚀 CHAT REQUEST STARTED
+     fields: {"workspaceId":"wks_1764017189103_x0x84d","userId":"usr_1763944524573_96ho2hd","message":"yes do that"}
+  9. ✅ sql.all (37ms)
+     🗄️  SQL Query: select "role" from "workspace_members" where "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.2732ms, 1 rows read, ENAM, DB: 2408.0KB
+  10. ✅ sql.all (33ms)
+     🗄️  SQL Query: select * from "conversation_sessions" where "id" = ? and "workspace_id" = ? and "user_id" = ?
+     📊 meta: 0.4357ms, 1 rows read, ENAM, DB: 2408.0KB
+  11. ✅ sql.all (63ms)
+     🗄️  SQL Query: insert into "conversation_messages" ("id", "session_id", "role", "content", "created_at") values (?, ?, ?, ?, ?)
+     📊 meta: 0.3344ms, 4 rows written, ENAM, DB: 2408.0KB
+  12. ✅ sql.all (32ms)
+     🗄️  SQL Query: select "name", "description" from "workspaces" where "id" = ?
+     📊 meta: 0.2829ms, 1 rows read, ENAM, DB: 2408.0KB
+  13. ✅ sql.all (34ms)
+     🗄️  SQL Query: select * from "workspace_scores" where "workspace_id" = ? order by "calculated_at" desc limit ?
+     📊 meta: 0.3856ms, 2 rows read, ENAM, DB: 2408.0KB
+  14. ✅ sql.all (30ms)
+     🗄️  SQL Query: select count("id") as "count" from "documents" where "workspace_id" = ?
+     📊 meta: 0.2073ms, 1 rows read, ENAM, DB: 2408.0KB
+  15. ✅ sql.all (29ms)
+     🗄️  SQL Query: select count("compliance_issues"."id") as "count" from "compliance_issues" inner join "compliance_checks" on "compliance_issues"."check_id" = "compliance_checks"."id" where "compliance_checks"."workspace_id" = ? and "compliance_issues"."status" = ?
+     📊 meta: 0.467ms, 24 rows read, ENAM, DB: 2408.0KB
+  16. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT A: Before episodic memory search"
+]
+  17. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT A: Before episodic memory search
+     fields: {}
+  18. ✅ console.log
+     severity: info
+     message: [
+  "🔍 SKIPPING episodic memory search temporarily"
+]
+  19. ✅ log
+     level: INFO
+     message: 🔍 SKIPPING episodic memory search - moving to procedural memory
+     fields: {}
+  20. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT B: Skipped episodic memory (disabled)"
+]
+  21. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT B: Skipped episodic memory
+     fields: {}
+  22. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT C: Before procedural memory retrieval"
+]
+  23. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT C: Before procedural memory retrieval
+     fields: {}
+  24. ✅ console.log
+     severity: info
+     message: [
+  "🔍 SKIPPING procedural memory - using default prompt"
+]
+  25. ✅ log
+     level: INFO
+     message: 🔍 SKIPPING procedural memory - using default prompt
+     fields: {}
+  26. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT D: Skipped procedural memory (disabled)"
+]
+  27. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT E: Skipped getProcedure call (disabled)"
+]
+  28. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT F: After procedural memory section"
+]
+  29. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT F: After procedural memory section
+     fields: {}
+  30. ✅ console.log
+     severity: info
+     message: [
+  "🧠 Retrieving conversation history from SmartMemory"
+]
+  31. ✅ log
+     level: INFO
+     message: 🧠 Retrieving conversation history from SmartMemory
+     fields: {"sessionId":"conv_1764030259223_uhpqbr","memorySessionId":"01kaw6b80q05c8mraq3w5vd80z"}
+  32. ✅ smartmemory.getWorkingMemorySession (0ms)
+     smartMemory: ASSISTANT_MEMORY
+     sessionId: 01kaw6b80q05c8mraq3w5vd80z
+  33. ✅ agent_working_memory.getMemory (28ms)
+     smartMemory: ASSISTANT_MEMORY
+     sessionId: 01kaw6b80q05c8mraq3w5vd80z
+     timeline: conversation
+     hasKey: false
+     nMostRecent: 20
+     hasTimeRange: false
+     resultCount: 14
+  34. ✅ console.log
+     severity: info
+     message: [
+  "✅ Retrieved 14 messages from SmartMemory"
+]
+  35. ✅ log
+     level: INFO
+     message: ✅ Retrieved 14 messages from SmartMemory
+     fields: {"sessionId":"conv_1764030259223_uhpqbr","memorySessionId":"01kaw6b80q05c8mraq3w5vd80z","messageCount":14}
+  36. ✅ console.log
+     severity: info
+     message: [
+  "📝 Messages built (console.log)",
+  "{\"messageCount\":16}"
+]
+  37. ✅ log
+     level: INFO
+     message: 📝 Messages built
+     fields: {"messageCount":16}
+  38. ✅ console.log
+     severity: info
+     message: [
+  "🔍 CHECKPOINT: About to start AI pipeline - line 357 reached!"
+]
+  39. ✅ log
+     level: INFO
+     message: 🔍 CHECKPOINT: About to start AI pipeline - if you see this, code reached line 357!
+     fields: {}
+  40. ✅ log
+     level: INFO
+     message: 🤖 Starting 4-stage AI pipeline
+     fields: {}
+  41. ✅ log
+     level: INFO
+     message: Stage 1: Analyzing user request
+     fields: {"messageCount":16,"model":"llama-3.3-70b"}
+  42. ✅ log
+     level: INFO
+     message: 🎯 STAGE 1 INPUT:
+     fields: {"userQuestion":"yes do that","messageCount":16,"fullConversation":true,"lastThreeMessages":[{"role":"user","content":"has any compliance check been done yet"},{"role":"assistant","content":"Yes, a compliance check has been done. According to the tool results, all 1 of your documents have b"},{"role":"user","content":"yes do that"}]}
+  43. ✅ ai.run (408ms)
+  44. ✅ log
+     level: INFO
+     message: Decision stage completed
+     fields: {"hasResponse":true}
+  45. ✅ log
+     level: INFO
+     message: 🎯 STAGE 1 DECISION (FULL):
+     fields: {"needsTools":true,"toolCalls":[{"name":"get_compliance_issues","arguments":{}}],"reasoning":"User wants to know more about compliance issues","userFacingMessage":"Retrieving compliance issues for you...","rawDecisionJson":"{\"needsTools\":true,\"toolCalls\":[{\"name\":\"get_compliance_issues\",\"arguments\":{}}],\"reasoning\":\"User wants to know more about compliance issues\",\"userFacingMessage\":\"Retrieving compliance issues for you...\"}"}
+  46. ✅ log
+     level: INFO
+     message: Stage 2: Executing tools
+     fields: {"toolCount":1,"tools":["get_compliance_issues"]}
+  47. ✅ sql.all (46ms)
+     🗄️  SQL Query: select "compliance_issues"."id", "compliance_issues"."severity", "compliance_issues"."regulation_citation", "compliance_issues"."excerpt", "compliance_issues"."remediation_steps", "compliance_issues"."framework", "compliance_issues"."status", "documents"."filename", "documents"."id" as "document_id" from "compliance_issues" inner join "compliance_checks" on "compliance_issues"."check_id" = "compliance_checks"."id" inner join "documents" on "compliance_issues"."document_id" = "documents"."id" where "compliance_checks"."workspace_id" = ? and "compliance_issues"."status" = ? order by "compliance_issues"."severity" asc limit ?
+     📊 meta: 0.9523ms, 30 rows read, ENAM, DB: 2408.0KB
+  48. ✅ log
+     level: INFO
+     message: Tools executed
+     fields: {"toolCount":1,"rawDataCount":1}
+  49. ✅ log
+     level: INFO
+     message: Stage 3: Generating final response with tool results
+     fields: {}
+
+[11/24/2025, 7:27:03 PM] 🔗 Trace: 53a9acb52e48c8c63c5d44f64c5fa5d1 (745ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (114ms)
+  2. ✅ putMemory (745ms)
+  3. ✅ vector_index.upsert (631ms)
+     count: 1
+     index: MEMORY_SEARCH
+
+[11/24/2025, 7:27:18 PM] 🔗 Trace: 0b12ce1953dbcb256d5c2b63e8af5db6 (323ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (44ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2994ms, 2 rows read, ENAM, DB: 2408.0KB
+  2. ✅ validateSession (44ms)
+  3. ✅ getMemory (0ms)
+
+[11/24/2025, 7:27:20 PM] 🔗 Trace: 0b12ce1953dbcb256d5c2b63e8af5db6 (1585ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (1006ms)
+  2. ✅ putMemory (1585ms)
+  3. ✅ vector_index.upsert (579ms)
+     count: 1
+     index: MEMORY_SEARCH
+
+[11/24/2025, 7:27:40 PM] 🔗 Trace: 289b24bfcc41da788a9bce1b7564c0cd (41ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (41ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2404ms, 2 rows read, ENAM, DB: 2408.0KB
+  2. ✅ validateSession (41ms)
+
+[11/24/2025, 7:27:41 PM] 🔗 Trace: 289b24bfcc41da788a9bce1b7564c0cd (733ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (102ms)
+  2. ✅ putMemory (733ms)
+  3. ✅ vector_index.upsert (631ms)
+     count: 1
+     index: MEMORY_SEARCH
+
+[11/24/2025, 7:27:48 PM] 🔗 Trace: ec794db1f0ef9f0f7f49a9c607e851ce (142ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (38ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.273ms, 2 rows read, ENAM, DB: 2412.0KB
+  2. ✅ validateSession (38ms)
+  3. ✅ sql.all (31ms)
+     🗄️  SQL Query: select * from "notifications" where "user_id" = ? order by "created_at" desc limit ? offset ?
+     📊 meta: 0.3255ms, 4 rows read, ENAM, DB: 2412.0KB
+  4. ✅ getNotifications (100ms)
+  5. ✅ validateSession (43ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (146ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01kap308m7dyxr5eftpgtn6epz
+     http.method: POST
+     http.url: https://svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/notifications
+     http.scheme: https
+     http.host: svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: undici
+     http.content_type: application/json
+     http.content_length: 48
+     http.referer: undefined
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: *
+     http.authorization: [REDACTED]
+     http.cf_ray: 9a3d05ba4c64ab8d
+     http.cf_connecting_ip: 142.180.185.49
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (33ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ?
+     📊 meta: 0.2769ms, 4 rows read, ENAM, DB: 2412.0KB
+  8. ✅ getNotifications (103ms)
+     service: NOTIFICATION_SERVICE
+  9. ✅ sql.all (36ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ? and "read" = ?
+     📊 meta: 0.3167ms, 4 rows read, ENAM, DB: 2412.0KB
+
+[11/24/2025, 7:28:15 PM] 🔗 Trace: 230f4a61cf531fb2c7421f9f87e0cbe9 (914ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (45ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.3752ms, 2 rows read, ENAM, DB: 2412.0KB
+  2. ✅ validateSession (45ms)
+  3. ✅ getMemory (0ms)
+  4. ✅ sql.all (40ms)
+     🗄️  SQL Query: insert into "usage_tracking" ("id", "workspace_id", "resource_type", "resource_id", "user_id", "meta_info", "tracked_at") values (?, ?, ?, ?, ?, ?, ?)
+     📊 meta: 0.6247ms, 5 rows written, ENAM, DB: 2412.0KB
+  5. ✅ trackUsage (110ms)
+  6. ✅ sql.all (31ms)
+     🗄️  SQL Query: select * from "usage_summaries" where "workspace_id" = ? and "date" = ?
+     📊 meta: 0.2227ms, 1 rows read, ENAM, DB: 2412.0KB
+  7. ✅ sql.all (39ms)
+     🗄️  SQL Query: update "usage_summaries" set "assistant_messages" = ?, "updated_at" = ? where "workspace_id" = ? and "date" = ?
+     📊 meta: 0.243ms, 1 rows read, 1 rows written, ENAM, DB: 2412.0KB
+
+[11/24/2025, 7:28:16 PM] 🔗 Trace: 230f4a61cf531fb2c7421f9f87e0cbe9 (743ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: assistant-memory:memory-actor
+  1. ✅ ai.run (101ms)
+  2. ✅ putMemory (743ms)
+  3. ✅ vector_index.upsert (642ms)
+     count: 1
+     index: MEMORY_SEARCH
+
+[11/24/2025, 7:28:30 PM] 🔗 Trace: f71530a126294651c51773c2800709de (35ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (35ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2315ms, 2 rows read, ENAM, DB: 2412.0KB
+  2. ✅ validateSession (35ms)
+
+[11/24/2025, 7:28:32 PM] 🔗 Trace: f71530a126294651c51773c2800709de (107ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: usage-service
+  1. ✅ sql.all (42ms)
+     🗄️  SQL Query: insert into "usage_tracking" ("id", "workspace_id", "resource_type", "resource_id", "user_id", "meta_info", "tracked_at") values (?, ?, ?, ?, ?, ?, ?)
+     📊 meta: 0.6571ms, 5 rows written, ENAM, DB: 2412.0KB
+  2. ✅ trackUsage (107ms)
+  3. ✅ ai.run (289ms)
+  4. ✅ putMemory (939ms)
+  5. ✅ sql.all (31ms)
+     🗄️  SQL Query: select * from "usage_summaries" where "workspace_id" = ? and "date" = ?
+     📊 meta: 0.2503ms, 1 rows read, ENAM, DB: 2412.0KB
+  6. ✅ vector_index.upsert (650ms)
+     count: 1
+     index: MEMORY_SEARCH
+  7. ✅ sql.all (34ms)
+     🗄️  SQL Query: update "usage_summaries" set "assistant_messages" = ?, "updated_at" = ? where "workspace_id" = ? and "date" = ?
+     📊 meta: 0.2569ms, 1 rows read, 1 rows written, ENAM, DB: 2412.0KB
+
+[11/24/2025, 7:28:50 PM] 🔗 Trace: abdace24b0a4fe4a429c1a21b45d1288 (183ms total)
+  Org: org_01K8NJSJ98QQESZ0PPXFF2YQ4N, App: auditguard-v2, v01kap308m7dyxr5eftpgtn6epz, Script: auth-service
+  1. ✅ sql.all (75ms)
+     🗄️  SQL Query: select "users"."id" as "userId", "users"."email", "sessions"."expires_at" from "sessions" inner join "users" on "users"."id" = "sessions"."user_id" where "sessions"."id" = ? and "sessions"."expires_at" > ?
+     📊 meta: 0.2166ms, 2 rows read, ENAM, DB: 2412.0KB
+  2. ✅ validateSession (75ms)
+  3. ✅ sql.all (30ms)
+     🗄️  SQL Query: select * from "notifications" where "user_id" = ? order by "created_at" desc limit ? offset ?
+     📊 meta: 0.3611ms, 4 rows read, ENAM, DB: 2412.0KB
+  4. ✅ getNotifications (104ms)
+  5. ✅ validateSession (78ms)
+     service: AUTH_SERVICE
+  6. ✅ fetch (184ms)
+     organization.id: org_01K8NJSJ98QQESZ0PPXFF2YQ4N
+     service.namespace: auditguard-v2
+     service.name: api-gateway
+     service.version: 01kap308m7dyxr5eftpgtn6epz
+     http.method: POST
+     http.url: https://svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/notifications
+     http.scheme: https
+     http.host: svc-01kap30j21msacq6g59j0jjezr.01k8njsj98qqesz0ppxff2yq4n.lmapp.run
+     http.user_agent: undici
+     http.content_type: application/json
+     http.content_length: 48
+     http.referer: undefined
+     http.accept: */*
+     http.accept_encoding: gzip, br
+     http.accept_language: *
+     http.authorization: [REDACTED]
+     http.cf_ray: 9a3d073e6931aad4
+     http.cf_connecting_ip: 142.180.185.49
+     http.cf_country: CA
+     http.status: ✅ 200
+  7. ✅ sql.all (33ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ?
+     📊 meta: 0.2867ms, 4 rows read, ENAM, DB: 2412.0KB
+  8. ✅ getNotifications (106ms)
+     service: NOTIFICATION_SERVICE
+  9. ✅ sql.all (41ms)
+     🗄️  SQL Query: select count("id") as "count" from "notifications" where "user_id" = ? and "read" = ?
+     📊 meta: 0.2221ms, 4 rows read, ENAM, DB: 2412.0KB
+
+✅ S

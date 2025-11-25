@@ -328,7 +328,7 @@ KNOWLEDGE BASE ACCESS:
       const workingMemory = await this.env.ASSISTANT_MEMORY.getWorkingMemorySession(memorySessionId);
       const memoryEntries = await workingMemory.getMemory({
         timeline: 'conversation',
-        nMostRecent: 20, // Last 10 turns (20 messages: 10 user + 10 assistant)
+        nMostRecent: 100, // Last 50 turns (100 messages: 50 user + 50 assistant) - TEST FULL MODEL CAPACITY
       });
 
       if (memoryEntries && memoryEntries.length > 0) {
@@ -353,16 +353,124 @@ KNOWLEDGE BASE ACCESS:
       // Continue with empty history - single-turn conversation
     }
 
+    // 🔥 CONVERSATION SUMMARIZATION: Prevent context overflow
+    // With llama-3.1-70b-instruct (128K context), summarize when conversation exceeds 20 messages
+    let processedHistory = conversationHistory;
+    
+    if (conversationHistory.length > 20) {
+      console.log(`🧠 Conversation has ${conversationHistory.length} messages - applying summarization`);
+      this.env.logger.info('🧠 Applying conversation summarization', {
+        originalMessageCount: conversationHistory.length,
+        threshold: 20,
+        model: 'llama-3.1-70b-instruct (128K context)'
+      });
+      
+      // Keep recent 12 messages (last 6 turns) for immediate context
+      const recentMessages = conversationHistory.slice(-12);
+      
+      // Summarize older messages (first N-12 messages) into key facts
+      const olderMessages = conversationHistory.slice(0, -12);
+      
+      // Extract key information from older messages
+      const keyFacts: string[] = [];
+      let userName: string | null = null;
+      let firstUserMessage: string | null = null;
+      
+      // Scan older messages for important information
+      for (let i = 0; i < olderMessages.length; i++) {
+        const msg = olderMessages[i];
+        
+        // Capture first user message
+        if (msg.role === 'user' && !firstUserMessage) {
+          firstUserMessage = msg.content;
+        }
+        
+        // Extract user's name from introduction patterns
+        if (msg.role === 'user' && !userName) {
+          const nameMatches = [
+            msg.content.match(/my name is (\w+)/i),
+            msg.content.match(/I'm (\w+)/i),
+            msg.content.match(/I am (\w+)/i),
+            msg.content.match(/call me (\w+)/i)
+          ];
+          
+          for (const match of nameMatches) {
+            if (match && match[1]) {
+              userName = match[1];
+              break;
+            }
+          }
+        }
+        
+        // Capture compliance-related info from assistant responses
+        if (msg.role === 'assistant') {
+          if (msg.content.includes('compliance score')) {
+            const scoreMatch = msg.content.match(/compliance score is (\d+)/i);
+            if (scoreMatch) {
+              keyFacts.push(`Compliance score: ${scoreMatch[1]}`);
+            }
+          }
+          
+          if (msg.content.includes('documents')) {
+            const docMatch = msg.content.match(/(\d+) documents?/i);
+            if (docMatch && !keyFacts.some(f => f.includes('documents'))) {
+              keyFacts.push(`Document count: ${docMatch[1]}`);
+            }
+          }
+        }
+      }
+      
+      // Build summary message
+      const summaryParts: string[] = ['CONVERSATION SUMMARY (earlier messages):'];
+      
+      if (firstUserMessage) {
+        summaryParts.push(`- User's first message: "${firstUserMessage}"`);
+      }
+      
+      if (userName) {
+        summaryParts.push(`- User's name: ${userName}`);
+      }
+      
+      if (keyFacts.length > 0) {
+        summaryParts.push(...keyFacts.map(fact => `- ${fact}`));
+      }
+      
+      const summaryMessage: ChatMessage = {
+        role: 'system',
+        content: summaryParts.join('\n')
+      };
+      
+      // Replace old messages with summary + keep recent messages
+      processedHistory = [summaryMessage, ...recentMessages];
+      
+      console.log(`✅ Summarized ${olderMessages.length} old messages into summary. Keeping ${recentMessages.length} recent messages.`);
+      this.env.logger.info('✅ Conversation summarized', {
+        oldMessageCount: olderMessages.length,
+        recentMessageCount: recentMessages.length,
+        summaryLength: summaryMessage.content.length,
+        extractedName: userName,
+        extractedFacts: keyFacts.length
+      });
+    }
+
     // Build messages for AI (SmartMemory already excludes the current message since we haven't stored it yet)
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
-      ...conversationHistory,
+      ...processedHistory,
       { role: 'user', content: request.message }, // Current message - will be stored in SmartMemory after AI response
     ];
 
     // Use multiple logging methods to ensure visibility
-    console.log('📝 Messages built (console.log)', { messageCount: messages.length });
-    this.env.logger.info('📝 Messages built', { messageCount: messages.length });
+    console.log('📝 Messages built (console.log)', { 
+      messageCount: messages.length,
+      originalHistoryCount: conversationHistory.length,
+      summarized: conversationHistory.length > 20
+    });
+    this.env.logger.info('📝 Messages built', { 
+      messageCount: messages.length,
+      originalHistoryCount: conversationHistory.length,
+      processedHistoryCount: processedHistory.length
+    });
 
     console.log('🔍 CHECKPOINT: About to start AI pipeline - line 357 reached!');
     this.env.logger.info('🔍 CHECKPOINT: About to start AI pipeline - if you see this, code reached line 357!');
@@ -403,7 +511,8 @@ Context: ${workspaceContext}`
       // Stage 1: Decision phase - analyze user request and decide on tool usage
       this.env.logger.info('Stage 1: Analyzing user request', {
         messageCount: messages.length,
-        model: 'llama-3.3-70b'
+        model: 'llama-3.1-70b-instruct',
+        contextWindow: '128K tokens'
       });
       
       const decisionPrompt = {
@@ -515,8 +624,8 @@ User: "thank you"
       
       let decisionResponse: any;
       try {
-        decisionResponse = await this.env.AI.run('llama-3.3-70b', {
-          model: 'llama-3.3-70b',
+        decisionResponse = await this.env.AI.run('llama-3.1-70b-instruct', {
+          model: 'llama-3.1-70b-instruct',
           messages: [
             decisionPrompt,
             ...messages // FIXED: Pass full conversation history from SmartMemory, not just last 3 messages
@@ -536,7 +645,51 @@ User: "thank you"
         throw decisionError;
       }
       
-      const decision = JSON.parse(decisionResponse.choices[0].message.content);
+      // 🔧 ROBUST JSON PARSING: Model sometimes adds text like "Here is the..." before JSON
+      let decisionContent = decisionResponse.choices[0].message.content;
+      let decision: any;
+      let skipToStoreMessage = false;
+      
+      // Log raw AI response BEFORE parsing
+      console.log('🔍 RAW AI DECISION RESPONSE:', decisionContent.substring(0, 500));
+      this.env.logger.info('🔍 RAW AI DECISION RESPONSE', {
+        rawResponse: decisionContent.substring(0, 500),
+        fullLength: decisionContent.length
+      });
+      
+      // Try to extract JSON if there's extra text
+      const jsonMatch = decisionContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        console.log('✅ Extracted JSON from response');
+        decisionContent = jsonMatch[0];
+        
+        try {
+          decision = JSON.parse(decisionContent);
+        } catch (parseError: any) {
+          console.log('❌ JSON parsing failed even after extraction');
+          this.env.logger.error('JSON parsing failed', {
+            error: parseError.message,
+            extractedContent: decisionContent.substring(0, 200)
+          });
+          throw new Error(`Failed to parse AI decision: ${parseError.message}`);
+        }
+      } else {
+        console.log('⚠️ No JSON found in response - model returned plain text!');
+        this.env.logger.warn('⚠️ No JSON found in AI response - using fallback', {
+          rawResponse: decisionContent.substring(0, 200)
+        });
+        
+        // FALLBACK: If model returned plain text answer, treat it as final answer
+        decision = {
+          needsTools: false,
+          toolCalls: [],
+          reasoning: 'Model returned plain text instead of JSON',
+          userFacingMessage: decisionContent.substring(0, 500)
+        };
+        
+        assistantMessage = decisionContent; // Use plain text as final answer
+        skipToStoreMessage = true;
+      }
       
       // 🔍 DEBUG: Log the FULL decision response to see what AI decided
       this.env.logger.info('🎯 STAGE 1 DECISION (FULL):', {
@@ -544,11 +697,14 @@ User: "thank you"
         toolCalls: decision.toolCalls,
         reasoning: decision.reasoning,
         userFacingMessage: decision.userFacingMessage,
+        skipToStoreMessage,
         rawDecisionJson: JSON.stringify(decision).substring(0, 1000) // First 1000 chars
       });
       
-      // Stage 2: Execute tools if needed
-      if (decision.needsTools && decision.toolCalls && decision.toolCalls.length > 0) {
+      // Skip tool execution and final response if we already have plain text answer
+      if (!skipToStoreMessage) {
+        // Stage 2: Execute tools if needed
+        if (decision.needsTools && decision.toolCalls && decision.toolCalls.length > 0) {
         this.env.logger.info('Stage 2: Executing tools', {
           toolCount: decision.toolCalls.length,
           tools: decision.toolCalls.map((tc: any) => tc.name)
@@ -575,8 +731,8 @@ User: "thank you"
         // Stage 3: Generate final response with tool results
         this.env.logger.info('Stage 3: Generating final response with tool results');
         
-        const finalResponse = await this.env.AI.run('llama-3.3-70b', {
-          model: 'llama-3.3-70b',
+        const finalResponse = await this.env.AI.run('llama-3.1-70b-instruct', {
+          model: 'llama-3.1-70b-instruct',
           messages: [
             systemMessage,
             ...messages, // FIXED: Use full conversation history from SmartMemory
@@ -606,8 +762,8 @@ User: "thank you"
           assistantMessage = decision.userFacingMessage;
         } else {
           // Fallback: generate conversational response
-          const simpleResponse = await this.env.AI.run('llama-3.3-70b', {
-            model: 'llama-3.3-70b',
+          const simpleResponse = await this.env.AI.run('llama-3.1-70b-instruct', {
+            model: 'llama-3.1-70b-instruct',
             messages: [systemMessage, ...messages] as any, // FIXED: Use full conversation history
             temperature: 0.7,
             max_tokens: 1000,
@@ -619,6 +775,7 @@ User: "thank you"
           responseLength: assistantMessage.length
         });
       }
+      } // End of if (!skipToStoreMessage)
     } catch (error) {
       this.env.logger.error('AI inference failed', {
         error: error instanceof Error ? error.message : String(error),
@@ -901,8 +1058,8 @@ Respond with this exact JSON structure:
           let decision: any = { needsTools: false, toolCalls: [], reasoning: '', userFacingMessage: '' };
           
           try {
-            const decisionResponse = await self.env.AI.run('llama-3.3-70b', {
-              model: 'llama-3.3-70b',
+            const decisionResponse = await self.env.AI.run('llama-3.1-70b-instruct', {
+              model: 'llama-3.1-70b-instruct',
               messages: [
                 decisionPrompt,
                 ...messages // FIXED: Use full conversation history from SmartMemory
@@ -974,8 +1131,8 @@ Respond with this exact JSON structure:
           // Call AI with streaming
           try {
             // Attempt streaming AI call
-            const response = await self.env.AI.run('llama-3.3-70b', {
-              model: 'llama-3.3-70b',
+            const response = await self.env.AI.run('llama-3.1-70b-instruct', {
+              model: 'llama-3.1-70b-instruct',
               messages: finalMessages as any,
               temperature: 0.7,
               max_tokens: 2000,
@@ -1230,8 +1387,8 @@ Assistant: ${assistantResponse}
 Workspace context: ${workspaceContext}`
       };
 
-      const response = await this.env.AI.run('llama-3.3-70b', {
-        model: 'llama-3.3-70b',
+      const response = await this.env.AI.run('llama-3.1-70b-instruct', {
+        model: 'llama-3.1-70b-instruct',
         messages: [suggestionPrompt] as any,
         response_format: { type: 'json_object' },
         temperature: 0.5,
@@ -1516,8 +1673,8 @@ RULES:
 - If no relevant documents, return empty actions array
 - Be specific and actionable`;
 
-      const result = await this.env.AI.run('llama-3.3-70b', {
-        model: 'llama-3.3-70b',
+      const result = await this.env.AI.run('llama-3.1-70b-instruct', {
+        model: 'llama-3.1-70b-instruct',
         messages: [{ role: 'system', content: prompt }] as any,
         response_format: { type: 'json_object' },
         temperature: 0.4, // Lower = more consistent
