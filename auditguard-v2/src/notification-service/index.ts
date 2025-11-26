@@ -1369,5 +1369,295 @@ export default class extends Service<Env> {
       });
     }
   }
+
+  /**
+   * PHASE 2: Get proactive notifications with filtering
+   */
+  async getProactiveNotifications(params: {
+    workspaceId: string;
+    userId: string;
+    types?: string[];
+    severity?: string[];
+    unreadOnly?: boolean;
+    limit?: number;
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    // Query proactive notifications
+    let query = db
+      .selectFrom('proactive_notifications')
+      .selectAll()
+      .where('workspace_id', '=', params.workspaceId)
+      .orderBy('created_at', 'desc');
+
+    if (params.types && params.types.length > 0) {
+      query = query.where('type', 'in', params.types);
+    }
+
+    if (params.severity && params.severity.length > 0) {
+      query = query.where('severity', 'in', params.severity);
+    }
+
+    if (params.unreadOnly) {
+      query = query.where('acknowledged', '=', 0);
+    }
+
+    if (params.limit) {
+      query = query.limit(params.limit);
+    } else {
+      query = query.limit(50);
+    }
+
+    const notifications = await query.execute();
+
+    // Get unread count
+    const unreadCount = await db
+      .selectFrom('proactive_notifications')
+      .select(db.fn.count('id').as('count'))
+      .where('workspace_id', '=', params.workspaceId)
+      .where('acknowledged', '=', 0)
+      .executeTakeFirst();
+
+    return {
+      notifications: notifications.map(n => {
+        const metadata = n.metadata ? JSON.parse(n.metadata) : {};
+        return {
+          id: n.id,
+          type: n.type,
+          severity: n.severity,
+          title: n.title,
+          message: n.message,
+          detailedAnalysis: metadata.detailed_analysis || '',
+          actionItems: metadata.action_items || [],
+          primaryAction: {
+            label: 'View Details',
+            url: metadata.action_url || '',
+          },
+          affectedDocuments: metadata.affected_documents || [],
+          createdAt: n.created_at,
+          isRead: n.acknowledged === 1,
+        };
+      }),
+      total: notifications.length,
+      unreadCount: Number(unreadCount?.count || 0),
+    };
+  }
+
+  /**
+   * PHASE 2: Analyze compliance gaps for a framework
+   */
+  async analyzeComplianceGaps(params: {
+    workspaceId: string;
+    userId: string;
+    framework: string;
+    comparisonLevel?: 'basic' | 'comprehensive';
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    // Get framework info
+    const framework = await db
+      .selectFrom('compliance_frameworks')
+      .select(['name', 'display_name', 'description'])
+      .where('name', '=', params.framework)
+      .executeTakeFirst();
+
+    if (!framework) {
+      throw new Error('Framework not found');
+    }
+
+    // Get current framework score
+    const score = await db
+      .selectFrom('framework_scores')
+      .select('score')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('framework', '=', params.framework)
+      .orderBy('last_check_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+
+    const currentCoverage = score?.score || 0;
+
+    // Get all issues for this framework
+    const issues = await db
+      .selectFrom('compliance_issues')
+      .selectAll()
+      .where('workspace_id', '=', params.workspaceId)
+      .where('framework', '=', params.framework)
+      .where('status', '!=', 'resolved')
+      .execute();
+
+    // Group issues by category
+    const issuesByCategory: Record<string, any[]> = {};
+    for (const issue of issues) {
+      const cat = issue.category || 'Other';
+      if (!issuesByCategory[cat]) {
+        issuesByCategory[cat] = [];
+      }
+      issuesByCategory[cat].push(issue);
+    }
+
+    // Generate gaps
+    const gaps = Object.entries(issuesByCategory).map(([category, catIssues]) => {
+      const criticalCount = catIssues.filter(i => i.severity === 'critical').length;
+      
+      return {
+        category,
+        requirement: `${category} compliance requirements`,
+        severity: criticalCount > 0 ? 'critical' : catIssues[0]?.severity || 'medium',
+        missingDocuments: catIssues
+          .filter(i => i.recommendation?.includes('document'))
+          .map(i => i.title)
+          .slice(0, 3),
+        recommendations: catIssues
+          .map(i => i.recommendation)
+          .filter(Boolean)
+          .slice(0, 3) as string[],
+      };
+    });
+
+    // Prioritize actions based on impact and effort
+    const prioritizedActions = issues
+      .filter(i => i.severity === 'critical' || i.severity === 'high')
+      .slice(0, 10)
+      .map(i => ({
+        action: `Address: ${i.title}`,
+        impact: i.severity === 'critical' ? 'high' : 'medium' as 'high' | 'medium' | 'low',
+        effort: 'medium' as 'high' | 'medium' | 'low', // Simplified
+      }));
+
+    return {
+      framework: params.framework,
+      currentCoverage,
+      gaps,
+      prioritizedActions,
+    };
+  }
+
+  /**
+   * PHASE 2: Get comprehensive risk assessment
+   */
+  async getRiskAssessment(params: {
+    workspaceId: string;
+    userId: string;
+    includeForecasting?: boolean;
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    // Get workspace score
+    const workspaceScore = await db
+      .selectFrom('workspace_scores')
+      .selectAll()
+      .where('workspace_id', '=', params.workspaceId)
+      .orderBy('calculated_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+
+    // Calculate overall risk based on score
+    let overallRisk: 'critical' | 'high' | 'medium' | 'low' = 'low';
+    const score = workspaceScore?.overall_score || 0;
+    if (score < 40) overallRisk = 'critical';
+    else if (score < 60) overallRisk = 'high';
+    else if (score < 80) overallRisk = 'medium';
+
+    // Get top risks from critical and high severity issues
+    const criticalIssues = await db
+      .selectFrom('compliance_issues')
+      .selectAll()
+      .where('workspace_id', '=', params.workspaceId)
+      .where('severity', 'in', ['critical', 'high'])
+      .where('status', '!=', 'resolved')
+      .orderBy('severity', 'desc')
+      .orderBy('created_at', 'desc')
+      .limit(5)
+      .execute();
+
+    const topRisks = criticalIssues.map(issue => ({
+      category: issue.category || 'Compliance',
+      description: issue.title,
+      likelihood: issue.severity === 'critical' ? 'high' : 'medium',
+      impact: issue.severity === 'critical' ? 'high' : 'medium',
+      mitigation: [
+        issue.recommendation || 'Address this issue according to framework requirements',
+        'Assign to a team member for resolution',
+        'Track progress and verify remediation',
+      ],
+    }));
+
+    const result: any = {
+      overallRisk,
+      riskScore: 100 - score, // Inverse of compliance score
+      topRisks,
+    };
+
+    // Add forecasting if requested
+    if (params.includeForecasting) {
+      // Get trends for last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+      const trends = await db
+        .selectFrom('compliance_trends')
+        .select(['date', 'overall_score'])
+        .where('workspace_id', '=', params.workspaceId)
+        .where('date', '>=', thirtyDaysAgoStr)
+        .orderBy('date', 'asc')
+        .execute();
+
+      // Simple linear forecast
+      let predictedScore = score;
+      if (trends.length >= 2) {
+        const firstScore = trends[0].overall_score;
+        const lastScore = trends[trends.length - 1].overall_score;
+        const changePerDay = (lastScore - firstScore) / trends.length;
+        predictedScore = Math.max(0, Math.min(100, score + (changePerDay * 30)));
+      }
+
+      result.forecast = {
+        predictedScoreIn30Days: Math.round(predictedScore),
+        trend: predictedScore > score ? 'improving' : predictedScore < score ? 'declining' : 'stable',
+        confidence: trends.length >= 7 ? 'high' : 'low',
+      };
+    }
+
+    return result;
+  }
 }
+
 

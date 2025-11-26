@@ -1059,4 +1059,417 @@ export default class extends Service<Env> {
       createdAt: inv.created_at,
     }));
   }
+
+  /**
+   * PHASE 2: Get workspace members with detailed activity stats
+   */
+  async getMembersDetailed(params: {
+    workspaceId: string;
+    userId: string;
+    includeActivity?: boolean;
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    // Get all workspace members with user details
+    const members = await db
+      .selectFrom('workspace_members')
+      .innerJoin('users', 'users.id', 'workspace_members.user_id')
+      .select([
+        'workspace_members.user_id as id',
+        'workspace_members.role',
+        'workspace_members.added_at as joined_at',
+        'workspace_members.added_by',
+        'users.email',
+        'users.created_at as user_created_at',
+      ])
+      .where('workspace_members.workspace_id', '=', params.workspaceId)
+      .orderBy('workspace_members.added_at', 'asc')
+      .execute();
+
+    // Get activity stats if requested
+    let activityStats: Record<string, any> = {};
+    if (params.includeActivity) {
+      for (const member of members) {
+        // Get issue assignments
+        const issueCount = await db
+          .selectFrom('issue_assignments')
+          .innerJoin('compliance_issues', 'compliance_issues.id', 'issue_assignments.issue_id')
+          .select(db.fn.count('issue_assignments.id').as('count'))
+          .where('issue_assignments.assigned_to', '=', member.id)
+          .where('compliance_issues.workspace_id', '=', params.workspaceId)
+          .executeTakeFirst();
+
+        // Get documents uploaded
+        const docCount = await db
+          .selectFrom('documents')
+          .select(db.fn.count('id').as('count'))
+          .where('workspace_id', '=', params.workspaceId)
+          .where('uploaded_by', '=', member.id)
+          .executeTakeFirst();
+
+        activityStats[member.id] = {
+          lastLogin: null, // TODO: Add last_login tracking to users table
+          issuesAssigned: Number(issueCount?.count || 0),
+          documentsUploaded: Number(docCount?.count || 0),
+        };
+      }
+    }
+
+    // Get user who added each member
+    const adderIds = [...new Set(members.map(m => m.added_by))];
+    const adders = await db
+      .selectFrom('users')
+      .select(['id', 'email'])
+      .where('id', 'in', adderIds)
+      .execute();
+    
+    const adderMap = Object.fromEntries(adders.map(a => [a.id, a.email.split('@')[0]]));
+
+    return {
+      members: members.map(m => ({
+        id: m.id,
+        name: m.email.split('@')[0],
+        email: m.email,
+        role: m.role,
+        addedAt: m.joined_at,
+        addedBy: {
+          id: m.added_by,
+          name: adderMap[m.added_by] || 'System',
+        },
+        activity: params.includeActivity ? activityStats[m.id] : undefined,
+      })),
+      total: members.length,
+    };
+  }
+
+  /**
+   * PHASE 2: Get workspace activity feed
+   */
+  async getActivityFeed(params: {
+    workspaceId: string;
+    userId: string;
+    activityTypes?: string[];
+    filterUserId?: string;
+    limit?: number;
+    since?: number;
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    const activities: any[] = [];
+    const limit = params.limit || 50;
+    const since = params.since || 0;
+
+    // Get document upload activities
+    if (!params.activityTypes || params.activityTypes.includes('document_uploaded')) {
+      let docQuery = db
+        .selectFrom('documents')
+        .innerJoin('users', 'users.id', 'documents.uploaded_by')
+        .select([
+          sql`'document_uploaded'`.as('type'),
+          'documents.id as entity_id',
+          'documents.filename as description',
+          'documents.uploaded_by as user_id',
+          'users.email as user_email',
+          'documents.uploaded_at as timestamp',
+        ])
+        .where('documents.workspace_id', '=', params.workspaceId)
+        .where('documents.uploaded_at', '>=', since);
+
+      if (params.filterUserId) {
+        docQuery = docQuery.where('documents.uploaded_by', '=', params.filterUserId);
+      }
+
+      const docs = await docQuery.limit(limit).execute();
+      activities.push(...docs);
+    }
+
+    // Get issue created activities  
+    // Note: Compliance issues don't have a created_by field since they're auto-generated
+    // We'll fetch them but without user attribution
+    if (!params.activityTypes || params.activityTypes.includes('issue_created')) {
+      let issueQuery = db
+        .selectFrom('compliance_issues')
+        .select([
+          sql`'issue_created'`.as('type'),
+          'compliance_issues.id as entity_id',
+          'compliance_issues.title as description',
+          sql`NULL`.as('user_id'),
+          sql`'System'`.as('user_email'),
+          'compliance_issues.created_at as timestamp',
+        ])
+        .where('compliance_issues.workspace_id', '=', params.workspaceId)
+        .where('compliance_issues.created_at', '>=', since);
+
+      const issues = await issueQuery.limit(limit).execute();
+      activities.push(...issues);
+    }
+
+    // Get issue resolved activities
+    if (!params.activityTypes || params.activityTypes.includes('issue_resolved')) {
+      let resolvedQuery = db
+        .selectFrom('issue_status_history')
+        .innerJoin('compliance_issues', 'compliance_issues.id', 'issue_status_history.issue_id')
+        .innerJoin('users', 'users.id', 'issue_status_history.changed_by')
+        .select([
+          sql`'issue_resolved'`.as('type'),
+          'compliance_issues.id as entity_id',
+          'compliance_issues.title as description',
+          'issue_status_history.changed_by as user_id',
+          'users.email as user_email',
+          'issue_status_history.changed_at as timestamp',
+        ])
+        .where('compliance_issues.workspace_id', '=', params.workspaceId)
+        .where('issue_status_history.new_status', '=', 'resolved')
+        .where('issue_status_history.changed_at', '>=', since);
+
+      if (params.filterUserId) {
+        resolvedQuery = resolvedQuery.where('issue_status_history.changed_by', '=', params.filterUserId);
+      }
+
+      const resolved = await resolvedQuery.limit(limit).execute();
+      activities.push(...resolved);
+    }
+
+    // Get member added activities
+    if (!params.activityTypes || params.activityTypes.includes('member_added')) {
+      let memberQuery = db
+        .selectFrom('workspace_members')
+        .innerJoin('users as u1', 'u1.id', 'workspace_members.user_id')
+        .innerJoin('users as u2', 'u2.id', 'workspace_members.added_by')
+        .select([
+          sql`'member_added'`.as('type'),
+          'workspace_members.user_id as entity_id',
+          'u1.email as description',
+          'workspace_members.added_by as user_id',
+          'u2.email as user_email',
+          'workspace_members.added_at as timestamp',
+        ])
+        .where('workspace_members.workspace_id', '=', params.workspaceId)
+        .where('workspace_members.added_at', '>=', since);
+
+      if (params.filterUserId) {
+        memberQuery = memberQuery.where('workspace_members.added_by', '=', params.filterUserId);
+      }
+
+      const members = await memberQuery.limit(limit).execute();
+      activities.push(...members);
+    }
+
+    // Sort by timestamp descending and limit
+    activities.sort((a, b) => b.timestamp - a.timestamp);
+    const limitedActivities = activities.slice(0, limit);
+
+    return {
+      activities: limitedActivities.map(a => ({
+        id: `${a.type}_${a.entity_id}`,
+        type: a.type,
+        description: a.description,
+        user: {
+          id: a.user_id,
+          name: a.user_email.split('@')[0],
+        },
+        timestamp: a.timestamp,
+        metadata: {
+          entityId: a.entity_id,
+        },
+      })),
+      total: limitedActivities.length,
+    };
+  }
+
+  /**
+   * PHASE 2: Get workspace usage statistics
+   */
+  async getUsageStats(params: {
+    workspaceId: string;
+    userId: string;
+    includeSubscriptionInfo?: boolean;
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    // Get workspace info
+    const workspace = await db
+      .selectFrom('workspaces')
+      .select(['id', 'organization_id'])
+      .where('id', '=', params.workspaceId)
+      .executeTakeFirst();
+
+    if (!workspace) {
+      throw new Error('Workspace not found');
+    }
+
+    // Get organization subscription plan
+    let billingTier = 'free';
+    let subscriptionStatus = 'active';
+    let subscriptionPeriodEnd: number | null = null;
+    
+    const subscription = await db
+      .selectFrom('subscriptions')
+      .innerJoin('subscription_plans', 'subscription_plans.id', 'subscriptions.plan_id')
+      .select(['subscription_plans.name', 'subscriptions.status', 'subscriptions.current_period_end'])
+      .where('subscriptions.organization_id', '=', workspace.organization_id)
+      .where('subscriptions.status', '!=', 'canceled')
+      .executeTakeFirst();
+
+    if (subscription) {
+      billingTier = subscription.name || 'free';
+      subscriptionStatus = subscription.status || 'active';
+      subscriptionPeriodEnd = subscription.current_period_end || null;
+    }
+
+    // Count documents
+    const docCount = await db
+      .selectFrom('documents')
+      .select(db.fn.count('id').as('count'))
+      .where('workspace_id', '=', params.workspaceId)
+      .executeTakeFirst();
+
+    // Count compliance checks this month
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const checkCount = await db
+      .selectFrom('compliance_checks')
+      .select(db.fn.count('id').as('count'))
+      .where('workspace_id', '=', params.workspaceId)
+      .where('created_at', '>=', monthStart.getTime())
+      .executeTakeFirst();
+
+    // Count assistant messages this month (using query_count from assistant_analytics_daily)
+    const msgCount = await db
+      .selectFrom('assistant_analytics_daily')
+      .select(db.fn.sum('query_count').as('total'))
+      .where('workspace_id', '=', params.workspaceId)
+      .where('date', '>=', formatDate(monthStart.getTime()))
+      .executeTakeFirst();
+
+    // Calculate storage (simplified - sum of document file sizes)
+    const storageResult = await db
+      .selectFrom('documents')
+      .select(db.fn.sum('file_size').as('total'))
+      .where('workspace_id', '=', params.workspaceId)
+      .executeTakeFirst();
+
+    // Define plan limits based on subscription tier
+    const planLimits = {
+      free: {
+        documents: 10,
+        checksPerMonth: 50,
+        messagesPerMonth: 100,
+        storageMB: 100,
+      },
+      starter: {
+        documents: 100,
+        checksPerMonth: 500,
+        messagesPerMonth: 1000,
+        storageMB: 1000,
+      },
+      professional: {
+        documents: 1000,
+        checksPerMonth: 5000,
+        messagesPerMonth: 10000,
+        storageMB: 10000,
+      },
+      enterprise: {
+        documents: -1, // unlimited
+        checksPerMonth: -1,
+        messagesPerMonth: -1,
+        storageMB: -1,
+      },
+    };
+
+    const tier = billingTier as keyof typeof planLimits;
+    const limits = planLimits[tier] || planLimits.free;
+
+    const currentDocs = Number(docCount?.count || 0);
+    const currentChecks = Number(checkCount?.count || 0);
+    const currentMessages = Number(msgCount?.total || 0);
+    const currentStorageMB = Math.round((Number(storageResult?.total || 0)) / (1024 * 1024));
+
+    // Generate recommendations
+    const recommendations: string[] = [];
+    if (limits.documents > 0 && currentDocs / limits.documents > 0.8) {
+      recommendations.push('You are approaching your document limit. Consider upgrading your plan.');
+    }
+    if (limits.checksPerMonth > 0 && currentChecks / limits.checksPerMonth > 0.8) {
+      recommendations.push('You are approaching your compliance checks limit for this month.');
+    }
+    if (limits.storageMB > 0 && currentStorageMB / limits.storageMB > 0.8) {
+      recommendations.push('You are approaching your storage limit. Consider archiving old documents.');
+    }
+
+    const result: any = {
+      usage: {
+        documents: {
+          current: currentDocs,
+          limit: limits.documents,
+        },
+        complianceChecks: {
+          current: currentChecks,
+          limit: limits.checksPerMonth,
+        },
+        assistantMessages: {
+          current: currentMessages,
+          limit: limits.messagesPerMonth,
+        },
+        storage: {
+          currentMB: currentStorageMB,
+          limitMB: limits.storageMB,
+        },
+      },
+      recommendations,
+    };
+
+    if (params.includeSubscriptionInfo) {
+      result.subscription = {
+        plan: billingTier,
+        status: subscriptionStatus,
+        currentPeriodEnd: subscriptionPeriodEnd,
+      };
+    }
+
+    return result;
+  }
+}
+
+function formatDate(timestamp: number): string {
+  const date = new Date(timestamp);
+  return date.toISOString().split('T')[0];
 }

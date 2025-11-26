@@ -1470,6 +1470,233 @@ export default class extends Service<Env> {
         }
       }
 
+      // ====== PHASE 2: TEAM MANAGEMENT ENDPOINTS ======
+
+      // GET /api/workspaces/:id/members/detailed
+      const membersDetailedMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/members\/detailed$/);
+      if (membersDetailedMatch && membersDetailedMatch[1] && request.method === 'GET') {
+        const workspaceId = membersDetailedMatch[1];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const includeActivity = url.searchParams.get('includeActivity') === 'true';
+
+        const result = await this.env.WORKSPACE_SERVICE.getMembersDetailed({
+          workspaceId,
+          userId: user.userId,
+          includeActivity,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/workspaces/:id/activity-feed
+      const activityFeedMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/activity-feed$/);
+      if (activityFeedMatch && activityFeedMatch[1] && request.method === 'GET') {
+        const workspaceId = activityFeedMatch[1];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const activityTypes = url.searchParams.get('activityTypes')?.split(',');
+        const filterUserId = url.searchParams.get('userId') || undefined;
+        const limit = parseInt(url.searchParams.get('limit') || '50');
+        const since = parseInt(url.searchParams.get('since') || '0');
+
+        const result = await this.env.WORKSPACE_SERVICE.getActivityFeed({
+          workspaceId,
+          userId: user.userId,
+          activityTypes,
+          filterUserId,
+          limit,
+          since,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/workspaces/:id/usage-stats
+      const usageStatsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/usage-stats$/);
+      if (usageStatsMatch && usageStatsMatch[1] && request.method === 'GET') {
+        const workspaceId = usageStatsMatch[1];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const includeSubscriptionInfo = url.searchParams.get('includeSubscriptionInfo') === 'true';
+
+        const result = await this.env.WORKSPACE_SERVICE.getUsageStats({
+          workspaceId,
+          userId: user.userId,
+          includeSubscriptionInfo,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // ====== PHASE 2: REPORTING ENDPOINTS ======
+
+      // POST /api/workspaces/:id/reports/generate
+      const generateReportMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/reports\/generate$/);
+      if (generateReportMatch && generateReportMatch[1] && request.method === 'POST') {
+        const workspaceId = generateReportMatch[1];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          frameworks?: string[];
+          dateRange?: { start: number; end: number };
+          includeRecommendations?: boolean;
+          format?: 'summary' | 'detailed';
+        }>(request, []);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        const result = await this.env.REPORTING_SERVICE.generateComplianceReport({
+          workspaceId,
+          userId: user.userId,
+          frameworks: body.frameworks,
+          dateRange: body.dateRange,
+          includeRecommendations: body.includeRecommendations,
+          format: body.format,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/workspaces/:id/reports
+      const savedReportsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/reports$/);
+      if (savedReportsMatch && savedReportsMatch[1] && request.method === 'GET') {
+        const workspaceId = savedReportsMatch[1];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const limit = parseInt(url.searchParams.get('limit') || '20');
+        const offset = parseInt(url.searchParams.get('offset') || '0');
+
+        const result = await this.env.REPORTING_SERVICE.getSavedReports({
+          workspaceId,
+          userId: user.userId,
+          limit,
+          offset,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/workspaces/:id/analytics/dashboard
+      const analyticsDashboardMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/analytics\/dashboard$/);
+      if (analyticsDashboardMatch && analyticsDashboardMatch[1] && request.method === 'GET') {
+        const workspaceId = analyticsDashboardMatch[1];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const metrics = url.searchParams.get('metrics')?.split(',') || [];
+        const startDate = parseInt(url.searchParams.get('startDate') || '0');
+        const endDate = parseInt(url.searchParams.get('endDate') || '0');
+
+        const result = await this.env.REPORTING_SERVICE.getAnalyticsDashboard({
+          workspaceId,
+          userId: user.userId,
+          metrics,
+          dateRange: startDate && endDate ? { start: startDate, end: endDate } : undefined,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // ====== PHASE 2: PROACTIVE INTELLIGENCE ENDPOINTS ======
+
+      // GET /api/workspaces/:id/proactive-notifications
+      const proactiveNotificationsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/proactive-notifications$/);
+      if (proactiveNotificationsMatch && proactiveNotificationsMatch[1] && request.method === 'GET') {
+        const workspaceId = proactiveNotificationsMatch[1];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const types = url.searchParams.get('types')?.split(',');
+        const severity = url.searchParams.get('severity')?.split(',');
+        const unreadOnly = url.searchParams.get('unreadOnly') === 'true';
+        const limit = parseInt(url.searchParams.get('limit') || '50');
+
+        const result = await this.env.NOTIFICATION_SERVICE.getProactiveNotifications({
+          workspaceId,
+          userId: user.userId,
+          types,
+          severity,
+          unreadOnly,
+          limit,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // POST /api/workspaces/:id/analyze-gaps
+      const analyzeGapsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/analyze-gaps$/);
+      if (analyzeGapsMatch && analyzeGapsMatch[1] && request.method === 'POST') {
+        const workspaceId = analyzeGapsMatch[1];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          framework: string;
+          comparisonLevel?: 'basic' | 'comprehensive';
+        }>(request, ['framework']);
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const body = parseResult.data;
+
+        const result = await this.env.NOTIFICATION_SERVICE.analyzeComplianceGaps({
+          workspaceId,
+          userId: user.userId,
+          framework: body.framework,
+          comparisonLevel: body.comparisonLevel,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // GET /api/workspaces/:id/risk-assessment
+      const riskAssessmentMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/risk-assessment$/);
+      if (riskAssessmentMatch && riskAssessmentMatch[1] && request.method === 'GET') {
+        const workspaceId = riskAssessmentMatch[1];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const includeForecasting = url.searchParams.get('includeForecasting') === 'true';
+
+        const result = await this.env.NOTIFICATION_SERVICE.getRiskAssessment({
+          workspaceId,
+          userId: user.userId,
+          includeForecasting,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // ====== WORKSPACE INVITATION ENDPOINTS ======
       // POST /api/workspaces/:id/invitations - Create invitation
       // GET /api/workspaces/:id/invitations - List invitations
@@ -1974,6 +2201,111 @@ export default class extends Service<Env> {
         }
       }
 
+      // PHASE 2: Semantic document search - POST /api/workspaces/:id/documents/search/semantic
+      const semanticSearchMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/search\/semantic$/);
+      if (semanticSearchMatch && semanticSearchMatch[1] && request.method === 'POST') {
+        const workspaceId = semanticSearchMatch[1];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          query: string;
+          framework?: string;
+          documentTypes?: string[];
+          dateRange?: { start: number; end: number };
+          topK?: number;
+          minScore?: number;
+        }>(request, ['query']);
+
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.DOCUMENT_SERVICE.searchDocumentsSemantic({
+          workspaceId,
+          userId: user.userId,
+          ...parseResult.data,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // PHASE 2: Get document compliance analysis - GET /api/workspaces/:id/documents/:documentId/compliance-analysis
+      const docComplianceMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/compliance-analysis$/);
+      if (docComplianceMatch && docComplianceMatch[1] && docComplianceMatch[2] && request.method === 'GET') {
+        const workspaceId = docComplianceMatch[1];
+        const documentId = docComplianceMatch[2];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const frameworksParam = url.searchParams.get('frameworks');
+        const frameworks = frameworksParam ? frameworksParam.split(',') : undefined;
+
+        const result = await this.env.DOCUMENT_SERVICE.getDocumentComplianceAnalysis({
+          workspaceId,
+          userId: user.userId,
+          documentId,
+          frameworks,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // PHASE 2: Get document processing status - GET /api/workspaces/:id/documents/:documentId/processing-status
+      const docProcessingMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/processing-status$/);
+      if (docProcessingMatch && docProcessingMatch[1] && docProcessingMatch[2] && request.method === 'GET') {
+        const workspaceId = docProcessingMatch[1];
+        const documentId = docProcessingMatch[2];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.DOCUMENT_SERVICE.getDocumentProcessingStatus({
+          workspaceId,
+          userId: user.userId,
+          documentId,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // PHASE 2: RAG query on document - POST /api/workspaces/:id/documents/:documentId/query
+      const docQueryMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/query$/);
+      if (docQueryMatch && docQueryMatch[1] && docQueryMatch[2] && request.method === 'POST') {
+        const workspaceId = docQueryMatch[1];
+        const documentId = docQueryMatch[2];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          question: string;
+          includeContext?: boolean;
+        }>(request, ['question']);
+
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.DOCUMENT_SERVICE.queryDocumentContent({
+          workspaceId,
+          userId: user.userId,
+          documentId,
+          ...parseResult.data,
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Phase 5: Match /api/workspaces/:id/documents/:documentId/chunks
       const chunksMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/chunks$/);
       if (chunksMatch && chunksMatch[1] && chunksMatch[2] && request.method === 'GET') {
@@ -2432,6 +2764,78 @@ export default class extends Service<Env> {
         const user = await this.validateSession(request);
 
         const result = await this.env.COMPLIANCE_SERVICE.listComplianceChecks(workspaceId, user.userId);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // NEW: Match /api/workspaces/:id/compliance/overview (comprehensive overview)
+      const complianceOverviewMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/compliance\/overview$/);
+      if (complianceOverviewMatch && complianceOverviewMatch[1] && request.method === 'GET') {
+        const workspaceId = complianceOverviewMatch[1];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const includeFrameworkBreakdown = url.searchParams.get('includeFrameworkBreakdown') === 'true';
+        const includeTrends = url.searchParams.get('includeTrends') === 'true';
+
+        const result = await this.env.COMPLIANCE_SERVICE.getWorkspaceComplianceOverview({
+          workspaceId,
+          userId: user.userId,
+          includeFrameworkBreakdown,
+          includeTrends
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // NEW: Match /api/workspaces/:id/compliance/trends (trend analysis)
+      const complianceTrendsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/compliance\/trends$/);
+      if (complianceTrendsMatch && complianceTrendsMatch[1] && request.method === 'GET') {
+        const workspaceId = complianceTrendsMatch[1];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const framework = url.searchParams.get('framework') || undefined;
+        const startDate = parseInt(url.searchParams.get('startDate') || '0') || (Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const endDate = parseInt(url.searchParams.get('endDate') || '0') || Date.now();
+        const granularity = (url.searchParams.get('granularity') as 'daily' | 'weekly' | 'monthly') || 'daily';
+
+        const result = await this.env.COMPLIANCE_SERVICE.getComplianceTrends({
+          workspaceId,
+          userId: user.userId,
+          framework,
+          startDate,
+          endDate,
+          granularity
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // NEW: Match /api/workspaces/:id/frameworks/:framework/details (framework-specific details)
+      const frameworkDetailsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/frameworks\/([^\/]+)\/details$/);
+      if (frameworkDetailsMatch && frameworkDetailsMatch[1] && frameworkDetailsMatch[2] && request.method === 'GET') {
+        const workspaceId = frameworkDetailsMatch[1];
+        const framework = frameworkDetailsMatch[2];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const includeDocuments = url.searchParams.get('includeDocuments') === 'true';
+        const includeIssues = url.searchParams.get('includeIssues') === 'true';
+
+        const result = await this.env.COMPLIANCE_SERVICE.getFrameworkComplianceDetails({
+          workspaceId,
+          userId: user.userId,
+          framework,
+          includeDocuments,
+          includeIssues
+        });
 
         return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -3868,6 +4272,107 @@ export default class extends Service<Env> {
           | undefined;
 
         const result = await this.env.ANALYTICS_SERVICE.getIssuesByStatus(workspaceId, user.userId, status);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // NEW: Match /api/workspaces/:id/issues/advanced (advanced filtering)
+      const issuesAdvancedMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/advanced$/);
+      if (issuesAdvancedMatch && issuesAdvancedMatch[1] && request.method === 'GET') {
+        const workspaceId = issuesAdvancedMatch[1];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const params: any = {
+          workspaceId,
+          userId: user.userId,
+          framework: url.searchParams.get('framework') || undefined,
+          severity: url.searchParams.get('severity')?.split(',') || undefined,
+          status: url.searchParams.get('status')?.split(',') || undefined,
+          priorityLevel: url.searchParams.get('priorityLevel')?.split(',') || undefined,
+          assignedTo: url.searchParams.get('assignedTo') || undefined,
+          unassignedOnly: url.searchParams.get('unassignedOnly') === 'true',
+          search: url.searchParams.get('search') || undefined,
+          sort: url.searchParams.get('sortField') ? {
+            field: url.searchParams.get('sortField')!,
+            direction: (url.searchParams.get('sortDirection') as 'asc' | 'desc') || 'desc'
+          } : undefined,
+          pagination: {
+            limit: parseInt(url.searchParams.get('limit') || '20'),
+            offset: parseInt(url.searchParams.get('offset') || '0')
+          }
+        };
+
+        // Date filters
+        const dueBefore = url.searchParams.get('dueBefore');
+        const dueAfter = url.searchParams.get('dueAfter');
+        if (dueBefore || dueAfter) {
+          params.dueDate = {
+            before: dueBefore ? parseInt(dueBefore) : undefined,
+            after: dueAfter ? parseInt(dueAfter) : undefined
+          };
+        }
+
+        const createdBefore = url.searchParams.get('createdBefore');
+        const createdAfter = url.searchParams.get('createdAfter');
+        if (createdBefore || createdAfter) {
+          params.createdDate = {
+            before: createdBefore ? parseInt(createdBefore) : undefined,
+            after: createdAfter ? parseInt(createdAfter) : undefined
+          };
+        }
+
+        const result = await this.env.ISSUE_MANAGEMENT_SERVICE.getIssuesAdvanced(params);
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // NEW: Match /api/workspaces/:id/issues/:issueId/full (complete issue details)
+      const issueFullMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/([^\/]+)\/full$/);
+      if (issueFullMatch && issueFullMatch[1] && issueFullMatch[2] && request.method === 'GET') {
+        const workspaceId = issueFullMatch[1];
+        const issueId = issueFullMatch[2];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const includeHistory = url.searchParams.get('includeHistory') === 'true';
+        const includeComments = url.searchParams.get('includeComments') === 'true';
+        const includeLLMAnalysis = url.searchParams.get('includeLLMAnalysis') === 'true';
+
+        const result = await this.env.ISSUE_MANAGEMENT_SERVICE.getIssueFullDetails({
+          workspaceId,
+          userId: user.userId,
+          issueId,
+          includeHistory,
+          includeComments,
+          includeLLMAnalysis
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // NEW: Match /api/workspaces/:id/issues/assignments (assignment tracking)
+      const assignmentsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/issues\/assignments$/);
+      if (assignmentsMatch && assignmentsMatch[1] && request.method === 'GET') {
+        const workspaceId = assignmentsMatch[1];
+        const user = await this.validateSession(request);
+
+        const url = new URL(request.url);
+        const assignedUserId = url.searchParams.get('userId') || undefined;
+        const includeWorkloadStats = url.searchParams.get('includeWorkloadStats') === 'true';
+
+        const result = await this.env.ISSUE_MANAGEMENT_SERVICE.getIssueAssignments({
+          workspaceId,
+          userId: user.userId,
+          assignedUserId,
+          includeWorkloadStats
+        });
 
         return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },

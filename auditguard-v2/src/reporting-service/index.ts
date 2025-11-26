@@ -739,4 +739,390 @@ export default class extends Service<Env> {
 
     return csvRows.join('\n');
   }
+
+  /**
+   * PHASE 2: Generate comprehensive compliance report
+   */
+  async generateComplianceReport(params: {
+    workspaceId: string;
+    userId: string;
+    frameworks?: string[];
+    dateRange?: { start: number; end: number };
+    includeRecommendations?: boolean;
+    format?: 'summary' | 'detailed';
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    const now = Date.now();
+    const reportId = `report_${now}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Get workspace score
+    const workspaceScore = await db
+      .selectFrom('workspace_scores')
+      .selectAll()
+      .where('workspace_id', '=', params.workspaceId)
+      .orderBy('calculated_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+
+    // Get framework scores
+    let frameworkQuery = db
+      .selectFrom('framework_scores')
+      .selectAll()
+      .where('workspace_id', '=', params.workspaceId)
+      .orderBy('last_check_at', 'desc');
+
+    if (params.frameworks && params.frameworks.length > 0) {
+      frameworkQuery = frameworkQuery.where('framework', 'in', params.frameworks);
+    }
+
+    const frameworkScores = await frameworkQuery.execute();
+
+    // Get issues
+    let issuesQuery = db
+      .selectFrom('compliance_issues')
+      .selectAll()
+      .where('workspace_id', '=', params.workspaceId);
+
+    if (params.dateRange) {
+      issuesQuery = issuesQuery
+        .where('created_at', '>=', params.dateRange.start)
+        .where('created_at', '<=', params.dateRange.end);
+    }
+
+    if (params.frameworks && params.frameworks.length > 0) {
+      issuesQuery = issuesQuery.where('framework', 'in', params.frameworks);
+    }
+
+    const issues = await issuesQuery.execute();
+
+    // Count resolved issues
+    const resolvedIssues = issues.filter(i => i.status === 'resolved').length;
+
+    // Count documents analyzed
+    const docCount = await db
+      .selectFrom('documents')
+      .select(db.fn.count('id').as('count'))
+      .where('workspace_id', '=', params.workspaceId)
+      .where('processing_status', '=', 'completed')
+      .executeTakeFirst();
+
+    // Group issues by category
+    const issuesByCategory: Record<string, number> = {};
+    for (const issue of issues) {
+      const category = issue.category || 'Other';
+      issuesByCategory[category] = (issuesByCategory[category] || 0) + 1;
+    }
+
+    // Generate executive summary
+    const executiveSummary = `This compliance report covers ${params.frameworks?.join(', ') || 'all frameworks'} for the period ${params.dateRange ? new Date(params.dateRange.start).toLocaleDateString() + ' to ' + new Date(params.dateRange.end).toLocaleDateString() : 'all time'}. Overall compliance score: ${workspaceScore?.overall_score?.toFixed(1) || 'N/A'}%. Total issues: ${issues.length} (${resolvedIssues} resolved).`;
+
+    // Build framework reports
+    const frameworkReports = frameworkScores.map(fs => {
+      const frameworkIssues = issues.filter(i => i.framework === fs.framework);
+      
+      const keyFindings: string[] = [];
+      const criticalCount = frameworkIssues.filter(i => i.severity === 'critical').length;
+      if (criticalCount > 0) {
+        keyFindings.push(`${criticalCount} critical issues require immediate attention`);
+      }
+
+      const recommendations: string[] = [];
+      if (fs.score < 70) {
+        recommendations.push(`Improve ${fs.framework} compliance by addressing high-severity issues first`);
+      }
+
+      return {
+        framework: fs.framework,
+        score: fs.score,
+        issuesByCategory: frameworkIssues.reduce((acc, i) => {
+          const cat = i.category || 'Other';
+          acc[cat] = (acc[cat] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>),
+        keyFindings,
+        recommendations,
+      };
+    });
+
+    // Generate action items
+    const actionItems = issues
+      .filter(i => i.status === 'open' && (i.severity === 'critical' || i.severity === 'high'))
+      .slice(0, 10)
+      .map(i => `${i.severity.toUpperCase()}: ${i.title}`);
+
+    const report = {
+      reportId,
+      generatedAt: now,
+      period: params.dateRange || { start: 0, end: now },
+      summary: {
+        overallScore: workspaceScore?.overall_score || 0,
+        totalIssues: issues.length,
+        resolvedIssues,
+        documentsAnalyzed: Number(docCount?.count || 0),
+      },
+      frameworkReports,
+      executiveSummary,
+      actionItems,
+    };
+
+    // Store report metadata
+    this.env.logger.info('Compliance report generated', {
+      reportId,
+      workspaceId: params.workspaceId,
+      frameworks: params.frameworks,
+      issueCount: issues.length,
+    });
+
+    return report;
+  }
+
+  /**
+   * PHASE 2: Get saved reports list
+   */
+  async getSavedReports(params: {
+    workspaceId: string;
+    userId: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    // Get all reports for workspace
+    // Note: Currently reports are generated on-demand and not persisted
+    // This would typically query a reports table
+    // For now, return recent executive summaries as a proxy
+
+    const limit = params.limit || 20;
+    const offset = params.offset || 0;
+
+    // Get recent compliance checks as proxy for reports
+    const checks = await db
+      .selectFrom('compliance_checks')
+      .innerJoin('users', 'users.id', 'compliance_checks.created_by')
+      .select([
+        'compliance_checks.id',
+        'compliance_checks.framework',
+        'compliance_checks.created_at',
+        'compliance_checks.created_by',
+        'users.email as creator_email',
+      ])
+      .where('compliance_checks.workspace_id', '=', params.workspaceId)
+      .orderBy('compliance_checks.created_at', 'desc')
+      .limit(limit)
+      .offset(offset)
+      .execute();
+
+    return {
+      reports: checks.map(c => ({
+        id: c.id,
+        name: `${c.framework} Compliance Report`,
+        frameworks: [c.framework],
+        period: {
+          start: c.created_at - 30 * 24 * 60 * 60 * 1000, // 30 days before
+          end: c.created_at,
+        },
+        createdAt: c.created_at,
+        createdBy: {
+          id: c.created_by,
+          name: c.creator_email.split('@')[0],
+        },
+      })),
+      total: checks.length,
+    };
+  }
+
+  /**
+   * PHASE 2: Get analytics dashboard data
+   */
+  async getAnalyticsDashboard(params: {
+    workspaceId: string;
+    userId: string;
+    metrics: string[];
+    dateRange?: { start: number; end: number };
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    const result: any = {};
+
+    // Compliance trends
+    if (params.metrics.includes('compliance_trends')) {
+      let trendsQuery = db
+        .selectFrom('compliance_trends')
+        .select(['date', 'overall_score'])
+        .where('workspace_id', '=', params.workspaceId)
+        .orderBy('date', 'asc');
+
+      if (params.dateRange) {
+        const startDate = new Date(params.dateRange.start).toISOString().split('T')[0];
+        const endDate = new Date(params.dateRange.end).toISOString().split('T')[0];
+        trendsQuery = trendsQuery
+          .where('date', '>=', startDate)
+          .where('date', '<=', endDate);
+      }
+
+      const trends = await trendsQuery.execute();
+      
+      let trendDirection: 'improving' | 'declining' | 'stable' = 'stable';
+      if (trends.length >= 2) {
+        const firstScore = trends[0].overall_score;
+        const lastScore = trends[trends.length - 1].overall_score;
+        if (lastScore > firstScore + 5) trendDirection = 'improving';
+        else if (lastScore < firstScore - 5) trendDirection = 'declining';
+      }
+
+      result.complianceTrends = {
+        scoreHistory: trends.map(t => ({
+          date: t.date,
+          score: t.overall_score,
+        })),
+        trend: trendDirection,
+      };
+    }
+
+    // Issue velocity
+    if (params.metrics.includes('issue_velocity')) {
+      const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+      const issuesCreated = await db
+        .selectFrom('compliance_issues')
+        .select(db.fn.count('id').as('count'))
+        .where('workspace_id', '=', params.workspaceId)
+        .where('created_at', '>=', thirtyDaysAgo)
+        .executeTakeFirst();
+
+      const issuesResolved = await db
+        .selectFrom('compliance_issues')
+        .select(db.fn.count('id').as('count'))
+        .where('workspace_id', '=', params.workspaceId)
+        .where('status', '=', 'resolved')
+        .where('updated_at', '>=', thirtyDaysAgo)
+        .executeTakeFirst();
+
+      // Calculate avg time to resolve (simplified)
+      const resolvedIssues = await db
+        .selectFrom('compliance_issues')
+        .select(['created_at', 'updated_at'])
+        .where('workspace_id', '=', params.workspaceId)
+        .where('status', '=', 'resolved')
+        .where('updated_at', '>=', thirtyDaysAgo)
+        .execute();
+
+      let avgTimeToResolve = 0;
+      if (resolvedIssues.length > 0) {
+        const totalTime = resolvedIssues.reduce((sum, i) => sum + (i.updated_at - i.created_at), 0);
+        avgTimeToResolve = Math.round(totalTime / resolvedIssues.length / (1000 * 60 * 60)); // hours
+      }
+
+      result.issueVelocity = {
+        created: Number(issuesCreated?.count || 0),
+        resolved: Number(issuesResolved?.count || 0),
+        avgTimeToResolve,
+      };
+    }
+
+    // Team performance
+    if (params.metrics.includes('team_performance')) {
+      const members = await db
+        .selectFrom('workspace_members')
+        .select('user_id')
+        .where('workspace_id', '=', params.workspaceId)
+        .execute();
+
+      const activeMembers = await db
+        .selectFrom('workspace_members')
+        .innerJoin('issue_assignments', 'issue_assignments.assigned_to', 'workspace_members.user_id')
+        .select('workspace_members.user_id')
+        .where('workspace_members.workspace_id', '=', params.workspaceId)
+        .groupBy('workspace_members.user_id')
+        .execute();
+
+      // Get issues by member
+      const issuesByMember: Record<string, number> = {};
+      for (const member of members) {
+        const count = await db
+          .selectFrom('issue_assignments')
+          .innerJoin('compliance_issues', 'compliance_issues.id', 'issue_assignments.issue_id')
+          .select(db.fn.count('issue_assignments.id').as('count'))
+          .where('issue_assignments.assigned_to', '=', member.user_id)
+          .where('compliance_issues.workspace_id', '=', params.workspaceId)
+          .executeTakeFirst();
+
+        issuesByMember[member.user_id] = Number(count?.count || 0);
+      }
+
+      result.teamPerformance = {
+        totalMembers: members.length,
+        activeMembers: activeMembers.length,
+        issuesByMember,
+      };
+    }
+
+    // Document stats
+    if (params.metrics.includes('document_stats')) {
+      const totalDocs = await db
+        .selectFrom('documents')
+        .select(db.fn.count('id').as('count'))
+        .where('workspace_id', '=', params.workspaceId)
+        .executeTakeFirst();
+
+      const analyzedDocs = await db
+        .selectFrom('documents')
+        .select(db.fn.count('id').as('count'))
+        .where('workspace_id', '=', params.workspaceId)
+        .where('processing_status', '=', 'completed')
+        .executeTakeFirst();
+
+      const avgScore = await db
+        .selectFrom('compliance_checks')
+        .select(db.fn.avg('overall_score').as('avg'))
+        .where('workspace_id', '=', params.workspaceId)
+        .executeTakeFirst();
+
+      result.documentStats = {
+        totalDocuments: Number(totalDocs?.count || 0),
+        documentsAnalyzed: Number(analyzedDocs?.count || 0),
+        avgComplianceScore: Math.round(Number(avgScore?.avg || 0) * 10) / 10,
+      };
+    }
+
+    return result;
+  }
 }
+

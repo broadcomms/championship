@@ -1438,6 +1438,177 @@ Workspace context: ${workspaceContext}`
       {
         type: 'function',
         function: {
+          name: 'get_workspace_compliance_overview',
+          description: 'Get comprehensive workspace compliance overview with scores, issues breakdown, optional framework details and trends',
+          parameters: {
+            type: 'object',
+            properties: {
+              includeFrameworkBreakdown: {
+                type: 'boolean',
+                description: 'Include per-framework score breakdown',
+              },
+              includeTrends: {
+                type: 'boolean',
+                description: 'Include 30-day compliance trend data',
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_framework_compliance_details',
+          description: 'Get detailed compliance information for a specific framework including documents and issues',
+          parameters: {
+            type: 'object',
+            properties: {
+              framework: {
+                type: 'string',
+                enum: ['gdpr', 'soc2', 'hipaa', 'iso27001', 'nist_csf', 'pci_dss'],
+                description: 'The compliance framework to analyze',
+              },
+              includeDocuments: {
+                type: 'boolean',
+                description: 'Include document scores for this framework',
+              },
+              includeIssues: {
+                type: 'boolean',
+                description: 'Include issues related to this framework',
+              },
+            },
+            required: ['framework'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_compliance_trends',
+          description: 'Get historical compliance score trends with analysis',
+          parameters: {
+            type: 'object',
+            properties: {
+              framework: {
+                type: 'string',
+                description: 'Optional framework filter (gdpr, soc2, hipaa, etc.)',
+              },
+              startDate: {
+                type: 'number',
+                description: 'Start timestamp (ms)',
+              },
+              endDate: {
+                type: 'number',
+                description: 'End timestamp (ms)',
+              },
+              granularity: {
+                type: 'string',
+                enum: ['daily', 'weekly', 'monthly'],
+                description: 'Data point granularity',
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_issues_with_advanced_filters',
+          description: 'Search and filter compliance issues with multiple criteria including framework, severity, status, priority, assignments, and dates',
+          parameters: {
+            type: 'object',
+            properties: {
+              framework: {
+                type: 'string',
+                description: 'Filter by framework (gdpr, soc2, hipaa, etc.)',
+              },
+              severity: {
+                type: 'array',
+                items: { type: 'string', enum: ['critical', 'high', 'medium', 'low', 'info'] },
+                description: 'Filter by severity levels',
+              },
+              status: {
+                type: 'array',
+                items: { type: 'string', enum: ['open', 'in_progress', 'resolved', 'dismissed'] },
+                description: 'Filter by status',
+              },
+              priorityLevel: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Filter by priority (P1, P2, P3, P4)',
+              },
+              assignedTo: {
+                type: 'string',
+                description: 'Filter by assigned user ID',
+              },
+              unassignedOnly: {
+                type: 'boolean',
+                description: 'Show only unassigned issues',
+              },
+              search: {
+                type: 'string',
+                description: 'Search in title, description, category',
+              },
+              limit: {
+                type: 'number',
+                description: 'Results per page (default 20)',
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_issue_full_details',
+          description: 'Get complete issue information including history, comments, and LLM analysis',
+          parameters: {
+            type: 'object',
+            properties: {
+              issueId: {
+                type: 'string',
+                description: 'The issue ID',
+              },
+              includeHistory: {
+                type: 'boolean',
+                description: 'Include status change history',
+              },
+              includeComments: {
+                type: 'boolean',
+                description: 'Include all comments',
+              },
+              includeLLMAnalysis: {
+                type: 'boolean',
+                description: 'Include LLM-generated analysis',
+              },
+            },
+            required: ['issueId'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_issue_assignments',
+          description: 'Get issue assignment information and team workload statistics',
+          parameters: {
+            type: 'object',
+            properties: {
+              userId: {
+                type: 'string',
+                description: 'Optional: filter by assigned user ID',
+              },
+              includeWorkloadStats: {
+                type: 'boolean',
+                description: 'Include team workload statistics',
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
           name: 'search_documents',
           description: 'Search for documents using semantic search in the workspace',
           parameters: {
@@ -1519,6 +1690,309 @@ Workspace context: ${workspaceContext}`
           },
         },
       },
+      {
+        type: 'function',
+        function: {
+          name: 'search_documents_semantic',
+          description: 'AI-powered semantic document search using vector embeddings for intelligent document discovery. Use this for natural language queries like "find privacy policies" or "documents about data retention"',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'Natural language search query',
+              },
+              framework: {
+                type: 'string',
+                description: 'Optional framework filter (gdpr, soc2, etc.)',
+              },
+              documentTypes: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Optional document types to filter (pdf, docx, etc.)',
+              },
+              topK: {
+                type: 'number',
+                description: 'Number of results to return (default 10)',
+              },
+            },
+            required: ['query'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_document_compliance_analysis',
+          description: 'Get comprehensive compliance analysis for a document including framework scores, issues, and AI recommendations',
+          parameters: {
+            type: 'object',
+            properties: {
+              documentId: {
+                type: 'string',
+                description: 'The document ID to analyze',
+              },
+              frameworks: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Optional frameworks to include (gdpr, soc2, etc.)',
+              },
+            },
+            required: ['documentId'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_document_processing_status',
+          description: 'Get document processing pipeline status including progress, chunking, embeddings, and estimated completion time',
+          parameters: {
+            type: 'object',
+            properties: {
+              documentId: {
+                type: 'string',
+                description: 'The document ID to check status for',
+              },
+            },
+            required: ['documentId'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'query_document_content',
+          description: 'Ask questions about document content using RAG (Retrieval-Augmented Generation). Use this for specific questions like "What does this document say about cookies?" or "Summarize the data retention policy"',
+          parameters: {
+            type: 'object',
+            properties: {
+              documentId: {
+                type: 'string',
+                description: 'The document ID to query',
+              },
+              question: {
+                type: 'string',
+                description: 'The specific question to ask about the document',
+              },
+              includeContext: {
+                type: 'boolean',
+                description: 'Include full context chunks in response (default false)',
+              },
+            },
+            required: ['documentId', 'question'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_workspace_members_detailed',
+          description: 'Get detailed information about workspace members including roles, join dates, and optional activity statistics',
+          parameters: {
+            type: 'object',
+            properties: {
+              includeActivity: {
+                type: 'boolean',
+                description: 'Include activity stats (issues assigned, documents uploaded) for each member',
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_workspace_activity_feed',
+          description: 'Get recent workspace activity feed with events like document uploads, issue creation/resolution, member additions',
+          parameters: {
+            type: 'object',
+            properties: {
+              activityTypes: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Filter by activity types: document_uploaded, issue_created, issue_resolved, member_added',
+              },
+              filterUserId: {
+                type: 'string',
+                description: 'Optional: filter activities by specific user ID',
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of activities to return (default 50)',
+              },
+              since: {
+                type: 'number',
+                description: 'Optional: return activities since this Unix timestamp',
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_workspace_usage_stats',
+          description: 'Get current workspace usage statistics compared to plan limits (documents, compliance checks, assistant messages, storage)',
+          parameters: {
+            type: 'object',
+            properties: {
+              includeSubscriptionInfo: {
+                type: 'boolean',
+                description: 'Include subscription plan details and billing information',
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'generate_compliance_report',
+          description: 'Generate comprehensive compliance report with framework scores, issue analysis, executive summary, and action items',
+          parameters: {
+            type: 'object',
+            properties: {
+              frameworks: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Optional: specific frameworks to include (gdpr, soc2, etc.)',
+              },
+              dateRange: {
+                type: 'object',
+                properties: {
+                  start: { type: 'number', description: 'Start timestamp' },
+                  end: { type: 'number', description: 'End timestamp' },
+                },
+                description: 'Optional: date range for report data',
+              },
+              includeRecommendations: {
+                type: 'boolean',
+                description: 'Include AI-generated recommendations (default true)',
+              },
+              format: {
+                type: 'string',
+                enum: ['summary', 'detailed'],
+                description: 'Report detail level (default: detailed)',
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_saved_reports',
+          description: 'Get list of previously generated or saved compliance reports',
+          parameters: {
+            type: 'object',
+            properties: {
+              limit: {
+                type: 'number',
+                description: 'Maximum number of reports to return (default 20)',
+              },
+              offset: {
+                type: 'number',
+                description: 'Pagination offset (default 0)',
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_analytics_dashboard_data',
+          description: 'Get analytics dashboard data for various metrics (compliance trends, issue velocity, team performance, document stats)',
+          parameters: {
+            type: 'object',
+            properties: {
+              metrics: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Metrics to include: compliance_trends, issue_velocity, team_performance, document_stats',
+              },
+              dateRange: {
+                type: 'object',
+                properties: {
+                  start: { type: 'number', description: 'Start timestamp' },
+                  end: { type: 'number', description: 'End timestamp' },
+                },
+                description: 'Optional: date range for analytics data',
+              },
+            },
+            required: ['metrics'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_proactive_notifications',
+          description: 'Get proactive intelligence notifications (upcoming deadlines, compliance drift, new regulations)',
+          parameters: {
+            type: 'object',
+            properties: {
+              types: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Filter by types: upcoming_deadline, compliance_drift, new_regulation, recommendation',
+              },
+              severity: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Filter by severity: critical, high, medium, low',
+              },
+              unreadOnly: {
+                type: 'boolean',
+                description: 'Only return unread notifications (default false)',
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum notifications to return (default 50)',
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'analyze_compliance_gaps',
+          description: 'Analyze compliance gaps for a specific framework by comparing current state against requirements',
+          parameters: {
+            type: 'object',
+            properties: {
+              framework: {
+                type: 'string',
+                description: 'Framework to analyze (gdpr, soc2, hipaa, iso27001, etc.)',
+              },
+              comparisonLevel: {
+                type: 'string',
+                enum: ['basic', 'comprehensive'],
+                description: 'Analysis depth level (default: basic)',
+              },
+            },
+            required: ['framework'],
+          },
+        },
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_risk_assessment',
+          description: 'Get comprehensive risk assessment with overall risk score, top risks, and optional 30-day trend forecasting',
+          parameters: {
+            type: 'object',
+            properties: {
+              includeForecasting: {
+                type: 'boolean',
+                description: 'Include 30-day risk trend forecasting (default false)',
+              },
+            },
+          },
+        },
+      },
     ];
   }
 
@@ -1541,6 +2015,63 @@ Workspace context: ${workspaceContext}`
         switch (toolCall.function.name) {
           case 'get_compliance_status':
             result = await this.toolGetComplianceStatus(workspaceId, args);
+            break;
+          case 'get_workspace_compliance_overview':
+            result = await this.toolGetWorkspaceComplianceOverview(workspaceId, args);
+            break;
+          case 'get_framework_compliance_details':
+            result = await this.toolGetFrameworkComplianceDetails(workspaceId, args);
+            break;
+          case 'get_compliance_trends':
+            result = await this.toolGetComplianceTrends(workspaceId, args);
+            break;
+          case 'get_issues_with_advanced_filters':
+            result = await this.toolGetIssuesAdvanced(workspaceId, args);
+            break;
+          case 'get_issue_full_details':
+            result = await this.toolGetIssueFullDetails(workspaceId, args);
+            break;
+          case 'get_issue_assignments':
+            result = await this.toolGetIssueAssignments(workspaceId, args);
+            break;
+          case 'search_documents_semantic':
+            result = await this.toolSearchDocumentsSemantic(workspaceId, args);
+            break;
+          case 'get_document_compliance_analysis':
+            result = await this.toolGetDocumentComplianceAnalysis(workspaceId, args);
+            break;
+          case 'get_document_processing_status':
+            result = await this.toolGetDocumentProcessingStatus(workspaceId, args);
+            break;
+          case 'query_document_content':
+            result = await this.toolQueryDocumentContent(workspaceId, args);
+            break;
+          case 'get_workspace_members_detailed':
+            result = await this.toolGetWorkspaceMembersDetailed(workspaceId, args);
+            break;
+          case 'get_workspace_activity_feed':
+            result = await this.toolGetWorkspaceActivityFeed(workspaceId, args);
+            break;
+          case 'get_workspace_usage_stats':
+            result = await this.toolGetWorkspaceUsageStats(workspaceId, args);
+            break;
+          case 'generate_compliance_report':
+            result = await this.toolGenerateComplianceReport(workspaceId, args);
+            break;
+          case 'get_saved_reports':
+            result = await this.toolGetSavedReports(workspaceId, args);
+            break;
+          case 'get_analytics_dashboard_data':
+            result = await this.toolGetAnalyticsDashboard(workspaceId, args);
+            break;
+          case 'get_proactive_notifications':
+            result = await this.toolGetProactiveNotifications(workspaceId, args);
+            break;
+          case 'analyze_compliance_gaps':
+            result = await this.toolAnalyzeComplianceGaps(workspaceId, args);
+            break;
+          case 'get_risk_assessment':
+            result = await this.toolGetRiskAssessment(workspaceId, args);
             break;
           case 'search_documents':
             result = await this.toolSearchDocuments(workspaceId, args);
@@ -1905,6 +2436,485 @@ RULES:
         completed_at: check.completed_at,
       })),
     };
+  }
+
+  private async toolGetWorkspaceComplianceOverview(
+    workspaceId: string,
+    args: { includeFrameworkBreakdown?: boolean; includeTrends?: boolean }
+  ): Promise<any> {
+    try {
+      const result = await this.env.COMPLIANCE_SERVICE.getWorkspaceComplianceOverview({
+        workspaceId,
+        userId: '', // Not needed for internal calls
+        includeFrameworkBreakdown: args.includeFrameworkBreakdown,
+        includeTrends: args.includeTrends
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_workspace_compliance_overview',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return {
+        error: 'Failed to retrieve compliance overview',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  private async toolGetFrameworkComplianceDetails(
+    workspaceId: string,
+    args: { framework: string; includeDocuments?: boolean; includeIssues?: boolean }
+  ): Promise<any> {
+    try {
+      const result = await this.env.COMPLIANCE_SERVICE.getFrameworkComplianceDetails({
+        workspaceId,
+        userId: '', // Internal service call
+        framework: args.framework,
+        includeDocuments: args.includeDocuments,
+        includeIssues: args.includeIssues
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_framework_compliance_details',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to retrieve framework details' };
+    }
+  }
+
+  private async toolGetComplianceTrends(
+    workspaceId: string,
+    args: { framework?: string; startDate?: number; endDate?: number; granularity?: string }
+  ): Promise<any> {
+    try {
+      const startDate = args.startDate || (Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const endDate = args.endDate || Date.now();
+      
+      const result = await this.env.COMPLIANCE_SERVICE.getComplianceTrends({
+        workspaceId,
+        userId: '', // Internal service call
+        framework: args.framework,
+        startDate,
+        endDate,
+        granularity: (args.granularity === 'daily' || args.granularity === 'weekly' || args.granularity === 'monthly') ? args.granularity : undefined
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_compliance_trends',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to retrieve compliance trends' };
+    }
+  }
+
+  private async toolGetIssuesAdvanced(
+    workspaceId: string,
+    args: any
+  ): Promise<any> {
+    try {
+      const result = await this.env.ISSUE_MANAGEMENT_SERVICE.getIssuesAdvanced({
+        workspaceId,
+        userId: '', // Internal service call
+        framework: args.framework,
+        severity: args.severity,
+        status: args.status,
+        priorityLevel: args.priorityLevel,
+        assignedTo: args.assignedTo,
+        unassignedOnly: args.unassignedOnly,
+        search: args.search
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_issues_with_advanced_filters',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to retrieve issues' };
+    }
+  }
+
+  private async toolGetIssueFullDetails(
+    workspaceId: string,
+    args: { issueId: string; includeHistory?: boolean; includeComments?: boolean; includeLLMAnalysis?: boolean }
+  ): Promise<any> {
+    try {
+      const result = await this.env.ISSUE_MANAGEMENT_SERVICE.getIssueFullDetails({
+        workspaceId,
+        userId: '', // Internal service call
+        issueId: args.issueId,
+        includeHistory: args.includeHistory,
+        includeComments: args.includeComments,
+        includeLLMAnalysis: args.includeLLMAnalysis
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_issue_full_details',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to retrieve issue details' };
+    }
+  }
+
+  private async toolGetIssueAssignments(
+    workspaceId: string,
+    args: { userId?: string; includeWorkloadStats?: boolean }
+  ): Promise<any> {
+    try {
+      const result = await this.env.ISSUE_MANAGEMENT_SERVICE.getIssueAssignments({
+        workspaceId,
+        userId: args.userId,
+        includeWorkloadStats: args.includeWorkloadStats
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_issue_assignments',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to retrieve assignments' };
+    }
+  }
+
+  /**
+   * PHASE 2: Execute semantic document search tool
+   */
+  private async toolSearchDocumentsSemantic(
+    workspaceId: string,
+    args: {
+      query: string;
+      framework?: string;
+      documentTypes?: string[];
+      topK?: number;
+    }
+  ): Promise<any> {
+    try {
+      const result = await this.env.DOCUMENT_SERVICE.searchDocumentsSemantic({
+        workspaceId,
+        userId: '',
+        ...args,
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'search_documents_semantic',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to search documents' };
+    }
+  }
+
+  /**
+   * PHASE 2: Get document compliance analysis
+   */
+  private async toolGetDocumentComplianceAnalysis(
+    workspaceId: string,
+    args: {
+      documentId: string;
+      frameworks?: string[];
+    }
+  ): Promise<any> {
+    try {
+      const result = await this.env.DOCUMENT_SERVICE.getDocumentComplianceAnalysis({
+        workspaceId,
+        userId: '',
+        ...args,
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_document_compliance_analysis',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to get compliance analysis' };
+    }
+  }
+
+  /**
+   * PHASE 2: Get document processing status
+   */
+  private async toolGetDocumentProcessingStatus(
+    workspaceId: string,
+    args: {
+      documentId: string;
+    }
+  ): Promise<any> {
+    try {
+      const result = await this.env.DOCUMENT_SERVICE.getDocumentProcessingStatus({
+        workspaceId,
+        userId: '',
+        documentId: args.documentId,
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_document_processing_status',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to get processing status' };
+    }
+  }
+
+  /**
+   * PHASE 2: Query document content using RAG
+   */
+  private async toolQueryDocumentContent(
+    workspaceId: string,
+    args: {
+      documentId: string;
+      question: string;
+      includeContext?: boolean;
+    }
+  ): Promise<any> {
+    try {
+      const result = await this.env.DOCUMENT_SERVICE.queryDocumentContent({
+        workspaceId,
+        userId: '',
+        ...args,
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'query_document_content',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to query document' };
+    }
+  }
+
+  private async toolGetWorkspaceMembersDetailed(
+    workspaceId: string,
+    args: { includeActivity?: boolean }
+  ): Promise<any> {
+    try {
+      const result = await this.env.WORKSPACE_SERVICE.getMembersDetailed({
+        workspaceId,
+        userId: '',
+        includeActivity: args.includeActivity ?? false,
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_workspace_members_detailed',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to get workspace members' };
+    }
+  }
+
+  private async toolGetWorkspaceActivityFeed(
+    workspaceId: string,
+    args: {
+      activityTypes?: string[];
+      filterUserId?: string;
+      limit?: number;
+      since?: number;
+    }
+  ): Promise<any> {
+    try {
+      const result = await this.env.WORKSPACE_SERVICE.getActivityFeed({
+        workspaceId,
+        userId: '',
+        activityTypes: args.activityTypes,
+        filterUserId: args.filterUserId,
+        limit: args.limit ?? 50,
+        since: args.since ?? 0,
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_workspace_activity_feed',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to get activity feed' };
+    }
+  }
+
+  private async toolGetWorkspaceUsageStats(
+    workspaceId: string,
+    args: { includeSubscriptionInfo?: boolean }
+  ): Promise<any> {
+    try {
+      const result = await this.env.WORKSPACE_SERVICE.getUsageStats({
+        workspaceId,
+        userId: '',
+        includeSubscriptionInfo: args.includeSubscriptionInfo ?? false,
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_workspace_usage_stats',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to get usage stats' };
+    }
+  }
+
+  private async toolGenerateComplianceReport(
+    workspaceId: string,
+    args: {
+      frameworks?: string[];
+      dateRange?: { start: number; end: number };
+      includeRecommendations?: boolean;
+      format?: 'summary' | 'detailed';
+    }
+  ): Promise<any> {
+    try {
+      const result = await this.env.REPORTING_SERVICE.generateComplianceReport({
+        workspaceId,
+        userId: '',
+        frameworks: args.frameworks,
+        dateRange: args.dateRange,
+        includeRecommendations: args.includeRecommendations ?? true,
+        format: args.format ?? 'detailed',
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'generate_compliance_report',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to generate compliance report' };
+    }
+  }
+
+  private async toolGetSavedReports(
+    workspaceId: string,
+    args: { limit?: number; offset?: number }
+  ): Promise<any> {
+    try {
+      const result = await this.env.REPORTING_SERVICE.getSavedReports({
+        workspaceId,
+        userId: '',
+        limit: args.limit ?? 20,
+        offset: args.offset ?? 0,
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_saved_reports',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to get saved reports' };
+    }
+  }
+
+  private async toolGetAnalyticsDashboard(
+    workspaceId: string,
+    args: {
+      metrics: string[];
+      dateRange?: { start: number; end: number };
+    }
+  ): Promise<any> {
+    try {
+      const result = await this.env.REPORTING_SERVICE.getAnalyticsDashboard({
+        workspaceId,
+        userId: '',
+        metrics: args.metrics,
+        dateRange: args.dateRange,
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_analytics_dashboard_data',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to get analytics dashboard' };
+    }
+  }
+
+  private async toolGetProactiveNotifications(
+    workspaceId: string,
+    args: {
+      types?: string[];
+      severity?: string[];
+      unreadOnly?: boolean;
+      limit?: number;
+    }
+  ): Promise<any> {
+    try {
+      const result = await this.env.NOTIFICATION_SERVICE.getProactiveNotifications({
+        workspaceId,
+        userId: '',
+        types: args.types,
+        severity: args.severity,
+        unreadOnly: args.unreadOnly ?? false,
+        limit: args.limit ?? 50,
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_proactive_notifications',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to get proactive notifications' };
+    }
+  }
+
+  private async toolAnalyzeComplianceGaps(
+    workspaceId: string,
+    args: {
+      framework: string;
+      comparisonLevel?: 'basic' | 'comprehensive';
+    }
+  ): Promise<any> {
+    try {
+      const result = await this.env.NOTIFICATION_SERVICE.analyzeComplianceGaps({
+        workspaceId,
+        userId: '',
+        framework: args.framework,
+        comparisonLevel: args.comparisonLevel ?? 'basic',
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'analyze_compliance_gaps',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to analyze compliance gaps' };
+    }
+  }
+
+  private async toolGetRiskAssessment(
+    workspaceId: string,
+    args: { includeForecasting?: boolean }
+  ): Promise<any> {
+    try {
+      const result = await this.env.NOTIFICATION_SERVICE.getRiskAssessment({
+        workspaceId,
+        userId: '',
+        includeForecasting: args.includeForecasting ?? false,
+      });
+      
+      return result;
+    } catch (error) {
+      this.env.logger.error('Tool execution failed', {
+        tool: 'get_risk_assessment',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return { error: 'Failed to get risk assessment' };
+    }
   }
 
   async listSessions(workspaceId: string, userId: string): Promise<{

@@ -523,6 +523,61 @@ export type billing_history = {
     created_at: number;
 };
 
+export type compliance_trends = {
+    id: string;
+    workspace_id: string;
+    date: string;
+    overall_score: number;
+    framework_scores: string;
+    critical_issues: number;
+    high_issues: number;
+    medium_issues: number;
+    low_issues: number;
+    total_documents: number;
+    documents_checked: number;
+    data_source: string | null;
+    created_at: number;
+};
+
+export type proactive_notifications = {
+    id: string;
+    workspace_id: string;
+    type: string;
+    severity: string;
+    title: string;
+    message: string;
+    trigger_condition: string;
+    trigger_value: string | null;
+    metadata: string;
+    acknowledged: number;
+    acknowledged_by: string | null;
+    acknowledged_at: number | null;
+    expires_at: number | null;
+    created_at: number;
+};
+
+export type assistant_analytics_daily = {
+    id: string;
+    workspace_id: string;
+    date: string;
+    query_count: number;
+    tool_calls: number;
+    avg_response_time: number;
+    unique_users: number;
+    created_at: number;
+};
+
+export type tool_usage_analytics = {
+    id: string;
+    workspace_id: string;
+    tool_name: string;
+    user_id: string;
+    execution_time: number;
+    success: number;
+    error_message: string | null;
+    executed_at: number;
+};
+
 export type DB = {
     documents: documents;
     sessions: sessions;
@@ -561,4 +616,8 @@ export type DB = {
     issue_assignments: issue_assignments;
     issue_status_history: issue_status_history;
     document_compliance_cache: document_compliance_cache;
+    compliance_trends: compliance_trends;
+    proactive_notifications: proactive_notifications;
+    assistant_analytics_daily: assistant_analytics_daily;
+    tool_usage_analytics: tool_usage_analytics;
 };

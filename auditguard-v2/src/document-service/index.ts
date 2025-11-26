@@ -2643,4 +2643,424 @@ Respond with ONLY a JSON object in this exact format:
       };
     }
   }
+
+  /**
+   * PHASE 2: AI-powered semantic document search
+   * Uses vector embeddings for intelligent document discovery
+   */
+  async searchDocumentsSemantic(params: {
+    workspaceId: string;
+    userId: string;
+    query: string;
+    framework?: string;
+    documentTypes?: string[];
+    dateRange?: { start: number; end: number };
+    topK?: number;
+    minScore?: number;
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    this.env.logger.info('Semantic document search', {
+      workspaceId: params.workspaceId,
+      userId: params.userId,
+      query: params.query.substring(0, 100),
+      framework: params.framework,
+    });
+
+    // Perform vector search
+    const vectorResults = await this.vectorSearch(params.workspaceId, params.userId, {
+      query: params.query,
+      workspaceId: params.workspaceId,
+      topK: params.topK || 10,
+      minScore: params.minScore || 0.7,
+      includeChunks: true,
+      page: 1,
+      pageSize: params.topK || 10,
+    });
+
+    // Get full document details for matching documents
+    const documentIds = [...new Set(vectorResults.results.map(r => r.documentId))];
+    
+    let documentsQuery = db
+      .selectFrom('documents')
+      .selectAll()
+      .where('workspace_id', '=', params.workspaceId)
+      .where('id', 'in', documentIds);
+
+    // Apply optional filters
+    if (params.documentTypes && params.documentTypes.length > 0) {
+      documentsQuery = documentsQuery.where('content_type', 'in', params.documentTypes);
+    }
+
+    if (params.dateRange) {
+      documentsQuery = documentsQuery
+        .where('uploaded_at', '>=', params.dateRange.start)
+        .where('uploaded_at', '<=', params.dateRange.end);
+    }
+
+    const documents = await documentsQuery.execute();
+
+    // Combine vector results with document metadata
+    const enrichedResults = vectorResults.results.map(result => {
+      const doc = documents.find(d => d.id === result.documentId);
+      return {
+        documentId: result.documentId,
+        score: result.score,
+        filename: doc?.filename || 'Unknown',
+        fileType: doc?.content_type,
+        uploadedAt: doc?.uploaded_at,
+        processingStatus: doc?.processing_status,
+        matchedChunks: [result.text],
+      };
+    });
+
+    return {
+      query: params.query,
+      totalResults: vectorResults.totalResults,
+      documents: enrichedResults,
+      searchTime: vectorResults.searchTime,
+      source: vectorResults.source,
+    };
+  }
+
+  /**
+   * PHASE 2: Get comprehensive compliance analysis for a document
+   * Includes framework scores, issues, and compliance details
+   */
+  async getDocumentComplianceAnalysis(params: {
+    workspaceId: string;
+    userId: string;
+    documentId: string;
+    frameworks?: string[];
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    // Get document info
+    const document = await db
+      .selectFrom('documents')
+      .selectAll()
+      .where('workspace_id', '=', params.workspaceId)
+      .where('id', '=', params.documentId)
+      .executeTakeFirst();
+
+    if (!document) {
+      throw new Error('Document not found');
+    }
+
+    this.env.logger.info('Getting document compliance analysis', {
+      workspaceId: params.workspaceId,
+      userId: params.userId,
+      documentId: params.documentId,
+    });
+
+    // Get compliance checks (scores)
+    let scoresQuery = db
+      .selectFrom('compliance_checks')
+      .selectAll()
+      .where('document_id', '=', params.documentId);
+
+    if (params.frameworks && params.frameworks.length > 0) {
+      scoresQuery = scoresQuery.where('framework', 'in', params.frameworks);
+    }
+
+    const scores = await scoresQuery.execute();
+
+    // Get related issues
+    const issues = await db
+      .selectFrom('compliance_issues')
+      .selectAll()
+      .where('workspace_id', '=', params.workspaceId)
+      .where('document_id', '=', params.documentId)
+      .orderBy('severity', 'desc')
+      .orderBy('created_at', 'desc')
+      .execute();
+
+    // Calculate overall compliance
+    const avgScore = scores.length > 0
+      ? scores.reduce((sum, s) => sum + (s.overall_score || 0), 0) / scores.length
+      : 0;
+
+    const riskLevel = avgScore >= 90 ? 'minimal' :
+                      avgScore >= 75 ? 'low' :
+                      avgScore >= 60 ? 'medium' :
+                      avgScore >= 40 ? 'high' : 'critical';
+
+    // Group issues by severity
+    const issuesByLevel = {
+      critical: issues.filter(i => i.severity === 'critical').length,
+      high: issues.filter(i => i.severity === 'high').length,
+      medium: issues.filter(i => i.severity === 'medium').length,
+      low: issues.filter(i => i.severity === 'low').length,
+      info: issues.filter(i => i.severity === 'info').length,
+    };
+
+    // Get LLM analysis from compliance checks
+    const llmAnalysis = await db
+      .selectFrom('compliance_checks')
+      .select(['llm_response'])
+      .where('document_id', '=', params.documentId)
+      .where('llm_response', 'is not', null)
+      .orderBy('created_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+
+    return {
+      document: {
+        id: document.id,
+        filename: document.filename,
+        fileType: document.content_type,
+        uploadedAt: document.uploaded_at,
+        processingStatus: document.processing_status,
+      },
+      compliance: {
+        overallScore: Math.round(avgScore * 10) / 10,
+        riskLevel,
+        frameworkScores: scores.map(s => ({
+          framework: s.framework,
+          score: s.overall_score || 0,
+          checksPerformed: 1,
+          lastCheck: s.completed_at,
+        })),
+      },
+      issues: {
+        total: issues.length,
+        byLevel: issuesByLevel,
+        byStatus: {
+          open: issues.filter(i => i.status === 'open').length,
+          in_progress: issues.filter(i => i.status === 'in_progress').length,
+          resolved: issues.filter(i => i.status === 'resolved').length,
+        },
+        details: issues.slice(0, 10).map(i => ({
+          id: i.id,
+          severity: i.severity,
+          title: i.title,
+          description: i.description,
+          status: i.status,
+          framework: i.framework,
+          createdAt: i.created_at,
+        })),
+      },
+      aiAnalysis: llmAnalysis?.llm_response ? {
+        summary: llmAnalysis.llm_response,
+        recommendations: [],
+        context: null,
+      } : null,
+    };
+  }
+
+  /**
+   * PHASE 2: Get document processing status and pipeline progress
+   * Tracks document through upload → chunking → embedding → analysis
+   */
+  async getDocumentProcessingStatus(params: {
+    workspaceId: string;
+    userId: string;
+    documentId: string;
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    // Get document
+    const document = await db
+      .selectFrom('documents')
+      .selectAll()
+      .where('workspace_id', '=', params.workspaceId)
+      .where('id', '=', params.documentId)
+      .executeTakeFirst();
+
+    if (!document) {
+      throw new Error('Document not found');
+    }
+
+    // Get processing steps
+    const steps = await this.getProcessingSteps(params.documentId);
+
+    // Get chunk count
+    const chunkCount = await db
+      .selectFrom('document_chunks')
+      .select(db.fn.count('id').as('count'))
+      .where('document_id', '=', params.documentId)
+      .executeTakeFirst();
+
+    // Check if document has embeddings (chunks exist in vector index)
+    const hasEmbeddings = Number(chunkCount?.count || 0) > 0;
+
+    // Calculate progress percentage
+    let progressPercentage = 0;
+    if (document.processing_status === 'completed') {
+      progressPercentage = 100;
+    } else if (document.processing_status === 'processing') {
+      // Estimate based on steps completed
+      const completedSteps = steps.filter((s: any) => s.status === 'completed').length;
+      progressPercentage = Math.min(Math.round((completedSteps / steps.length) * 100), 95);
+    } else if (document.processing_status === 'failed') {
+      progressPercentage = 0;
+    }
+
+    return {
+      document: {
+        id: document.id,
+        filename: document.filename,
+        status: document.processing_status,
+        fullyCompleted: document.processing_status === 'completed',
+        uploadedAt: document.uploaded_at,
+        updatedAt: document.updated_at,
+      },
+      progress: {
+        percentage: progressPercentage,
+        currentStage: document.processing_status,
+        chunksCreated: Number(chunkCount?.count || 0),
+        embeddingsGenerated: hasEmbeddings ? Number(chunkCount?.count || 0) : 0,
+      },
+      pipeline: {
+        steps: steps.map((s: any) => ({
+          name: s.step_name,
+          status: s.status,
+          startedAt: s.started_at,
+          completedAt: s.completed_at,
+          errorMessage: s.error_message,
+        })),
+      },
+      estimatedTimeRemaining: document.processing_status === 'processing'
+        ? `${Math.max(1, 5 - steps.filter((s: any) => s.status === 'completed').length)} minutes`
+        : null,
+    };
+  }
+
+  /**
+   * PHASE 2: Query document content using RAG (Retrieval-Augmented Generation)
+   * AI-powered Q&A over document content
+   */
+  async queryDocumentContent(params: {
+    workspaceId: string;
+    userId: string;
+    documentId: string;
+    question: string;
+    includeContext?: boolean;
+  }) {
+    const db = this.getDb();
+
+    // Verify workspace access
+    const membership = await db
+      .selectFrom('workspace_members')
+      .select('role')
+      .where('workspace_id', '=', params.workspaceId)
+      .where('user_id', '=', params.userId)
+      .executeTakeFirst();
+
+    if (!membership) {
+      throw new Error('Access denied: Not a workspace member');
+    }
+
+    // Get document
+    const document = await db
+      .selectFrom('documents')
+      .selectAll()
+      .where('workspace_id', '=', params.workspaceId)
+      .where('id', '=', params.documentId)
+      .executeTakeFirst();
+
+    if (!document) {
+      throw new Error('Document not found');
+    }
+
+    if (document.processing_status !== 'completed') {
+      throw new Error('Document processing not completed yet');
+    }
+
+    this.env.logger.info('RAG query on document', {
+      workspaceId: params.workspaceId,
+      userId: params.userId,
+      documentId: params.documentId,
+      question: params.question.substring(0, 100),
+    });
+
+    // Perform semantic search within this document
+    const searchResults = await this.vectorSearch(params.workspaceId, params.userId, {
+      query: params.question,
+      workspaceId: params.workspaceId,
+      topK: 5,
+      minScore: 0.6, // Lower threshold for RAG
+      includeChunks: true,
+      page: 1,
+      pageSize: 5,
+    });
+
+    // Filter to only this document's chunks
+    const relevantChunks = searchResults.results
+      .filter(r => r.documentId === params.documentId)
+      .map(r => ({ text: r.text, score: r.score, page_number: 0 })) // page_number not in metadata yet
+      .slice(0, 5); // Top 5 most relevant chunks
+
+    if (relevantChunks.length === 0) {
+      return {
+        answer: 'I could not find relevant information in this document to answer your question.',
+        confidence: 0,
+        sources: [],
+      };
+    }
+
+    // Build context from chunks
+    const context = relevantChunks
+      .map((chunk, idx) => `[Chunk ${idx + 1}]\n${chunk.text}`)
+      .join('\n\n');
+
+    // Simple answer extraction from context (placeholder for Cerebras integration)
+    // TODO: Integrate Cerebras when API key is available
+    const answer = `Based on the document content, here are the relevant excerpts:\n\n${context.substring(0, 500)}...`;
+    const responseTime = 100; // Placeholder
+
+    // Calculate confidence based on chunk similarity scores
+    const avgScore = relevantChunks.reduce((sum, c) => sum + (c.score || 0), 0) / relevantChunks.length;
+    const confidence = Math.round(avgScore * 100);
+
+    return {
+      answer,
+      confidence,
+      sources: relevantChunks.map((chunk, idx) => ({
+        chunkIndex: idx + 1,
+        text: chunk.text?.substring(0, 200) + '...',
+        score: chunk.score,
+        pageNumber: chunk.page_number,
+      })),
+      responseTime,
+      model: 'context-extraction', // Placeholder until Cerebras is integrated
+      includeFullContext: params.includeContext ? context : undefined,
+    };
+  }
 }
