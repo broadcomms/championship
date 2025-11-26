@@ -1690,13 +1690,13 @@ Workspace context: ${workspaceContext}`
         type: 'function',
         function: {
           name: 'search_documents_semantic',
-          description: 'AI-powered semantic document search using vector embeddings for intelligent document discovery. Use this for natural language queries like "find privacy policies" or "documents about data retention"',
+          description: 'AI-powered semantic document search using vector embeddings for intelligent document discovery. Use this for natural language queries like "find privacy policies" or "documents about data retention", OR when you need to find a document by filename to get its ID for other tools. Returns document IDs, filenames, and metadata.',
           parameters: {
             type: 'object',
             properties: {
               query: {
                 type: 'string',
-                description: 'Natural language search query',
+                description: 'Natural language search query or document filename (e.g., "Social_Media_Policy.pdf")',
               },
               framework: {
                 type: 'string',
@@ -1720,13 +1720,13 @@ Workspace context: ${workspaceContext}`
         type: 'function',
         function: {
           name: 'get_document_compliance_analysis',
-          description: 'Get comprehensive compliance analysis for a document including framework scores, issues, and AI recommendations',
+          description: 'ANALYZE A DOCUMENT by name or ID. Use this when user says "analyze document X" or "analyze X.pdf" or asks about compliance analysis of a file. Pass the filename or ID exactly as user provides it.',
           parameters: {
             type: 'object',
             properties: {
               documentId: {
                 type: 'string',
-                description: 'The document ID to analyze',
+                description: 'Document ID or filename - pass EXACTLY what user said (e.g. "Social_Media_Policy.pdf" or "doc_123"). Tool handles both.',
               },
               frameworks: {
                 type: 'array',
@@ -1742,13 +1742,13 @@ Workspace context: ${workspaceContext}`
         type: 'function',
         function: {
           name: 'get_document_processing_status',
-          description: 'Get document processing pipeline status including progress, chunking, embeddings, and estimated completion time',
+          description: 'Get document processing pipeline status including progress, chunking, embeddings, and estimated completion time. IMPORTANT: This tool requires a document ID. If the user provides a document name, you MUST first use search_documents_semantic to find the document and get its ID.',
           parameters: {
             type: 'object',
             properties: {
               documentId: {
                 type: 'string',
-                description: 'The document ID to check status for',
+                description: 'The document ID (NOT filename). Use search_documents_semantic first if you only have a filename.',
               },
             },
             required: ['documentId'],
@@ -1759,13 +1759,13 @@ Workspace context: ${workspaceContext}`
         type: 'function',
         function: {
           name: 'query_document_content',
-          description: 'Ask questions about document content using RAG (Retrieval-Augmented Generation). Use this for specific questions like "What does this document say about cookies?" or "Summarize the data retention policy"',
+          description: 'Ask questions about document content using RAG (Retrieval-Augmented Generation). Use this for specific questions like "What does this document say about cookies?" or "Summarize the data retention policy". IMPORTANT: This tool requires a document ID. If the user provides a document name, you MUST first use search_documents_semantic to find the document and get its ID.',
           parameters: {
             type: 'object',
             properties: {
               documentId: {
                 type: 'string',
-                description: 'The document ID to query',
+                description: 'The document ID (NOT filename). Use search_documents_semantic first if you only have a filename.',
               },
               question: {
                 type: 'string',
@@ -2000,7 +2000,19 @@ Workspace context: ${workspaceContext}`
     const messages: ChatMessage[] = [];
     const rawData: any[] = [];
 
+    // Log all tool calls being executed
+    this.env.logger.info('🔧🔧🔧 EXECUTE TOOLS CALLED', {
+      toolCount: toolCalls.length,
+      toolNames: toolCalls.map(tc => tc.function.name),
+      workspaceId
+    });
+
     for (const toolCall of toolCalls) {
+      this.env.logger.info('🛠️ Executing tool', {
+        toolName: toolCall.function.name,
+        toolId: toolCall.id
+      });
+
       try {
         const args = typeof toolCall.function.arguments === 'string' 
           ? JSON.parse(toolCall.function.arguments)
@@ -2031,16 +2043,16 @@ Workspace context: ${workspaceContext}`
             result = await this.toolGetIssueAssignments(workspaceId, args);
             break;
           case 'search_documents_semantic':
-            result = await this.toolSearchDocumentsSemantic(workspaceId, args);
+            result = await this.toolSearchDocumentsSemantic(workspaceId, userId, args);
             break;
           case 'get_document_compliance_analysis':
-            result = await this.toolGetDocumentComplianceAnalysis(workspaceId, args);
+            result = await this.toolGetDocumentComplianceAnalysis(workspaceId, userId, args);
             break;
           case 'get_document_processing_status':
-            result = await this.toolGetDocumentProcessingStatus(workspaceId, args);
+            result = await this.toolGetDocumentProcessingStatus(workspaceId, userId, args);
             break;
           case 'query_document_content':
-            result = await this.toolQueryDocumentContent(workspaceId, args);
+            result = await this.toolQueryDocumentContent(workspaceId, userId, args);
             break;
           case 'get_workspace_members_detailed':
             result = await this.toolGetWorkspaceMembersDetailed(workspaceId, args);
@@ -2671,6 +2683,7 @@ RULES:
    */
   private async toolSearchDocumentsSemantic(
     workspaceId: string,
+    userId: string,
     args: {
       query: string;
       framework?: string;
@@ -2681,7 +2694,7 @@ RULES:
     try {
       const result = await this.env.DOCUMENT_SERVICE.searchDocumentsSemantic({
         workspaceId,
-        userId: '',
+        userId,
         ...args,
       });
       
@@ -2697,19 +2710,82 @@ RULES:
 
   /**
    * PHASE 2: Get document compliance analysis
+   * Smart tool: Automatically searches for document if filename is provided
    */
   private async toolGetDocumentComplianceAnalysis(
     workspaceId: string,
+    userId: string,
     args: {
       documentId: string;
       frameworks?: string[];
     }
   ): Promise<any> {
     try {
+      let documentId = args.documentId;
+      
+      // Check if documentId looks like a filename (contains file extension)
+      const fileExtensions = ['.pdf', '.docx', '.doc', '.txt', '.xlsx', '.xls', '.pptx', '.ppt', '.csv'];
+      const isFilename = fileExtensions.some(ext => documentId.toLowerCase().includes(ext));
+      
+      if (isFilename) {
+        this.env.logger.info('Filename detected, performing automatic search', {
+          filename: documentId,
+          workspaceId
+        });
+        
+        // Extract clean filename for search (remove path if present, KEEP extension)
+        const cleanFilename = documentId.split('/').pop() || documentId;
+        
+        // Perform semantic search to find the document using FULL filename including extension
+        const searchResult = await this.env.DOCUMENT_SERVICE.searchDocumentsSemantic({
+          workspaceId,
+          userId,
+          query: cleanFilename, // Use full filename WITH extension
+          topK: 10 // Get more results to increase chances of finding exact match
+        });
+        
+        this.env.logger.info('Search completed', {
+          filename: cleanFilename,
+          resultsFound: searchResult?.documents?.length ?? 0
+        });
+        
+        if (!searchResult.documents || searchResult.documents.length === 0) {
+          return { 
+            error: 'Document not found', 
+            details: `No documents found matching filename: ${cleanFilename}`,
+            suggestion: 'Try using a broader search term or check if the document has been uploaded'
+          };
+        }
+        
+        // Find exact or best filename match
+        let bestMatch = searchResult.documents[0];
+        for (const doc of searchResult.documents) {
+          if (doc.filename && doc.filename.toLowerCase() === cleanFilename.toLowerCase()) {
+            bestMatch = doc;
+            this.env.logger.info('Exact filename match found!', { 
+              filename: cleanFilename,
+              documentId: doc.documentId
+            });
+            break;
+          }
+        }
+        
+        documentId = bestMatch.documentId;
+        
+        this.env.logger.info('Document found via automatic search', {
+          originalInput: args.documentId,
+          foundDocumentId: documentId,
+          filename: bestMatch.filename,
+          score: bestMatch.score
+        });
+      }
+      
+      // Proceed with analysis using resolved document ID
       const result = await this.env.DOCUMENT_SERVICE.getDocumentComplianceAnalysis({
         workspaceId,
-        userId: '',
-        ...args,
+        userId,
+        documentId,
+        frameworks: args.frameworks,
       });
       
       return result;
@@ -2727,6 +2803,7 @@ RULES:
    */
   private async toolGetDocumentProcessingStatus(
     workspaceId: string,
+    userId: string,
     args: {
       documentId: string;
     }
@@ -2734,7 +2811,7 @@ RULES:
     try {
       const result = await this.env.DOCUMENT_SERVICE.getDocumentProcessingStatus({
         workspaceId,
-        userId: '',
+        userId,
         documentId: args.documentId,
       });
       
@@ -2753,6 +2830,7 @@ RULES:
    */
   private async toolQueryDocumentContent(
     workspaceId: string,
+    userId: string,
     args: {
       documentId: string;
       question: string;
@@ -2762,7 +2840,7 @@ RULES:
     try {
       const result = await this.env.DOCUMENT_SERVICE.queryDocumentContent({
         workspaceId,
-        userId: '',
+        userId,
         ...args,
       });
       

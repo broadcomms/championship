@@ -194,7 +194,7 @@ export default class extends Service<Env> {
       };
 
       // Allow requests from localhost for development and production URL
-      const allowedOrigins = ['http://localhost:3000', 'https://auditguardx.com'];
+      const allowedOrigins = ['http://localhost:3000', 'https://localhost:3000', 'https://auditguardx.com'];
       if (origin && allowedOrigins.includes(origin)) {
         headers['Access-Control-Allow-Origin'] = origin;
       }
