@@ -1806,6 +1806,40 @@ Return JSON with all the found issues array. If fully compliant, return empty ar
       .limit(1)
       .executeTakeFirst();
 
+    // FALLBACK: If no workspace_scores, calculate from compliance_checks
+    let calculatedScore = null;
+    let documentsChecked = 0;
+    let totalDocuments = 0;
+    
+    if (!latestScore) {
+      // Get all completed checks for this workspace
+      const checks = await db
+        .selectFrom('compliance_checks')
+        .select(['overall_score', 'document_id'])
+        .where('workspace_id', '=', params.workspaceId)
+        .where('status', '=', 'completed')
+        .execute();
+      
+      if (checks.length > 0) {
+        // Calculate average score
+        const totalScore = checks.reduce((sum, check) => sum + (check.overall_score || 0), 0);
+        calculatedScore = Math.round(totalScore / checks.length);
+        
+        // Count unique documents
+        const uniqueDocs = new Set(checks.map(c => c.document_id));
+        documentsChecked = uniqueDocs.size;
+      }
+      
+      // Get total documents count
+      const docsCount = await db
+        .selectFrom('documents')
+        .select(db.fn.count<number>('id').as('count'))
+        .where('workspace_id', '=', params.workspaceId)
+        .executeTakeFirst();
+      
+      totalDocuments = Number(docsCount?.count || 0);
+    }
+
     // Get issue counts by status and severity
     const issueCounts = await db
       .selectFrom('compliance_issues')
@@ -1848,12 +1882,22 @@ Return JSON with all the found issues array. If fully compliant, return empty ar
         .execute();
     }
 
+    // Determine risk level based on score
+    const score = latestScore?.overall_score ?? calculatedScore;
+    let riskLevel = 'unknown';
+    if (score !== null) {
+      if (score >= 90) riskLevel = 'low';
+      else if (score >= 70) riskLevel = 'medium';
+      else if (score >= 50) riskLevel = 'moderate';
+      else riskLevel = 'high';
+    }
+    
     return {
       overall: {
-        score: latestScore?.overall_score ?? null,
-        riskLevel: latestScore?.risk_level ?? 'unknown',
-        documentsChecked: latestScore?.documents_checked ?? 0,
-        totalDocuments: latestScore?.total_documents ?? 0,
+        score: score,
+        riskLevel: latestScore?.risk_level ?? riskLevel,
+        documentsChecked: latestScore?.documents_checked ?? documentsChecked,
+        totalDocuments: latestScore?.total_documents ?? totalDocuments,
         lastAnalyzed: latestScore?.calculated_at ?? null
       },
       issues: {

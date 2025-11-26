@@ -1346,14 +1346,10 @@ Respond with this exact JSON structure:
 
     context += `Total Documents: ${docCount?.count || 0}\n`;
 
-    if (latestScore) {
-      context += `Overall Compliance Score: ${latestScore.overall_score}/100 (${latestScore.risk_level} risk)\n`;
-      context += `Documents Checked: ${latestScore.documents_checked}/${latestScore.total_documents}\n`;
-      context += `Open Issues: ${openIssuesCount?.count || 0} (Critical: ${latestScore.critical_issues}, High: ${latestScore.high_issues}, Medium: ${latestScore.medium_issues})\n`;
-      context += `Frameworks Covered: ${latestScore.frameworks_covered}\n`;
-    } else {
-      context += `No compliance checks run yet.\n`;
-    }
+    // IMPORTANT: Don't provide cached compliance data here - instruct AI to use tools instead
+    // The workspace_scores table may be outdated or empty even when checks exist
+    // Always let the AI call get_compliance_status tool for current data
+    context += `\nFor compliance scores and status: USE get_compliance_status tool (data may have changed since last aggregation)\n`;
 
     return context;
   }
@@ -2248,7 +2244,7 @@ RULES:
     const db = this.getDb();
 
     // Get latest workspace score
-    const latestScore = await db
+    let latestScore = await db
       .selectFrom('workspace_scores')
       .selectAll()
       .where('workspace_id', '=', workspaceId)
@@ -2256,10 +2252,95 @@ RULES:
       .limit(1)
       .executeTakeFirst();
 
+    // FALLBACK: If workspace_scores is empty, calculate from compliance_checks
+    // This ensures tools always return current data even if aggregation hasn't run
     if (!latestScore) {
+      // Build query for compliance checks
+      let checksQuery = db
+        .selectFrom('compliance_checks')
+        .select(['overall_score', 'document_id', 'framework'])
+        .where('workspace_id', '=', workspaceId)
+        .where('status', '=', 'completed');
+
+      // Filter by framework if specified
+      if (args.framework) {
+        checksQuery = checksQuery.where('framework', '=', args.framework.toUpperCase());
+      }
+
+      const checks = await checksQuery.execute();
+
+      if (checks.length === 0) {
+        const message = args.framework 
+          ? `No ${args.framework.toUpperCase()} compliance checks have been run yet for this workspace.`
+          : 'No compliance checks have been run yet for this workspace.';
+        return {
+          message,
+          overall_score: null,
+          framework: args.framework?.toUpperCase() || null,
+        };
+      }
+
+      // Calculate average score from completed checks
+      const avgScore = Math.round(
+        checks.reduce((sum, c) => sum + (c.overall_score || 0), 0) / checks.length
+      );
+
+      // Determine which frameworks were checked
+      const frameworksChecked = [...new Set(checks.map(c => c.framework))].join(', ');
+
+      // Count unique documents checked
+      const uniqueDocs = new Set(checks.map(c => c.document_id)).size;
+
+      // Get total documents count
+      const totalDocsResult = await db
+        .selectFrom('documents')
+        .select(({ fn }) => fn.count<number>('id').as('count'))
+        .where('workspace_id', '=', workspaceId)
+        .executeTakeFirst();
+
+      // Get issues breakdown
+      const issuesBreakdown = await db
+        .selectFrom('compliance_issues')
+        .select(['status', 'severity', ({ fn }) => fn.count<number>('id').as('count')])
+        .where('workspace_id', '=', workspaceId)
+        .groupBy(['status', 'severity'])
+        .execute();
+
+      // Count issues by severity
+      let critical = 0, high = 0, medium = 0, low = 0, info = 0;
+      for (const row of issuesBreakdown) {
+        const count = Number(row.count);
+        if (row.severity === 'critical') critical += count;
+        else if (row.severity === 'high') high += count;
+        else if (row.severity === 'medium') medium += count;
+        else if (row.severity === 'low') low += count;
+        else if (row.severity === 'info') info += count;
+      }
+
+      // Determine risk level
+      let riskLevel = 'low';
+      if (critical > 0 || avgScore < 60) riskLevel = 'critical';
+      else if (high > 0 || avgScore < 80) riskLevel = 'high';
+      else if (medium > 0 || avgScore < 90) riskLevel = 'medium';
+
+      // Return calculated data directly without inserting to database
       return {
-        message: 'No compliance checks have been run yet for this workspace.',
-        overall_score: null,
+        overall_score: avgScore,
+        risk_level: riskLevel,
+        documents_checked: uniqueDocs,
+        total_documents: totalDocsResult?.count || 0,
+        critical_issues: critical,
+        high_issues: high,
+        medium_issues: medium,
+        low_issues: low,
+        info_issues: info,
+        frameworks_covered: args.framework ? 1 : frameworksChecked.split(', ').length,
+        frameworks_checked: frameworksChecked,
+        framework_requested: args.framework?.toUpperCase() || 'ALL',
+        framework_score: null,
+        message: args.framework 
+          ? `Found ${uniqueDocs} ${args.framework.toUpperCase()} compliance checks with an average score of ${avgScore}%. Risk level: ${riskLevel}. Issues: ${critical} critical, ${high} high, ${medium} medium, ${low} low, ${info} info.`
+          : `Found ${uniqueDocs} compliance checks across ${frameworksChecked} with an average score of ${avgScore}%. Risk level: ${riskLevel}. Issues: ${critical} critical, ${high} high, ${medium} medium, ${low} low, ${info} info.`
       };
     }
 
