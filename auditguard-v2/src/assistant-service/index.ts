@@ -3,6 +3,7 @@ import { Env } from './raindrop.gen';
 import { Kysely, sql } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
+import { CerebrasClient } from '../common/cerebras-client';
 
 // ============================================================================
 // Error Handling
@@ -121,6 +122,91 @@ export default class extends Service<Env> {
     return new Kysely<DB>({
       dialect: new D1Dialect({ database: this.env.AUDITGUARD_DB }),
     });
+  }
+
+  /**
+   * Universal AI call handler - Cerebras with automatic Raindrop AI fallback
+   * Non-streaming only for maximum compatibility
+   */
+  private async callAI(config: {
+    model?: 'decision' | 'response';
+    messages: any[];
+    temperature: number;
+    maxTokens: number;
+    responseFormat?: { type: 'json_object' };
+  }): Promise<any> {
+    // 🔍 FORENSIC DEBUG: Log the actual value and type
+    console.log('🔍 CEREBRAS DEBUG:', {
+      USE_CEREBRAS_RAW: this.env.USE_CEREBRAS,
+      USE_CEREBRAS_TYPE: typeof this.env.USE_CEREBRAS,
+      USE_CEREBRAS_STRICT_EQUAL: this.env.USE_CEREBRAS === 'true',
+      USE_CEREBRAS_LOOSE_EQUAL: this.env.USE_CEREBRAS == 'true',
+      CEREBRAS_API_KEY_EXISTS: !!this.env.CEREBRAS_API_KEY,
+      CEREBRAS_API_KEY_LENGTH: this.env.CEREBRAS_API_KEY?.length || 0
+    });
+    
+    const useCerebras = this.env.USE_CEREBRAS === 'true';
+    const modelName = config.model === 'decision' 
+      ? this.env.CEREBRAS_DECISION_MODEL 
+      : this.env.CEREBRAS_RESPONSE_MODEL;
+
+    if (useCerebras) {
+      try {
+        const startTime = Date.now();
+        this.env.logger.info('🚀 Using Cerebras API', {
+          model: modelName,
+          messageCount: config.messages.length
+        });
+
+        const cerebras = new CerebrasClient(this.env.CEREBRAS_API_KEY);
+        const response = await cerebras.chatCompletion({
+          model: modelName,
+          messages: config.messages,
+          temperature: config.temperature,
+          max_tokens: config.maxTokens,
+          response_format: config.responseFormat,
+        });
+
+        const duration = Date.now() - startTime;
+        this.env.logger.info('✅ Cerebras call completed', {
+          model: modelName,
+          tokensUsed: response.usage?.total_tokens,
+          latency: duration,
+          tokensPerSecond: response.usage?.completion_tokens 
+            ? Math.round(response.usage.completion_tokens / (duration / 1000)) 
+            : 0
+        });
+
+        return { choices: response.choices };
+      } catch (cerebrasError) {
+        this.env.logger.error('❌ Cerebras failed, falling back to Raindrop AI', {
+          error: cerebrasError instanceof Error ? cerebrasError.message : String(cerebrasError),
+          model: modelName
+        });
+        // Fall through to Raindrop AI fallback
+      }
+    } else {
+      this.env.logger.info('ℹ️ Using Raindrop AI (Cerebras disabled)', {
+        reason: 'Feature flag USE_CEREBRAS=false'
+      });
+    }
+
+    // Fallback to Raindrop AI
+    const startTime = Date.now();
+    const response = await this.env.AI.run('llama-3.1-70b-instruct', {
+      model: 'llama-3.1-70b-instruct',
+      messages: config.messages,
+      temperature: config.temperature,
+      max_tokens: config.maxTokens,
+      response_format: config.responseFormat,
+    });
+    
+    const duration = Date.now() - startTime;
+    this.env.logger.info('✅ Raindrop AI call completed', {
+      latency: duration
+    });
+    
+    return response;
   }
 
   async fetch(_request: Request): Promise<Response> {
@@ -624,15 +710,15 @@ User: "thank you"
       
       let decisionResponse: any;
       try {
-        decisionResponse = await this.env.AI.run('llama-3.1-70b-instruct', {
-          model: 'llama-3.1-70b-instruct',
+        decisionResponse = await this.callAI({
+          model: 'decision',
           messages: [
             decisionPrompt,
-            ...messages // FIXED: Pass full conversation history from SmartMemory, not just last 3 messages
+            ...messages // FIXED: Pass full conversation history from SmartMemory
           ] as any,
-          response_format: { type: 'json_object' },
+          responseFormat: { type: 'json_object' },
           temperature: 0.3,
-          max_tokens: 500,
+          maxTokens: 500,
         });
         
         this.env.logger.info('Decision stage completed', {
@@ -731,8 +817,8 @@ User: "thank you"
         // Stage 3: Generate final response with tool results
         this.env.logger.info('Stage 3: Generating final response with tool results');
         
-        const finalResponse = await this.env.AI.run('llama-3.1-70b-instruct', {
-          model: 'llama-3.1-70b-instruct',
+        const finalResponse = await this.callAI({
+          model: 'response',
           messages: [
             systemMessage,
             ...messages, // FIXED: Use full conversation history from SmartMemory
@@ -747,14 +833,15 @@ User: "thank you"
             }
           ] as any,
           temperature: 0.7,
-          max_tokens: 1500,
+          maxTokens: 1500,
         });
         
         assistantMessage = finalResponse.choices[0].message.content;
         
         this.env.logger.info('Final response with tool results generated', {
           toolsExecuted: toolCalls.length,
-          responseLength: assistantMessage.length
+          responseLength: assistantMessage.length,
+          tokensUsed: finalResponse.usage?.total_tokens
         });
       } else {
         // No tools needed - use decision's message or generate response
@@ -762,11 +849,11 @@ User: "thank you"
           assistantMessage = decision.userFacingMessage;
         } else {
           // Fallback: generate conversational response
-          const simpleResponse = await this.env.AI.run('llama-3.1-70b-instruct', {
-            model: 'llama-3.1-70b-instruct',
+          const simpleResponse = await this.callAI({
+            model: 'response',
             messages: [systemMessage, ...messages] as any, // FIXED: Use full conversation history
             temperature: 0.7,
-            max_tokens: 1000,
+            maxTokens: 1000,
           });
           assistantMessage = simpleResponse.choices[0].message.content;
         }
@@ -1058,15 +1145,15 @@ Respond with this exact JSON structure:
           let decision: any = { needsTools: false, toolCalls: [], reasoning: '', userFacingMessage: '' };
           
           try {
-            const decisionResponse = await self.env.AI.run('llama-3.1-70b-instruct', {
-              model: 'llama-3.1-70b-instruct',
+            const decisionResponse = await self.callAI({
+              model: 'decision',
               messages: [
                 decisionPrompt,
                 ...messages // FIXED: Use full conversation history from SmartMemory
               ] as any,
-              response_format: { type: 'json_object' },
+              responseFormat: { type: 'json_object' },
               temperature: 0.3,
-              max_tokens: 500,
+              maxTokens: 500,
             });
             
             decision = JSON.parse(decisionResponse.choices[0].message.content);
@@ -1128,46 +1215,35 @@ Respond with this exact JSON structure:
               }]
             : messages; // FIXED: Use full conversation history
 
-          // Call AI with streaming
+          // Use Raindrop AI streaming (Cerebras doesn't support streaming in simplified mode)
           try {
-            // Attempt streaming AI call
             const response = await self.env.AI.run('llama-3.1-70b-instruct', {
               model: 'llama-3.1-70b-instruct',
               messages: finalMessages as any,
               temperature: 0.7,
               max_tokens: 2000,
-              stream: true, // Enable streaming
+              stream: true,
             });
 
             let fullMessage = '';
 
-            // Stream chunks - expect real streaming response
-            if (response && typeof response === 'object' && Symbol.asyncIterator in response) {
-              // Real streaming: iterate over chunks
-              for await (const chunk of response as AsyncIterable<any>) {
-                // Extract content from OpenAI-compatible format
-                const deltaContent = chunk.choices?.[0]?.delta?.content;
-                const text = deltaContent || chunk.response || chunk.content || '';
-                
-                if (text) {
-                  fullMessage += text;
-                  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'chunk', content: text })}\n\n`));
-                }
+            // Stream chunks from Raindrop AI
+            for await (const chunk of response as any) {
+              if (chunk.response) {
+                fullMessage += chunk.response;
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    `data: ${JSON.stringify({ type: 'chunk', content: chunk.response })}\n\n`
+                  )
+                );
               }
-            } else {
-              // Not a stream - use direct response extraction (OpenAI format)
-              const result = response as any;
-              const primaryResponse = result.choices?.[0]?.message?.content;
-              const fallbackResponse = result.response || result.content;
-              fullMessage = primaryResponse || fallbackResponse || '';
-              
-              if (!fullMessage) {
-                throw new Error('AI returned empty streaming response');
-              }
-              
-              // Send as single chunk (no simulated streaming)
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'chunk', content: fullMessage })}\n\n`));
             }
+
+            self.env.logger.info('🤖 Streaming response completed (Raindrop AI)', {
+              model: 'llama-3.1-70b-instruct',
+              totalLength: fullMessage.length,
+              toolsUsed: capturedToolsUsed.length
+            });
 
             // Store complete message
             const assistantMsgId = `msg_${Date.now()}_${Math.random().toString(36).substring(7)}`;
