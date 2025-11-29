@@ -5,14 +5,17 @@ import { useParams, useRouter } from 'next/navigation';
 import { AccountLayout } from '@/components/layout/AccountLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
+import { Building2, Folder, Bell, TrendingUp, Clock, Shield, CheckCircle2 } from 'lucide-react';
 
 interface Organization {
   id: string;
   name: string;
   slug: string;
   role: string;
-  workspaceCount: number;
-  memberCount: number;
+  workspace_count?: number;
+  workspaceCount?: number;
+  member_count?: number;
+  memberCount?: number;
   created_at: number;
 }
 
@@ -20,6 +23,15 @@ interface AccountStats {
   totalOrganizations: number;
   totalWorkspaces: number;
   unreadNotifications: number;
+}
+
+interface RecentActivity {
+  id: string;
+  type: 'organization' | 'workspace' | 'compliance';
+  title: string;
+  description: string;
+  timestamp: number;
+  icon: string;
 }
 
 interface GettingStartedItem {
@@ -42,6 +54,7 @@ export default function AccountDashboardPage() {
     totalWorkspaces: 0,
     unreadNotifications: 0
   });
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [gettingStarted, setGettingStarted] = useState<GettingStartedItem[]>([
     {
       id: '1',
@@ -83,14 +96,40 @@ export default function AccountDashboardPage() {
       const orgsData = await api.get<Organization[]>('/api/organizations');
       setOrganizations(orgsData);
 
-      // Calculate stats
-      const totalWorkspaces = orgsData.reduce((sum, org) => sum + (org.workspaceCount || 0), 0);
+      // Fetch notification count
+      let notificationCount = 0;
+      try {
+        const notifData = await api.get<{ unread: number }>('/api/notifications/count');
+        notificationCount = notifData.unread || 0;
+      } catch (err) {
+        console.error('Failed to fetch notifications:', err);
+      }
+
+      // Calculate stats - handle both camelCase and snake_case from API
+      const totalWorkspaces = orgsData.reduce((sum, org) => {
+        const count = org.workspace_count ?? org.workspaceCount ?? 0;
+        return sum + count;
+      }, 0);
 
       setStats({
         totalOrganizations: orgsData.length,
         totalWorkspaces: totalWorkspaces,
-        unreadNotifications: 0 // Will be fetched from notification service
+        unreadNotifications: notificationCount
       });
+
+      // Generate recent activity based on organizations
+      const activities: RecentActivity[] = [];
+      orgsData.slice(0, 3).forEach((org) => {
+        activities.push({
+          id: `org-${org.id}`,
+          type: 'organization',
+          title: org.name,
+          description: `You joined as ${org.role}`,
+          timestamp: org.created_at || Date.now(),
+          icon: 'building'
+        });
+      });
+      setRecentActivity(activities);
 
       // Update getting started checklist
       setGettingStarted(prev => prev.map(item => {
@@ -147,46 +186,55 @@ export default function AccountDashboardPage() {
 
         {/* Stats Overview */}
         <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
-          <div className="rounded-lg bg-white p-6 shadow">
+          {/* Organizations Card */}
+          <div className="group relative overflow-hidden rounded-lg bg-white p-6 shadow transition-all hover:shadow-lg">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Organizations</p>
                 <p className="mt-2 text-3xl font-bold text-gray-900">{stats.totalOrganizations}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {stats.totalOrganizations === 0 ? 'Create your first' : 'Active organizations'}
+                </p>
               </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-                <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 transition-colors group-hover:bg-blue-200">
+                <Building2 className="h-6 w-6 text-blue-600" />
               </div>
             </div>
+            <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-blue-500 to-blue-600"></div>
           </div>
 
-          <div className="rounded-lg bg-white p-6 shadow">
+          {/* Workspaces Card */}
+          <div className="group relative overflow-hidden rounded-lg bg-white p-6 shadow transition-all hover:shadow-lg">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Workspaces</p>
                 <p className="mt-2 text-3xl font-bold text-gray-900">{stats.totalWorkspaces}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {stats.totalWorkspaces === 0 ? 'Create your first' : 'Across all organizations'}
+                </p>
               </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 transition-colors group-hover:bg-green-200">
+                <Folder className="h-6 w-6 text-green-600" />
               </div>
             </div>
+            <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-green-500 to-green-600"></div>
           </div>
 
-          <div className="rounded-lg bg-white p-6 shadow">
+          {/* Notifications Card */}
+          <div className="group relative overflow-hidden rounded-lg bg-white p-6 shadow transition-all hover:shadow-lg">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Notifications</p>
                 <p className="mt-2 text-3xl font-bold text-gray-900">{stats.unreadNotifications}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {stats.unreadNotifications === 0 ? 'All caught up!' : 'Unread notifications'}
+                </p>
               </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100">
-                <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 transition-colors group-hover:bg-yellow-200">
+                <Bell className="h-6 w-6 text-yellow-600" />
               </div>
             </div>
+            <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-yellow-500 to-yellow-600"></div>
           </div>
         </div>
 
@@ -262,7 +310,12 @@ export default function AccountDashboardPage() {
         <div className="rounded-lg bg-white shadow">
           <div className="border-b border-gray-200 px-6 py-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Your Organizations</h2>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Your Organizations</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Manage teams, workspaces, and billing for your organizations
+                </p>
+              </div>
               <Button
                 variant="primary"
                 size="sm"
@@ -276,86 +329,207 @@ export default function AccountDashboardPage() {
           <div className="divide-y divide-gray-200">
             {organizations.length === 0 ? (
               <div className="px-6 py-12 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-50 to-blue-100">
+                  <Building2 className="h-8 w-8 text-blue-600" />
                 </div>
-                <h3 className="mt-4 text-sm font-medium text-gray-900">No organizations</h3>
+                <h3 className="mt-4 text-lg font-medium text-gray-900">No organizations yet</h3>
                 <p className="mt-2 text-sm text-gray-600">
-                  Get started by creating your first organization
+                  Organizations help you collaborate with your team and manage compliance across multiple workspaces
                 </p>
                 <div className="mt-6">
                   <Button
                     variant="primary"
                     onClick={() => router.push('/organizations/new')}
                   >
-                    Create Organization
+                    Create Your First Organization
                   </Button>
                 </div>
               </div>
             ) : (
-              organizations.map((org) => (
-                <div
-                  key={org.id}
-                  className="cursor-pointer px-6 py-4 transition-colors hover:bg-gray-50"
-                  onClick={() => router.push(`/org/${org.id}`)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium text-gray-900">{org.name}</h3>
-                      <div className="mt-1 flex items-center gap-4 text-sm text-gray-600">
-                        <span>{org.workspaceCount || 0} workspaces</span>
-                        <span>•</span>
-                        <span>{org.memberCount || 0} members</span>
-                        <span>•</span>
-                        <span className="capitalize">{org.role}</span>
+              organizations.map((org) => {
+                const workspaceCount = org.workspace_count ?? org.workspaceCount ?? 0;
+                const memberCount = org.member_count ?? org.memberCount ?? 0;
+                
+                return (
+                  <div
+                    key={org.id}
+                    className="group cursor-pointer px-6 py-4 transition-all hover:bg-gray-50"
+                    onClick={() => router.push(`/org/${org.id}`)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-sm">
+                          <Building2 className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                            {org.name}
+                          </h3>
+                          <div className="mt-1 flex items-center gap-4 text-sm text-gray-600">
+                            <span className="flex items-center gap-1">
+                              <Folder className="h-4 w-4" />
+                              {workspaceCount} {workspaceCount === 1 ? 'workspace' : 'workspaces'}
+                            </span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <Shield className="h-4 w-4" />
+                              {memberCount} {memberCount === 1 ? 'member' : 'members'}
+                            </span>
+                            <span>•</span>
+                            <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium capitalize text-blue-800">
+                              {org.role}
+                            </span>
+                          </div>
+                        </div>
                       </div>
+                      <svg className="h-5 w-5 text-gray-400 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
                     </div>
-                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
 
-        {/* Quick Links */}
-        <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <Button
-            variant="outline"
-            className="justify-start p-6 text-left"
-            onClick={() => router.push(`/account/${accountId}/profile`)}
-          >
-            <div>
-              <h3 className="font-medium text-gray-900">Profile Settings</h3>
-              <p className="mt-1 text-sm text-gray-600">Update your personal information</p>
-            </div>
-          </Button>
+        {/* Quick Links and Recent Activity Grid */}
+        <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* Quick Links - 2 columns */}
+          <div className="lg:col-span-2">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">Quick Actions</h2>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {/* Profile Settings Card */}
+              <button
+                onClick={() => router.push(`/account/${accountId}/profile`)}
+                className="group relative overflow-hidden rounded-lg border-2 border-gray-200 bg-white p-6 text-left transition-all hover:border-blue-500 hover:shadow-md"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
+                    <Shield className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                      Profile Settings
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Update your personal information and preferences
+                    </p>
+                  </div>
+                </div>
+                <div className="absolute bottom-0 left-0 h-1 w-0 bg-gradient-to-r from-blue-500 to-blue-600 transition-all group-hover:w-full"></div>
+              </button>
 
-          <Button
-            variant="outline"
-            className="justify-start p-6 text-left"
-            onClick={() => router.push(`/account/${accountId}/notifications`)}
-          >
-            <div>
-              <h3 className="font-medium text-gray-900">Notifications</h3>
-              <p className="mt-1 text-sm text-gray-600">Manage notification preferences</p>
-            </div>
-          </Button>
+              {/* Notifications Card */}
+              <button
+                onClick={() => router.push(`/account/${accountId}/notifications`)}
+                className="group relative overflow-hidden rounded-lg border-2 border-gray-200 bg-white p-6 text-left transition-all hover:border-yellow-500 hover:shadow-md"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-yellow-100 text-yellow-600 transition-colors group-hover:bg-yellow-600 group-hover:text-white">
+                    <Bell className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 group-hover:text-yellow-600 transition-colors">
+                      Notification Settings
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Manage how and when you receive notifications
+                    </p>
+                  </div>
+                </div>
+                <div className="absolute bottom-0 left-0 h-1 w-0 bg-gradient-to-r from-yellow-500 to-yellow-600 transition-all group-hover:w-full"></div>
+              </button>
 
-          <Button
-            variant="outline"
-            className="justify-start p-6 text-left"
-            onClick={() => router.push('/notifications')}
-          >
-            <div>
-              <h3 className="font-medium text-gray-900">Notification Center</h3>
-              <p className="mt-1 text-sm text-gray-600">View all notifications</p>
+              {/* Notification Center Card */}
+              <button
+                onClick={() => router.push('/notifications')}
+                className="group relative overflow-hidden rounded-lg border-2 border-gray-200 bg-white p-6 text-left transition-all hover:border-green-500 hover:shadow-md"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-600 transition-colors group-hover:bg-green-600 group-hover:text-white">
+                    <CheckCircle2 className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-gray-900 group-hover:text-green-600 transition-colors">
+                        Notification Center
+                      </h3>
+                      {stats.unreadNotifications > 0 && (
+                        <span className="inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                          {stats.unreadNotifications}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-gray-600">
+                      View all your notifications in one place
+                    </p>
+                  </div>
+                </div>
+                <div className="absolute bottom-0 left-0 h-1 w-0 bg-gradient-to-r from-green-500 to-green-600 transition-all group-hover:w-full"></div>
+              </button>
+
+              {/* All Organizations Card */}
+              <button
+                onClick={() => router.push('/organizations')}
+                className="group relative overflow-hidden rounded-lg border-2 border-gray-200 bg-white p-6 text-left transition-all hover:border-purple-500 hover:shadow-md"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-purple-100 text-purple-600 transition-colors group-hover:bg-purple-600 group-hover:text-white">
+                    <Building2 className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 group-hover:text-purple-600 transition-colors">
+                      All Organizations
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Manage all your organizations and teams
+                    </p>
+                  </div>
+                </div>
+                <div className="absolute bottom-0 left-0 h-1 w-0 bg-gradient-to-r from-purple-500 to-purple-600 transition-all group-hover:w-full"></div>
+              </button>
             </div>
-          </Button>
+          </div>
+
+          {/* Recent Activity - 1 column */}
+          <div>
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">Recent Activity</h2>
+            <div className="rounded-lg border border-gray-200 bg-white">
+              {recentActivity.length === 0 ? (
+                <div className="px-6 py-8 text-center">
+                  <Clock className="mx-auto h-10 w-10 text-gray-300" />
+                  <p className="mt-3 text-sm text-gray-600">No recent activity</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Your activity will appear here
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {recentActivity.map((activity) => (
+                    <div key={activity.id} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100">
+                          <Building2 className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {activity.title}
+                          </p>
+                          <p className="mt-0.5 text-xs text-gray-600">
+                            {activity.description}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-400">
+                            {new Date(activity.timestamp).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </AccountLayout>
