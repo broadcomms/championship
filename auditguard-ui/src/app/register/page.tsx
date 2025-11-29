@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
@@ -64,9 +65,12 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
       <div className="w-full max-w-md space-y-8">
         <div>
-          <h1 className="text-center text-3xl font-bold tracking-tight text-gray-900">
-            AuditGuard
-          </h1>
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <ShieldCheck className="h-10 w-10 text-blue-600" />
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+              AuditGuardX
+            </h1>
+          </div>
           <h2 className="mt-6 text-center text-2xl font-semibold text-gray-900">
             Create your account
           </h2>

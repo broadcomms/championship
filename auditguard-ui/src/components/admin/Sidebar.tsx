@@ -14,6 +14,7 @@ import {
   Package,
   Settings,
   Shield,
+  ShieldCheck,
   Users,
 } from 'lucide-react';
 
@@ -78,7 +79,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="p-6 border-b border-gray-800">
         <div className="flex items-center space-x-2">
-          <Package className="h-8 w-8 text-blue-500" />
+          <ShieldCheck className="h-8 w-8 text-blue-500" />
           <div>
             <h1 className="text-xl font-bold">AuditGuardX</h1>
             <p className="text-xs text-gray-400">Admin Panel</p>

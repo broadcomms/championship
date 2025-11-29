@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, Send, X, Minimize2, Maximize2, ExternalLink, Download, Shield, MessageSquare, Mic } from 'lucide-react';
+import { Bot, Send, X, Minimize2, Maximize2, ExternalLink, Download, Shield, ShieldCheck, MessageSquare, Mic } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -372,7 +372,7 @@ export function AIChatWidget({
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b bg-blue-600 text-white rounded-t-lg">
               <div className="flex items-center space-x-2">
-                <Shield className="w-5 h-5" />
+                <ShieldCheck className="w-5 h-5" />
                 <span className="font-semibold">AuditGuardX AI</span>
                 {currentSessionId && (
                   <span className="text-xs opacity-70">• Active Session</span>

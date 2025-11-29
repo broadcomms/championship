@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function Home() {
@@ -28,7 +29,10 @@ export default function Home() {
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-center">
-        <h1 className="text-2xl font-bold">AuditGuard</h1>
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <ShieldCheck className="h-8 w-8 text-blue-600 animate-pulse" />
+          <h1 className="text-2xl font-bold">AuditGuardX</h1>
+        </div>
         <p className="mt-2 text-gray-600">Loading...</p>
       </div>
     </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings, LogOut, User, Shield, Building2, ChevronDown } from 'lucide-react';
+import { Settings, LogOut, User, Shield, ShieldCheck, Building2, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { RealtimeStatusIndicator } from '@/components/status/RealtimeStatusIndicator';
@@ -86,7 +86,7 @@ export function TopNavBar({ currentOrgId, showOrgSwitcher = true }: TopNavBarPro
               onClick={handleLogoClick}
               className="flex items-center gap-2 group focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg px-2 py-1"
             >
-              <Shield className="h-7 w-7 text-blue-600 group-hover:text-blue-700 transition-colors" />
+              <ShieldCheck className="h-7 w-7 text-blue-600 group-hover:text-blue-700 transition-colors" />
               <span className="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
                 AuditGuardX
               </span>
