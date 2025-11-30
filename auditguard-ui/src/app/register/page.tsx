@@ -6,11 +6,11 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { ErrorResponse } from '@/types';
+import { AuthLayout } from '@/components/auth/AuthLayout';
 
 // Validation schema
 const registerSchema = z.object({
@@ -62,21 +62,27 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md space-y-8">
-        <div>
-          <div className="flex items-center justify-center gap-2 mb-6">
-            <ShieldCheck className="h-10 w-10 text-blue-600" />
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-              AuditGuardX
-            </h1>
-          </div>
-          <h2 className="mt-6 text-center text-2xl font-semibold text-gray-900">
-            Create your account
-          </h2>
+    <AuthLayout
+      hero={{
+        eyebrow: 'Launch-ready signup',
+        heading: 'Spin up an AI-powered compliance workspace in minutes',
+        description:
+          'Unified onboarding guides you from workspace creation to first evidence upload, no consultants required.',
+        bullets: [
+          'WorkOS SSO + Stripe billing configured out of the box',
+          'Smart bucket storage with Vultr speed',
+          'Voice copilots assist during every onboarding step',
+        ],
+      }}
+    >
+      <div className="space-y-8">
+        <div className="text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-blue-600">Get started</p>
+          <h2 className="mt-3 text-2xl font-semibold text-slate-900">Create your account</h2>
+          <p className="mt-2 text-sm text-slate-500">Start the 14-day Professional trial with instant workspace provisioning.</p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
+        <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
           {error && (
             <div className="rounded-md bg-red-50 p-4">
               <p className="text-sm text-red-800">{error}</p>
@@ -143,6 +149,6 @@ export default function RegisterPage() {
           </div>
         </form>
       </div>
-    </div>
+    </AuthLayout>
   );
 }

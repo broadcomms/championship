@@ -11,8 +11,9 @@ export const heroContent = {
 export const customerLogos = [
   { name: 'Raindrop Platform', logo: '/images/logos/liquidmetal.avif', tagline: '' },
   { name: 'Cerebras Labs', logo: '/images/logos/cerebras.png', tagline: '' },
-  { name: 'Strip', logo: '/images/logos/stripe.png', tagline: '' },
+
   { name: 'ElevenLabs', logo: '/images/logos/elevenlabs.png', tagline: '' },
+{ name: 'Stripe', logo: '/images/logos/stripe.png', tagline: '' },
   { name: 'Vultr', logo: '/images/logos/vultr.webp', tagline: '' },
   { name: 'WorkOS', logo: '/images/logos/workos.png', tagline: '' },
 ];

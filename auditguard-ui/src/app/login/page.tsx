@@ -6,12 +6,12 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { ErrorResponse } from '@/types';
 import { api } from '@/lib/api';
+import { AuthLayout } from '@/components/auth/AuthLayout';
 
 // Validation schema
 const loginSchema = z.object({
@@ -92,23 +92,29 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md space-y-8">
-        <div>
-          <div className="flex items-center justify-center gap-2 mb-6">
-            <ShieldCheck className="h-10 w-10 text-blue-600" />
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-              AuditGuardX
-            </h1>
-          </div>
-          <h2 className="mt-6 text-center text-2xl font-semibold text-gray-900">
-            Sign in to your account
-          </h2>
+    <AuthLayout
+      hero={{
+        eyebrow: 'Audit-ready access',
+        heading: 'Secure workspace login with AI copilots on standby',
+        description:
+          'SSO via WorkOS plus passwordless-ready email keeps every workspace aligned with SOC 2 and HIPAA controls.',
+        bullets: [
+          '24/7 monitoring on Raindrop Smart Components',
+          'Hands-free assistant available after sign-in',
+          'Audit trails, MFA, and device trust baked in',
+        ],
+      }}
+    >
+      <div className="space-y-8">
+        <div className="text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-blue-600">Welcome back</p>
+          <h2 className="mt-3 text-2xl font-semibold text-slate-900">Sign in to your account</h2>
+          <p className="mt-2 text-sm text-slate-500">Access your compliance workspace or rejoin an in-progress audit.</p>
         </div>
 
         {!showSsoForm ? (
           <>
-            <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
+            <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
               {error && (
                 <div className="rounded-md bg-red-50 p-4">
                   <p className="text-sm text-red-800">{error}</p>
@@ -181,7 +187,7 @@ export default function LoginPage() {
           </>
         ) : (
           <>
-            <form className="mt-8 space-y-6" onSubmit={handleSsoSubmit(onSsoSubmit)}>
+            <form className="space-y-6" onSubmit={handleSsoSubmit(onSsoSubmit)}>
               {error && (
                 <div className="rounded-md bg-red-50 p-4">
                   <p className="text-sm text-red-800">{error}</p>
@@ -241,6 +247,6 @@ export default function LoginPage() {
           </>
         )}
       </div>
-    </div>
+    </AuthLayout>
   );
 }
