@@ -1,83 +1,185 @@
 export const metadata = {
   title: 'About | AuditGuardX',
-  description: 'Learn about the mission, values, and team building the AuditGuardX compliance platform.',
+  description: 'Discover the story, mission, and leadership team powering AuditGuardX compliance automation.',
 };
 
+const stats = [
+  { value: '46', label: 'Enterprise Users', subtext: 'Modern teams in regulated industries' },
+  { value: '10K+', label: 'Documents Managed', subtext: 'Continuously monitored for compliance' },
+  { value: '99.9%', label: 'Platform Uptime', subtext: 'Trusted infrastructure and support' },
+  { value: '75%', label: 'Faster Audits', subtext: 'Automation-first workflows' },
+];
+
 const values = [
-  { title: 'Ship compliance superpowers', description: 'Every launch removes toil from compliance, legal, and security teams.' },
-  { title: 'Default to clarity', description: 'Complex frameworks deserve simple explanations and transparent roadmaps.' },
-  { title: 'Bias for credibility', description: 'Pair measurable outcomes with trust signals, audits, and certifications.' },
+  {
+    title: 'Integrity',
+    description:
+      'We maintain the highest ethical standards in everything we do, ensuring transparency and honesty in all relationships.',
+  },
+  {
+    title: 'Innovation',
+    description: "We push the boundaries of what's possible in compliance technology, delivering cutting-edge solutions.",
+  },
+  {
+    title: 'Collaboration',
+    description: 'We partner closely with customers to achieve shared success across every audit and framework.',
+  },
+  {
+    title: 'Excellence',
+    description: 'We strive for excellence in our platform, services, and the experiences we create for customers.',
+  },
 ];
 
 const timeline = [
-  { year: '2023', event: 'Prototype voice-first compliance assistant with ElevenLabs + Raindrop Smart Components.' },
-  { year: '2024', event: 'Launch AuditGuardX v2 with WorkOS SSO, Stripe billing, and Vultr global infrastructure.' },
-  { year: '2025', event: '3,000+ organizations onboarded, 20+ frameworks supported, Cerebras-powered inference.' },
+  {
+    year: '2024',
+    title: 'Foundation',
+    description:
+      'AuditGuardX launched with a vision to revolutionize compliance management through intelligent automation and design.',
+  },
+  {
+    year: '2025',
+    title: 'Platform Launch',
+    description:
+      'Released the core compliance platform, serving enterprise customers across healthcare and financial services.',
+  },
+];
+
+const leadership = [
+  {
+    name: 'Patrick Ejelle-Ndille',
+    role: 'Founder, President of Innovation',
+    bio: 'Technology visionary with deep expertise in AI, machine learning, and enterprise platform architecture.',
+  },
+  {
+    name: 'Joao Amador',
+    role: 'Vice President of Strategy',
+    bio: 'Compliance strategist with a track record of guiding regulated industries through complex frameworks.',
+  },
 ];
 
 export default function AboutPage() {
   return (
-    <div className="space-y-16 pt-28">
-      <section className="bg-white">
-        <div className="mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 lg:px-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Company</p>
-          <h1 className="mt-4 text-4xl font-bold text-gray-900 sm:text-5xl">Compliance automation for ambitious teams</h1>
-          <p className="mt-4 text-base text-gray-600">
-            AuditGuardX unifies document intelligence, remediation workflows, and conversational AI so compliance leaders can
-            move at the speed of product teams.
+    <div className="bg-gray-50 pb-24 pt-28">
+      <section className="mx-auto max-w-5xl px-4 text-center sm:px-6 lg:px-8">
+        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">About Us</p>
+        <h1 className="mt-4 text-4xl font-bold text-gray-900 sm:text-5xl">Automated compliance for the modern enterprise</h1>
+        <p className="mt-4 text-lg text-gray-600">
+          AuditGuardX is the enterprise compliance and audit management platform trusted by organizations worldwide to
+          streamline regulatory processes and ensure continuous compliance.
+        </p>
+      </section>
+
+      <section className="mx-auto mt-12 max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat) => (
+            <div key={stat.label} className="rounded-2xl border border-white/60 bg-white/90 p-6 shadow-sm">
+              <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+              <p className="mt-1 text-sm font-semibold uppercase tracking-wide text-blue-600">{stat.label}</p>
+              <p className="mt-2 text-sm text-gray-500">{stat.subtext}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto mt-16 grid max-w-6xl gap-8 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+        <div className="rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Our Mission</p>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">
+            Empower organizations with intelligent compliance solutions that transform regulatory burden into competitive advantage.
+          </h2>
+          <p className="mt-4 text-sm text-gray-600">
+            We help teams focus on growth while upholding the highest standards of governance and risk management.
+          </p>
+        </div>
+        <div className="rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Our Vision</p>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">
+            Become the global leader in compliance technology, seamlessly integrating regulatory requirements into daily operations.
+          </h2>
+          <p className="mt-4 text-sm text-gray-600">
+            We imagine a world where innovation flourishes alongside transparency and accountability.
           </p>
         </div>
       </section>
 
-      <section className="bg-white">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-12 sm:px-6 lg:grid-cols-2 lg:px-8">
-          <div className="rounded-3xl border border-gray-100 p-8 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Mission</p>
-            <p className="mt-4 text-2xl font-bold text-gray-900">Deliver enterprise-grade compliance at startup speed.</p>
-            <p className="mt-4 text-sm text-gray-600">
-              We integrate Raindrop Smart Components, Vultr services, WorkOS authentication, Stripe billing, and ElevenLabs
-              voice to automate every audit milestone.
+      <section className="mx-auto mt-16 max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="rounded-3xl bg-white p-10 shadow-sm">
+          <div className="text-center">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Our Story</p>
+            <p className="mt-4 text-base text-gray-600">
+              Founded in December 2024 by compliance experts and technology innovators, AuditGuardX emerged when traditional
+              methods could no longer keep pace with rapidly evolving business and regulatory landscapes.
             </p>
           </div>
-          <div className="rounded-3xl border border-gray-100 p-8 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Team</p>
-            <p className="mt-4 text-sm text-gray-600">
-              Distributed across New York, Toronto, and Lisbon with alumni from top compliance consultancies, AI research labs,
-              and YC-backed startups.
-            </p>
-            <ul className="mt-4 space-y-2 text-sm text-gray-600">
-              <li>• Compliance & Legal Ops</li>
-              <li>• AI Research & Platform</li>
-              <li>• Product, Brand, & Community</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-gray-50">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Values</p>
-          <div className="mt-6 grid gap-6 md:grid-cols-3">
-            {values.map((value) => (
-              <div key={value.title} className="rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
-                <p className="text-lg font-semibold text-gray-900">{value.title}</p>
-                <p className="mt-3 text-sm text-gray-600">{value.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-white">
-        <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Timeline</p>
-          <div className="mt-6 space-y-6">
+          <div className="mt-10 space-y-6">
             {timeline.map((item) => (
-              <div key={item.year} className="flex flex-col gap-4 rounded-3xl border border-gray-100 p-6 shadow-sm sm:flex-row sm:items-center">
-                <div className="text-3xl font-bold text-blue-600">{item.year}</div>
-                <p className="text-sm text-gray-600">{item.event}</p>
+              <div key={item.year} className="flex flex-col gap-4 rounded-2xl border border-gray-100 p-6 sm:flex-row sm:items-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-xl font-bold text-white">
+                  {item.year}
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-gray-900">{item.title}</p>
+                  <p className="mt-1 text-sm text-gray-600">{item.description}</p>
+                </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto mt-16 max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="rounded-3xl border border-gray-100 bg-white p-10 shadow-sm">
+          <h2 className="text-center text-3xl font-bold text-gray-900">Leadership</h2>
+          <p className="mt-3 text-center text-sm text-gray-600">
+            Meet the experts driving innovation in compliance technology.
+          </p>
+          <div className="mt-10 grid gap-6 sm:grid-cols-2">
+            {leadership.map((leader) => (
+              <div key={leader.name} className="rounded-2xl border border-gray-100 p-6">
+                <p className="text-lg font-semibold text-gray-900">{leader.name}</p>
+                <p className="text-sm font-medium text-blue-600">{leader.role}</p>
+                <p className="mt-3 text-sm text-gray-600">{leader.bio}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto mt-16 max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="rounded-3xl bg-white p-10 shadow-sm">
+          <p className="text-center text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Our Core Values</p>
+          <p className="mt-2 text-center text-base text-gray-600">The principles that guide everything we do.</p>
+          <div className="mt-8 grid gap-6 md:grid-cols-2">
+            {values.map((value) => (
+              <div key={value.title} className="rounded-2xl border border-gray-100 p-6">
+                <p className="text-lg font-semibold text-gray-900">{value.title}</p>
+                <p className="mt-2 text-sm text-gray-600">{value.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto mt-16 max-w-5xl px-4 sm:px-6 lg:px-8">
+        <div className="rounded-3xl bg-gradient-to-br from-blue-600 via-blue-500 to-purple-500 p-10 text-center text-white shadow-xl">
+          <h2 className="text-3xl font-bold">Join Our Mission</h2>
+          <p className="mt-3 text-base text-white/90">
+            Ready to transform your compliance processes? Partner with us to build a more efficient, transparent, and secure future.
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <a
+              href="/demo/video"
+              className="rounded-full border border-white/30 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+              See Platform Demo
+            </a>
+            <a
+              href="/company/contact"
+              className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-blue-600 transition hover:bg-blue-50"
+            >
+              Start Conversation
+            </a>
           </div>
         </div>
       </section>

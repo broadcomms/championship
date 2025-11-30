@@ -8,7 +8,7 @@ export function FeatureHighlights() {
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-600">Platform</p>
           <h2 className="mt-4 text-3xl font-bold text-gray-900 sm:text-4xl">Powerful features for every compliance moment</h2>
           <p className="mt-3 text-base text-gray-600">
-            Built with Raindrop Smart Components, Vultr infrastructure, WorkOS SSO, and Stripe billing for launch-ready scale.
+            Built with Raindrop Smart Components, Vultr infrastructure, WorkOS SSO, and Stripe billing for enterprise scaling.
           </p>
         </div>
         <div className="mt-12 grid gap-8 md:grid-cols-2">

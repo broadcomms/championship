@@ -27,16 +27,35 @@ export default function PricingPage() {
       <PricingPreview />
 
       <section className="bg-white">
-        <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-12 sm:px-6 lg:flex-row lg:px-8">
-          <div className="flex-1 space-y-4">
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Compare</p>
-            <h2 className="text-3xl font-bold text-gray-900">AuditGuardX vs. legacy providers</h2>
-            <p className="text-sm text-gray-600">
-              Pricing benchmarks pulled from analyst reports and the public pricing pages of Vanta, Drata, and Big 4 consultants.
-            </p>
-          </div>
-          <div className="flex-1">
-            <ComparisonTable />
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="items-start rounded-[40px] bg-gray-50/60 p-6 shadow-inner shadow-gray-100 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] lg:gap-10 lg:p-10">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Compare</p>
+                <h2 className="text-3xl font-bold text-gray-900">AuditGuardX vs. legacy compliance providers</h2>
+                <p className="text-sm text-gray-600">
+                  Benchmarks pulled from analyst reports and public pricing pages of Vanta, Drata, and Big 4 consultants. We win on price,
+                  coverage, and speed.
+                </p>
+              </div>
+              <ul className="space-y-3 text-sm text-gray-700">
+                <li className="rounded-2xl bg-white/80 p-4 shadow-sm">
+                  <p className="font-semibold text-gray-900">Transparent pricing</p>
+                  <p className="text-gray-600">Flat monthly plans with 14-day Professional trial and no hidden onboarding fees.</p>
+                </li>
+                <li className="rounded-2xl bg-white/80 p-4 shadow-sm">
+                  <p className="font-semibold text-gray-900">Full-stack automation</p>
+                  <p className="text-gray-600">Voice AI assistant, evidence automation, and remediation workflows included.</p>
+                </li>
+                <li className="rounded-2xl bg-white/80 p-4 shadow-sm">
+                  <p className="font-semibold text-gray-900">Enterprise readiness</p>
+                  <p className="text-gray-600">WorkOS SSO, Stripe billing, and global Vultr infrastructure deliver 99.9% uptime.</p>
+                </li>
+              </ul>
+            </div>
+            <div className="mt-8 lg:mt-0">
+              <ComparisonTable />
+            </div>
           </div>
         </div>
       </section>

@@ -9,12 +9,12 @@ export const heroContent = {
 };
 
 export const customerLogos = [
-  { name: 'Raindrop Platform', logo: '/images/logos/logo-raindrop.svg', tagline: 'Smart Components • MCP' },
-  { name: 'Cerebras Labs', logo: '/images/logos/logo-cerebras.svg', tagline: 'Ultra-low latency AI' },
-  { name: 'ElevenLabs Health', logo: '/images/logos/logo-elevenlabs.svg', tagline: 'Voice AI partner' },
-  { name: 'Northwind Financial', logo: '/images/logos/logo-northwind.svg', tagline: 'FinTech security' },
-  { name: 'Acme BioTech', logo: '/images/logos/logo-acme.svg', tagline: 'Healthcare data trust' },
-  { name: 'Atlas Legal', logo: '/images/logos/logo-atlas.svg', tagline: 'Global privacy ops' },
+  { name: 'Raindrop Platform', logo: '/images/logos/liquidmetal.avif', tagline: '' },
+  { name: 'Cerebras Labs', logo: '/images/logos/cerebras.png', tagline: '' },
+  { name: 'Strip', logo: '/images/logos/stripe.png', tagline: '' },
+  { name: 'ElevenLabs', logo: '/images/logos/elevenlabs.png', tagline: '' },
+  { name: 'Vultr', logo: '/images/logos/vultr.webp', tagline: '' },
+  { name: 'WorkOS', logo: '/images/logos/workos.png', tagline: '' },
 ];
 
 export const valueProps = [
@@ -233,10 +233,22 @@ export const frameworksCatalog = [
     automation: 'Policy generation, evidence reminders, auditor exports',
   },
   {
+    name: 'SOC 1 Type II',
+    coverage: 'Financial reporting controls • Service org trust',
+    industries: ['FinTech', 'Financial Services'],
+    automation: 'Control narratives, sampling automation, variance dashboards',
+  },
+  {
     name: 'HIPAA / HITECH',
     coverage: 'Privacy • Security • Breach notification',
     industries: ['Healthcare', 'Life Sciences'],
     automation: 'BAA templates, PHI redaction, incident logs',
+  },
+  {
+    name: 'HITRUST CSF',
+    coverage: 'Harmonized controls across HIPAA, NIST, ISO',
+    industries: ['Healthcare', 'Life Sciences'],
+    automation: 'Inheritance mapping, maturity scoring, assessor-ready evidence packs',
   },
   {
     name: 'GDPR + UK GDPR',
@@ -245,16 +257,112 @@ export const frameworksCatalog = [
     automation: 'Data map sync, subject request workflows',
   },
   {
-    name: 'PCI-DSS',
-    coverage: 'Network • Access • Monitoring',
-    industries: ['FinTech', 'Payments'],
-    automation: 'Control monitoring, gateway evidence collectors',
+    name: 'CPRA / CCPA',
+    coverage: 'US consumer privacy rights • Data minimization',
+    industries: ['E-commerce', 'Enterprise'],
+    automation: 'Do-not-sell registries, preference centers, DSAR fulfillment',
   },
   {
     name: 'ISO 27001',
     coverage: 'Annex A controls',
     industries: ['Enterprise', 'Government'],
     automation: 'Risk register sync, control health scoring',
+  },
+  {
+    name: 'ISO 27701',
+    coverage: 'Privacy Information Management System add-on',
+    industries: ['Enterprise', 'Government'],
+    automation: 'PIA workflows, processor/sub-processor attestation tracking',
+  },
+  {
+    name: 'ISO 22301',
+    coverage: 'Business continuity • Disaster recovery readiness',
+    industries: ['Enterprise', 'Critical Infrastructure'],
+    automation: 'BCP runbooks, scenario testing schedules, auditor exports',
+  },
+  {
+    name: 'PCI-DSS',
+    coverage: 'Network • Access • Monitoring',
+    industries: ['FinTech', 'Payments'],
+    automation: 'Control monitoring, gateway evidence collectors',
+  },
+  {
+    name: 'NIST CSF 2.0',
+    coverage: 'Identify • Protect • Detect • Respond • Recover',
+    industries: ['Critical Infrastructure', 'Enterprise'],
+    automation: 'Tier scoring matrices, gap analysis tasks, exec-ready heatmaps',
+  },
+  {
+    name: 'NIST SP 800-53 Rev 5',
+    coverage: 'Security controls for US federal workloads',
+    industries: ['Government', 'Public Sector'],
+    automation: 'Control tailoring, SSP automation, POA&M tracking',
+  },
+  {
+    name: 'FedRAMP Moderate',
+    coverage: 'US federal cloud authorization baseline',
+    industries: ['SaaS', 'Government'],
+    automation: 'Boundary diagrams, continuous monitoring packets, 3PAO exports',
+  },
+  {
+    name: 'CMMC 2.0 Level 2',
+    coverage: 'DFARS / DoD supplier security expectations',
+    industries: ['Defense', 'Manufacturing'],
+    automation: 'Assessment scoring, SPRS upload kits, remediation workflows',
+  },
+  {
+    name: 'SOX / ICFR',
+    coverage: 'Financial reporting integrity • ITGC alignment',
+    industries: ['Financial Services', 'Enterprise'],
+    automation: 'Control ownership, walkthrough documentation, quarterly certification tracking',
+  },
+  {
+    name: 'PIPEDA',
+    coverage: 'Canadian federal privacy principles',
+    industries: ['SaaS', 'Healthcare'],
+    automation: 'Consent models, breach logs, data residency attestations',
+  },
+  {
+    name: 'OSFI B-13 Technology & Cyber Risk',
+    coverage: 'Canadian banking guidance for resilience',
+    industries: ['Financial Services', 'Enterprise'],
+    automation: 'Control-to-guideline mapping, vendor risk workflows, regulator-ready briefs',
+  },
+  {
+    name: 'UK Cyber Essentials Plus',
+    coverage: 'Baseline UK government security controls',
+    industries: ['Government', 'SaaS'],
+    automation: 'Self-assessment evidence, penetration test tracking, certificate packages',
+  },
+  {
+    name: 'NHS DSP Toolkit',
+    coverage: 'UK health data security & protection',
+    industries: ['Healthcare', 'Public Sector'],
+    automation: 'IGT submissions, safeguard attestations, incident evidence logs',
+  },
+  {
+    name: 'Australian Privacy Act (APP)',
+    coverage: 'Australian Privacy Principles for regulated entities',
+    industries: ['Enterprise', 'Healthcare'],
+    automation: 'Collection notices, consent tracking, OAIC-ready reporting bundles',
+  },
+  {
+    name: 'ASD Essential Eight',
+    coverage: 'Australian Signals Directorate mitigation strategies',
+    industries: ['Government', 'Critical Infrastructure'],
+    automation: 'Maturity scoring, patch cadence evidence, hardening playbooks',
+  },
+  {
+    name: 'IRAP PROTECTED',
+    coverage: 'Australian federal cloud assessment (PROTECTED level)',
+    industries: ['Government', 'Enterprise'],
+    automation: 'IRAP assessor packages, control inheritance mapping, continuous monitoring kits',
+  },
+  {
+    name: 'APRA CPS 234',
+    coverage: 'Australian financial services cyber resilience',
+    industries: ['Financial Services', 'Banking'],
+    automation: 'Board reporting, incident SLAs, prudential review evidence',
   },
 ];
 
