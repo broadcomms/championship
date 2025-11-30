@@ -51,13 +51,21 @@ export function DocumentContentViewer({
         `/api/workspaces/${workspaceId}/documents/${documentId}/content`
       );
       setContent(data);
-    } catch (err: any) {
-      if (err?.status === 404) {
+    } catch (err: unknown) {
+      const status = typeof err === 'object' && err && 'status' in err ? (err as { status?: number }).status : undefined;
+      if (status === 404) {
         setContent(null);
         setIsContentUnavailable(true);
         return;
       }
-      setError(err.error || err.message || 'Failed to load document content');
+      const rawMessage =
+        (typeof err === 'object' && err && 'error' in err && typeof (err as { error?: string }).error === 'string'
+          ? (err as { error?: string }).error
+          : err instanceof Error
+            ? err.message
+            : 'Failed to load document content');
+      const safeMessage = rawMessage && rawMessage.trim().length > 0 ? rawMessage : 'Failed to load document content';
+      setError(safeMessage);
     } finally {
       setIsLoading(false);
     }
@@ -446,14 +454,15 @@ function FullTextTab({ fullText, workspaceId, documentId, onReExtract }: FullTex
       if (onReExtract) {
         onReExtract();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Differentiate between network errors and server errors
       if (error instanceof TypeError && error.message.includes('fetch')) {
         setReExtractError('Network error: Unable to connect to server');
       } else if (error instanceof SyntaxError) {
         setReExtractError('Server returned invalid response');
       } else {
-        setReExtractError(error.message || 'Failed to re-extract text from storage');
+        const fallback = error instanceof Error ? error.message : 'Failed to re-extract text from storage';
+        setReExtractError(fallback);
       }
     } finally {
       setIsReExtracting(false);

@@ -1,11 +1,5 @@
 import type { Message } from '@/types/assistant';
 
-interface ExportOptions {
-  format: 'markdown' | 'json' | 'pdf';
-  includeMetadata?: boolean;
-  includeTimestamps?: boolean;
-}
-
 /**
  * Export conversation to Markdown format
  */
@@ -14,14 +8,13 @@ export function exportToMarkdown(
   sessionId?: string,
   workspaceId?: string
 ): string {
-  const timestamp = new Date().toISOString().split('T')[0];
   let markdown = `# AuditGuardX AI Conversation\n\n`;
   markdown += `**Date:** ${new Date().toLocaleString()}\n`;
   if (sessionId) markdown += `**Session ID:** ${sessionId}\n`;
   if (workspaceId) markdown += `**Workspace ID:** ${workspaceId}\n`;
   markdown += `\n---\n\n`;
 
-  messages.forEach((message, index) => {
+  messages.forEach((message) => {
     const role = message.role === 'user' ? '👤 User' : '🤖 Assistant';
     const time = new Date(message.timestamp).toLocaleTimeString();
 

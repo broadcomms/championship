@@ -4,7 +4,6 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 import { X, AlertTriangle, Info, CheckCircle, AlertCircle } from 'lucide-react';
 import {
   ToastNotification,
-  NotificationType,
   NOTIFICATION_COLORS,
   DEFAULT_AUTO_HIDE_DURATION,
 } from '@/types/notification';
@@ -37,6 +36,10 @@ export function ToastProvider({
   defaultPosition = 'top-right',
 }: ToastProviderProps) {
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  }, []);
 
   const showToast = useCallback(
     (toast: Omit<ToastNotification, 'id' | 'timestamp'>) => {
@@ -71,12 +74,8 @@ export function ToastProvider({
         }, duration);
       }
     },
-    [maxToasts, defaultPosition]
+    [defaultPosition, dismissToast, maxToasts]
   );
-
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  }, []);
 
   const clearAllToasts = useCallback(() => {
     setToasts([]);
@@ -134,7 +133,7 @@ function Toast({ toast, onDismiss }: { toast: ToastNotification; onDismiss: () =
   useEffect(() => {
     if (toast.autoHide && toast.duration && toast.duration > 0 && toast.showProgress) {
       const interval = setInterval(() => {
-        setProgress((prev) => {
+        setProgress(() => {
           const elapsed = Date.now() - toast.timestamp;
           const remaining = Math.max(0, 100 - (elapsed / toast.duration!) * 100);
           return remaining;

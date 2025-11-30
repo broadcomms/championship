@@ -6,7 +6,6 @@ import { IssueSeverity, IssueStatus, ComplianceIssue } from '@/types/compliance'
 interface IssuesListProps {
   checkId: string;
   workspaceId: string;
-  documentId: string;
 }
 
 const SEVERITY_COLORS: Record<IssueSeverity, { bg: string; text: string; border: string }> = {
@@ -25,7 +24,7 @@ const STATUS_COLORS: Record<IssueStatus, { bg: string; text: string }> = {
   dismissed: { bg: 'bg-gray-100', text: 'text-gray-800' },
 };
 
-export function IssuesList({ checkId, workspaceId, documentId }: IssuesListProps) {
+export function IssuesList({ checkId, workspaceId }: IssuesListProps) {
   const [issues, setIssues] = useState<ComplianceIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -279,7 +278,7 @@ export function IssuesList({ checkId, workspaceId, documentId }: IssuesListProps
                     <div>
                       <h5 className="text-sm font-medium text-gray-900 mb-1">Excerpt</h5>
                       <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded italic">
-                        "{issue.excerpt}"
+                        &ldquo;{issue.excerpt}&rdquo;
                       </p>
                     </div>
                   )}

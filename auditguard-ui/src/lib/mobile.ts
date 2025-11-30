@@ -20,6 +20,35 @@ export const BREAKPOINTS = {
 
 export type Breakpoint = keyof typeof BREAKPOINTS;
 
+interface ConnectionInfo {
+  effectiveType?: string;
+  downlink?: number;
+  rtt?: number;
+  saveData?: boolean;
+  addEventListener?: (type: string, listener: () => void) => void;
+  removeEventListener?: (type: string, listener: () => void) => void;
+}
+
+type NavigatorWithConnection = Navigator & {
+  msMaxTouchPoints?: number;
+  connection?: ConnectionInfo;
+  mozConnection?: ConnectionInfo;
+  webkitConnection?: ConnectionInfo;
+};
+
+const getExtendedNavigator = (): NavigatorWithConnection | undefined => {
+  if (typeof navigator === 'undefined') {
+    return undefined;
+  }
+
+  return navigator as NavigatorWithConnection;
+};
+
+const getNetworkConnection = () => {
+  const extendedNavigator = getExtendedNavigator();
+  return extendedNavigator?.connection ?? extendedNavigator?.mozConnection ?? extendedNavigator?.webkitConnection;
+};
+
 /**
  * Device type detection
  */
@@ -38,12 +67,12 @@ export function getDeviceType(): 'mobile' | 'tablet' | 'desktop' {
  */
 export function isTouchDevice(): boolean {
   if (typeof window === 'undefined') return false;
+  const extendedNavigator = getExtendedNavigator();
 
   return (
     'ontouchstart' in window ||
-    navigator.maxTouchPoints > 0 ||
-    // @ts-ignore - IE compatibility
-    navigator.msMaxTouchPoints > 0
+    (extendedNavigator?.maxTouchPoints ?? 0) > 0 ||
+    (extendedNavigator?.msMaxTouchPoints ?? 0) > 0
   );
 }
 
@@ -396,11 +425,10 @@ export function useNetworkStatus() {
 
   useEffect(() => {
     const updateStatus = () => {
-      // @ts-ignore - NetworkInformation API
-      const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      const connection = getNetworkConnection();
 
       setStatus({
-        online: navigator.onLine,
+        online: typeof navigator !== 'undefined' ? navigator.onLine : true,
         effectiveType: connection?.effectiveType,
         downlink: connection?.downlink,
         rtt: connection?.rtt,
@@ -412,16 +440,15 @@ export function useNetworkStatus() {
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
 
-    // @ts-ignore
-    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (connection) {
+    const connection = getNetworkConnection();
+    if (connection?.addEventListener) {
       connection.addEventListener('change', updateStatus);
     }
 
     return () => {
       window.removeEventListener('online', updateStatus);
       window.removeEventListener('offline', updateStatus);
-      if (connection) {
+      if (connection?.removeEventListener) {
         connection.removeEventListener('change', updateStatus);
       }
     };

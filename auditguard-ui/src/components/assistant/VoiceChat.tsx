@@ -68,7 +68,7 @@ export function VoiceChat({ workspaceId, onTranscription, onSendMessage, lastAss
     if (lastAssistantMessage && voiceSettings.autoPlay && isVoiceModeActive) {
       speechSynthesis.speak(lastAssistantMessage);
     }
-  }, [lastAssistantMessage, voiceSettings.autoPlay, isVoiceModeActive]);
+  }, [isVoiceModeActive, lastAssistantMessage, speechSynthesis, voiceSettings.autoPlay]);
 
   const handleToggleVoiceMode = () => {
     setIsVoiceModeActive(!isVoiceModeActive);

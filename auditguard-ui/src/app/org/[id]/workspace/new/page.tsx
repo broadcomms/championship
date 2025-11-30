@@ -6,6 +6,25 @@ import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import type { ErrorResponse } from '@/types';
+import type { CreateWorkspaceInput, Workspace } from '@/types/workspace';
+
+const getApiErrorMessage = (error: unknown) => {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'error' in error &&
+    typeof (error as ErrorResponse).error === 'string'
+  ) {
+    return (error as ErrorResponse).error;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Failed to create workspace. Please try again.';
+};
 
 export default function NewWorkspacePage() {
   const params = useParams();
@@ -29,10 +48,15 @@ export default function NewWorkspacePage() {
     try {
       // Note: api.post() returns data directly, not wrapped in .data property
       // Using blueprint pattern: /api/organizations/{orgId}/workspaces
-      const newWorkspace = await api.post(`/api/organizations/${orgId}/workspaces`, {
+      const payload: CreateWorkspaceInput = {
         name: formData.name,
         description: formData.description,
-      });
+      };
+
+      const newWorkspace = await api.post<Workspace>(
+        `/api/organizations/${orgId}/workspaces`,
+        payload
+      );
 
       // Navigate to the newly created workspace
       if (newWorkspace && newWorkspace.id) {
@@ -40,9 +64,10 @@ export default function NewWorkspacePage() {
       } else {
         throw new Error('Workspace created but no ID returned');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to create workspace:', err);
-      setError(err.error || 'Failed to create workspace. Please try again.');
+      setError(getApiErrorMessage(err));
+    } finally {
       setCreating(false);
     }
   };

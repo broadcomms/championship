@@ -9,7 +9,6 @@ import { useWebSocket, WebSocketMessage } from '@/hooks/useWebSocket';
 interface ComplianceCheckResultProps {
   checkId: string;
   workspaceId: string;
-  documentId: string;
   onCheckComplete?: (check: ComplianceCheck) => void;
   onError?: (error: string) => void;
   pollInterval?: number; // milliseconds
@@ -19,7 +18,6 @@ interface ComplianceCheckResultProps {
 export function ComplianceCheckResult({
   checkId,
   workspaceId,
-  documentId,
   onCheckComplete,
   onError,
   pollInterval = 2000,
@@ -35,32 +33,51 @@ export function ComplianceCheckResult({
     workspaceId,
     onMessage: (message: WebSocketMessage) => {
       if (message.type === 'compliance_check_update' && message.data?.checkId === checkId) {
-        console.log('Real-time check update:', message.data);
+        const data = message.data;
+        if (!data) {
+          return;
+        }
+        console.log('Real-time check update:', data);
+        const scoreUpdate = typeof data.score === 'number' ? data.score : undefined;
+        const statusUpdate = typeof data.status === 'string' ? (data.status as CheckStatus) : undefined;
         
         // Update progress
-        if (message.data.progress !== undefined) {
-          setProgress(message.data.progress);
+        if (typeof data.progress === 'number') {
+          setProgress(data.progress);
         }
 
         // Update check status
-        setCheck(prev => prev ? {
-          ...prev,
-          status: message.data.status || prev.status,
-          overallScore: message.data.score ?? prev.overallScore,
-        } : null);
+        setCheck((prev) => {
+          if (!prev) {
+            return null;
+          }
+
+          const validStatuses: CheckStatus[] = ['pending', 'running', 'processing', 'completed', 'failed'];
+          const nextStatus = statusUpdate && validStatuses.includes(statusUpdate)
+            ? statusUpdate
+            : prev.status;
+
+          const nextScore = scoreUpdate ?? prev.overallScore;
+
+          return {
+            ...prev,
+            status: nextStatus,
+            overallScore: nextScore,
+          };
+        });
 
         // Handle completion
-        if (message.data.status === 'completed' && check) {
+        if (statusUpdate === 'completed' && check) {
           const completedCheck = {
             ...check,
             status: 'completed' as CheckStatus,
-            overallScore: message.data.score ?? check.overallScore,
+            overallScore: scoreUpdate ?? check.overallScore,
           };
           onCheckComplete?.(completedCheck);
         }
 
         // Handle failure
-        if (message.data.status === 'failed') {
+        if (statusUpdate === 'failed') {
           setError('Compliance check failed');
           onError?.('Compliance check failed');
         }

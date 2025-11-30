@@ -1,5 +1,5 @@
 import { retryWithBackoff, retryFetch, createRetryable, isRetryableError, useRetry } from '../../utils/retry'
-import { NetworkError, ValidationError } from '../../utils/errors'
+import { ValidationError } from '../../utils/errors'
 import { renderHook, waitFor, act } from '@testing-library/react'
 
 describe('retryWithBackoff', () => {
@@ -103,8 +103,6 @@ describe('retryWithBackoff', () => {
 })
 
 describe('retryFetch', () => {
-  const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
-
   beforeEach(() => {
     jest.clearAllMocks()
     global.fetch = jest.fn()
@@ -359,7 +357,7 @@ describe('useRetry', () => {
     await act(async () => {
       try {
         await result.current.execute()
-      } catch (err) {
+      } catch {
         // Expected to throw
       }
     })
@@ -408,7 +406,7 @@ describe('useRetry', () => {
     await act(async () => {
       try {
         await result.current.execute()
-      } catch (err) {
+      } catch {
         // Expected to throw
       }
     })

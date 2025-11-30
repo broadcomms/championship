@@ -2,21 +2,36 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   AnalyticsDashboard,
   UsageTrend,
-  ToolUsage,
-  ResponseQuality,
-  UserEngagement,
-  CostAnalysis,
-  TopQuestion,
-  ComplianceIntelligence,
-  Metric,
-  calculateTrend,
+  TimeRangeFilter,
   formatMetricChange,
 } from '@/types/analytics';
 
+interface AnalyticsRequest {
+  workspaceId: string;
+  timeRange?: TimeRangeFilter;
+  includeDetails?: boolean;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { workspaceId, timeRange, includeDetails } = body;
+    const body = (await request.json()) as AnalyticsRequest;
+    const {
+      workspaceId,
+      timeRange,
+      includeDetails = true,
+    } = body;
+
+    const resolvedTimeRange: TimeRangeFilter = timeRange || { type: 'week' };
+    const seedSource = (workspaceId || 'default-workspace').split('');
+    const workspaceSeed = seedSource.reduce((sum, char) => sum + char.charCodeAt(0), 0) % 20;
+    const conversationsValue = 230 + workspaceSeed;
+    const previousConversations = conversationsValue - 18;
+    const responseTimeValue = 1 + (workspaceSeed % 5) * 0.05;
+    const previousResponseTime = responseTimeValue + 0.3;
+    const satisfactionValue = 4.5 + (workspaceSeed % 5) * 0.05;
+    const previousSatisfaction = satisfactionValue - 0.2;
+    const activeUsersValue = 70 + (workspaceSeed % 25);
+    const previousActiveUsers = activeUsersValue - 9;
 
     // Mock analytics data
     const analytics: AnalyticsDashboard = {
@@ -25,18 +40,18 @@ export async function POST(request: NextRequest) {
           id: 'conversations',
           type: 'conversations',
           label: 'Conversations',
-          value: 248,
-          previousValue: 215,
-          ...formatMetricChange(248, 215),
+          value: conversationsValue,
+          previousValue: previousConversations,
+          ...formatMetricChange(conversationsValue, previousConversations),
           trend: 'up',
         },
         responseTime: {
           id: 'response_time',
           type: 'response_time',
           label: 'Avg Response Time',
-          value: 1.2,
-          previousValue: 1.5,
-          ...formatMetricChange(1.2, 1.5),
+          value: Number(responseTimeValue.toFixed(2)),
+          previousValue: Number(previousResponseTime.toFixed(2)),
+          ...formatMetricChange(responseTimeValue, previousResponseTime),
           trend: 'down',
           unit: 's',
         },
@@ -44,9 +59,9 @@ export async function POST(request: NextRequest) {
           id: 'satisfaction',
           type: 'satisfaction',
           label: 'Satisfaction',
-          value: 4.8,
-          previousValue: 4.6,
-          ...formatMetricChange(4.8, 4.6),
+          value: Number(satisfactionValue.toFixed(1)),
+          previousValue: Number(previousSatisfaction.toFixed(1)),
+          ...formatMetricChange(satisfactionValue, previousSatisfaction),
           trend: 'up',
           unit: '/5',
         },
@@ -54,13 +69,13 @@ export async function POST(request: NextRequest) {
           id: 'active_users',
           type: 'usage',
           label: 'Active Users',
-          value: 87,
-          previousValue: 79,
-          ...formatMetricChange(87, 79),
+          value: activeUsersValue,
+          previousValue: previousActiveUsers,
+          ...formatMetricChange(activeUsersValue, previousActiveUsers),
           trend: 'up',
         },
       },
-      usageTrends: generateUsageTrends(timeRange.type),
+      usageTrends: generateUsageTrends(resolvedTimeRange.type),
       toolUsage: [
         { toolName: 'Compliance Check', count: 145, percentage: 35.3 },
         { toolName: 'Document Search', count: 98, percentage: 23.9 },
@@ -186,7 +201,15 @@ export async function POST(request: NextRequest) {
       ],
     };
 
-    return NextResponse.json(analytics);
+    const responsePayload: AnalyticsDashboard = {
+      ...analytics,
+      topQuestions: includeDetails ? analytics.topQuestions : analytics.topQuestions.slice(0, 2),
+      complianceIntelligence: includeDetails
+        ? analytics.complianceIntelligence
+        : analytics.complianceIntelligence.slice(0, 2),
+    };
+
+    return NextResponse.json(responsePayload);
   } catch (error) {
     console.error('Analytics API error:', error);
     return NextResponse.json(
@@ -196,7 +219,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function generateUsageTrends(timeRange: string): UsageTrend[] {
+function generateUsageTrends(timeRange: TimeRangeFilter['type']): UsageTrend[] {
   const days = timeRange === 'today' ? 1 : timeRange === 'week' ? 7 : 30;
   const trends: UsageTrend[] = [];
 

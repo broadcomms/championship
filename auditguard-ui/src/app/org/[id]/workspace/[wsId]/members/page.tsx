@@ -1,17 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
 
+type WorkspaceRole = 'admin' | 'member' | 'viewer';
+type InvitationStatus = 'pending' | 'accepted' | 'expired';
+
 interface WorkspaceMember {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'member' | 'viewer';
+  role: WorkspaceRole;
   added_at: number;
   last_active?: number;
 }
@@ -19,16 +22,34 @@ interface WorkspaceMember {
 interface Invitation {
   id: string;
   email: string;
-  role: 'admin' | 'member' | 'viewer';
+  role: WorkspaceRole;
   invited_by: string;
   invited_at: number;
-  status: 'pending' | 'accepted' | 'expired';
+  status: InvitationStatus;
 }
 
+const normalizeApiResponse = <T,>(response: T | { data: T }): T => {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as { data: T }).data;
+  }
+  return response as T;
+};
+
+const getApiErrorMessage = (err: unknown, fallback: string): string => {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const responseErr = err as { response?: { data?: { message?: string } } };
+    return responseErr.response?.data?.message || fallback;
+  }
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message?: string }).message || fallback);
+  }
+  return fallback;
+};
+
 export default function WorkspaceMembersPage() {
-  const params = useParams();
-  const orgId = params.id as string;
-  const wsId = params.wsId as string;
+  const params = useParams<{ id: string; wsId: string }>();
+  const orgId = params.id;
+  const wsId = params.wsId;
   const { user } = useAuth();
   const accountId = user?.userId;
 
@@ -37,33 +58,41 @@ export default function WorkspaceMembersPage() {
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'member' | 'viewer'>('member');
+  const [inviteRole, setInviteRole] = useState<WorkspaceRole>('member');
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchMembers();
-    fetchInvitations();
-  }, [wsId]);
-
-  const fetchMembers = async () => {
+  const fetchMembers = useCallback(async (withLoader = false) => {
+    if (!wsId) return;
+    if (withLoader) {
+      setLoading(true);
+    }
     try {
-      const response = await api.get(`/workspaces/${wsId}/members`);
-      setMembers(response.data);
+      const response = await api.get<WorkspaceMember[]>(`/workspaces/${wsId}/members`);
+      setMembers(normalizeApiResponse(response));
+      setLoadError(null);
     } catch (error) {
       console.error('Failed to fetch members:', error);
+      setLoadError(getApiErrorMessage(error, 'Failed to load members'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [wsId]);
 
-  const fetchInvitations = async () => {
+  const fetchInvitations = useCallback(async () => {
+    if (!wsId) return;
     try {
-      const response = await api.get(`/workspaces/${wsId}/invitations`);
-      setInvitations(response.data);
+      const response = await api.get<Invitation[]>(`/workspaces/${wsId}/invitations`);
+      setInvitations(normalizeApiResponse(response));
     } catch (error) {
       console.error('Failed to fetch invitations:', error);
     }
-  };
+  }, [wsId]);
+
+  useEffect(() => {
+    fetchMembers(true);
+    fetchInvitations();
+  }, [fetchInvitations, fetchMembers]);
 
   const handleInviteMember = async () => {
     if (!inviteEmail.trim()) {
@@ -82,15 +111,15 @@ export default function WorkspaceMembersPage() {
       setInviteEmail('');
       setInviteRole('member');
       await fetchInvitations();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to invite member:', error);
-      alert(error.response?.data?.message || 'Failed to send invitation');
+      alert(getApiErrorMessage(error, 'Failed to send invitation'));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleUpdateRole = async (memberId: string, newRole: 'admin' | 'member' | 'viewer') => {
+  const handleUpdateRole = async (memberId: string, newRole: WorkspaceRole) => {
     try {
       await api.patch(`/workspaces/${wsId}/members/${memberId}`, {
         role: newRole,
@@ -98,7 +127,7 @@ export default function WorkspaceMembersPage() {
       await fetchMembers();
     } catch (error) {
       console.error('Failed to update role:', error);
-      alert('Failed to update member role');
+      alert(getApiErrorMessage(error, 'Failed to update member role'));
     }
   };
 
@@ -112,7 +141,7 @@ export default function WorkspaceMembersPage() {
       await fetchMembers();
     } catch (error) {
       console.error('Failed to remove member:', error);
-      alert('Failed to remove member');
+      alert(getApiErrorMessage(error, 'Failed to remove member'));
     }
   };
 
@@ -122,11 +151,11 @@ export default function WorkspaceMembersPage() {
       await fetchInvitations();
     } catch (error) {
       console.error('Failed to cancel invitation:', error);
-      alert('Failed to cancel invitation');
+      alert(getApiErrorMessage(error, 'Failed to cancel invitation'));
     }
   };
 
-  const getRoleBadgeColor = (role: string) => {
+  const getRoleBadgeColor = (role: WorkspaceRole) => {
     switch (role) {
       case 'admin':
         return 'bg-purple-100 text-purple-800 border-purple-300';
@@ -150,11 +179,31 @@ export default function WorkspaceMembersPage() {
     return new Date(timestamp).toLocaleDateString();
   };
 
+  const pendingInvitations = useMemo(
+    () => invitations.filter((invitation) => invitation.status === 'pending'),
+    [invitations]
+  );
+
   if (loading) {
     return (
       <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
         <div className="flex items-center justify-center p-8">
           <div className="text-gray-500">Loading...</div>
+        </div>
+      </OrganizationLayout>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center">
+            <div className="text-6xl mb-4">⚠️</div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Unable to load members</h3>
+            <p className="text-gray-600 mb-4">{loadError}</p>
+            <Button onClick={() => fetchMembers(true)}>Retry</Button>
+          </div>
         </div>
       </OrganizationLayout>
     );
@@ -250,7 +299,10 @@ export default function WorkspaceMembersPage() {
                       <select
                         value={member.role}
                         onChange={(e) =>
-                          handleUpdateRole(member.id, e.target.value as any)
+                          handleUpdateRole(
+                            member.id,
+                            e.target.value as WorkspaceRole
+                          )
                         }
                         className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
@@ -272,16 +324,14 @@ export default function WorkspaceMembersPage() {
           </div>
 
           {/* Pending Invitations */}
-          {invitations.filter((i) => i.status === 'pending').length > 0 && (
+          {pendingInvitations.length > 0 && (
             <div className="bg-white rounded-lg border border-gray-200">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-semibold text-gray-900">Pending Invitations</h2>
               </div>
 
               <div className="divide-y divide-gray-200">
-                {invitations
-                  .filter((i) => i.status === 'pending')
-                  .map((invitation) => (
+                {pendingInvitations.map((invitation) => (
                     <div
                       key={invitation.id}
                       className="px-6 py-4 hover:bg-gray-50 transition"
@@ -394,7 +444,7 @@ export default function WorkspaceMembersPage() {
                     </label>
                     <select
                       value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value as any)}
+                      onChange={(e) => setInviteRole(e.target.value as WorkspaceRole)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="admin">Admin - Full access</option>
@@ -405,7 +455,7 @@ export default function WorkspaceMembersPage() {
 
                   <div className="bg-gray-50 rounded-lg p-4">
                     <p className="text-xs text-gray-600">
-                      An email invitation will be sent to this address. They'll need to accept
+                      An email invitation will be sent to this address. They&rsquo;ll need to accept
                       the invitation to join the workspace.
                     </p>
                   </div>

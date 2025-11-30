@@ -291,7 +291,7 @@ export function DocumentComplianceIssuesList({
         issueId={selectedIssueId}
         isOpen={isModalOpen}
         onClose={handleModalClose}
-        onStatusChange={(id, status) => {
+        onStatusChange={() => {
           handleIssueUpdate();
         }}
       />

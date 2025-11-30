@@ -6,8 +6,6 @@ import {
   Database,
   ChevronRight,
   Search,
-  Download,
-  Play,
   Loader2,
 } from 'lucide-react';
 import { DatabaseTable } from '@/components/admin/DatabaseTable';

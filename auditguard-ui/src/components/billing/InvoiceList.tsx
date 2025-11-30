@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 
 interface Invoice {
@@ -21,22 +21,31 @@ interface InvoiceListProps {
   workspaceId: string;
 }
 
+interface BillingHistoryItem {
+  id: string;
+  invoiceId?: string;
+  status?: Invoice['status'];
+  amount: number;
+  currency: string;
+  createdAt: number;
+  invoicePdf?: string | null;
+  description?: string | null;
+}
+
 export function InvoiceList({ workspaceId }: InvoiceListProps) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadInvoices();
-  }, [workspaceId]);
-
-  const loadInvoices = async () => {
+  const loadInvoices = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await api.get(`/api/workspaces/${workspaceId}/billing-history`);
+      const data = await api.get<{ history?: BillingHistoryItem[] }>(
+        `/api/workspaces/${workspaceId}/billing-history`
+      );
       
       // Map backend billing history to frontend invoice format
-      const mappedInvoices = (data.history || []).map((item: any) => ({
+      const mappedInvoices = (data.history || []).map((item) => ({
         id: item.id,
         number: item.invoiceId || item.id,
         status: item.status || 'paid',
@@ -46,19 +55,23 @@ export function InvoiceList({ workspaceId }: InvoiceListProps) {
         created: Math.floor(item.createdAt / 1000), // Convert to seconds
         dueDate: null,
         hostedInvoiceUrl: null,
-        invoicePdf: item.invoicePdf,
-        description: item.description,
+        invoicePdf: item.invoicePdf ?? null,
+        description: item.description ?? null,
       }));
       
       setInvoices(mappedInvoices);
       setError(null);
-    } catch (err) {
+    } catch (err: unknown) {
       setError('Failed to load billing history');
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [workspaceId]);
+
+  useEffect(() => {
+    loadInvoices();
+  }, [loadInvoices]);
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleDateString('en-US', {

@@ -52,8 +52,15 @@ export function InviteMemberDialog({
       reset();
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.error || 'Failed to invite member');
+    } catch (err: unknown) {
+      const rawMessage =
+        (typeof err === 'object' && err && 'error' in err && typeof (err as { error?: string }).error === 'string'
+          ? (err as { error?: string }).error
+          : err instanceof Error
+            ? err.message
+            : 'Failed to invite member');
+      const safeMessage = rawMessage && rawMessage.trim().length > 0 ? rawMessage : 'Failed to invite member';
+      setError(safeMessage);
     } finally {
       setIsSubmitting(false);
     }

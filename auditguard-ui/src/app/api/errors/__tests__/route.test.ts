@@ -7,11 +7,6 @@
 import { POST, GET } from '../log/route';
 import { NextRequest } from 'next/server';
 
-// Mock console methods
-const originalConsoleError = console.error;
-const originalConsoleWarn = console.warn;
-const originalConsoleInfo = console.info;
-
 describe('/api/errors/log', () => {
   let consoleErrorSpy: jest.SpyInstance;
   let consoleWarnSpy: jest.SpyInstance;

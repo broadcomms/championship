@@ -6,7 +6,6 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/common/Button';
 import type { PlanId } from '@/utils/feature-gates';
 
 interface UpgradeModalProps {

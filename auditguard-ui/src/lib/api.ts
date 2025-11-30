@@ -10,10 +10,10 @@ class ApiClient {
     this.baseURL = baseURL;
   }
 
-  private async request(
+  private async request<TResponse>(
     endpoint: string,
     options: RequestInit = {}
-  ): Promise<any> {
+  ): Promise<TResponse> {
     const url = `${this.baseURL}${endpoint}`;
 
     const config: RequestInit = {
@@ -30,16 +30,17 @@ class ApiClient {
 
       // Handle 204 No Content
       if (response.status === 204) {
-        return null;
+        return null as TResponse;
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as unknown;
 
       if (!response.ok) {
+        const payload = data as Partial<ErrorResponse>;
         const error: ErrorResponse = {
-          error: data.error || 'API request failed',
+          error: typeof payload.error === 'string' ? payload.error : 'API request failed',
           status: response.status,
-          details: data.details,
+          details: payload.details,
         };
 
         // Handle specific error cases
@@ -67,7 +68,7 @@ class ApiClient {
         throw error;
       }
 
-      return data;
+      return data as TResponse;
     } catch (error) {
       if (error instanceof TypeError) {
         // Network error
@@ -81,45 +82,45 @@ class ApiClient {
   }
 
   // GET request
-  async get<T = any>(endpoint: string): Promise<T> {
-    return this.request(endpoint, { method: 'GET' });
+  async get<TResponse = unknown>(endpoint: string): Promise<TResponse> {
+    return this.request<TResponse>(endpoint, { method: 'GET' });
   }
 
   // POST request
-  async post<T = any>(endpoint: string, data?: any): Promise<T> {
-    return this.request(endpoint, {
+  async post<TResponse = unknown>(endpoint: string, data?: unknown): Promise<TResponse> {
+    return this.request<TResponse>(endpoint, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   // PUT request
-  async put<T = any>(endpoint: string, data: any): Promise<T> {
-    return this.request(endpoint, {
+  async put<TResponse = unknown>(endpoint: string, data: unknown): Promise<TResponse> {
+    return this.request<TResponse>(endpoint, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
   // PATCH request
-  async patch<T = any>(endpoint: string, data: any): Promise<T> {
-    return this.request(endpoint, {
+  async patch<TResponse = unknown>(endpoint: string, data: unknown): Promise<TResponse> {
+    return this.request<TResponse>(endpoint, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
 
   // DELETE request
-  async delete<T = any>(endpoint: string): Promise<T> {
-    return this.request(endpoint, { method: 'DELETE' });
+  async delete<TResponse = unknown>(endpoint: string): Promise<TResponse> {
+    return this.request<TResponse>(endpoint, { method: 'DELETE' });
   }
 
   // File upload with multipart/form-data
-  async uploadFile<T = any>(
+  async uploadFile<TResponse = unknown>(
     endpoint: string,
     file: File,
     metadata?: Record<string, string>
-  ): Promise<T> {
+  ): Promise<TResponse> {
     const formData = new FormData();
     formData.append('file', file);
 
@@ -148,7 +149,7 @@ class ApiClient {
       } as ErrorResponse;
     }
 
-    return response.json();
+    return response.json() as Promise<TResponse>;
   }
 
   // Download file

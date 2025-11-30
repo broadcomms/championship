@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40" viewBox="0 0 160 40" role="img" aria-label="Northwind Financial logo">
+  <rect width="160" height="40" rx="8" fill="#EEF2FF" />
+  <path d="M18 28l10-16 10 16" stroke="#312E81" stroke-width="3" fill="none" />
+  <path d="M23 19l5-7 5 7" stroke="#6366F1" stroke-width="3" fill="none" />
+  <text x="56" y="25" font-family="Inter, Arial, sans-serif" font-size="16" fill="#312E81" font-weight="600">Northwind</text>
+</svg>

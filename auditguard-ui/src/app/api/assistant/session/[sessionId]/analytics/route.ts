@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+interface SessionMessage {
+  content?: string;
+}
+
 async function getSession(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const sessionCookie = request.cookies.get('session');
@@ -67,7 +71,7 @@ export async function GET(
     }
 
     const data = await response.json();
-    const messages = data.messages || [];
+    const messages: SessionMessage[] = data.messages || [];
     const sessionData = data.session || {};
 
     // Calculate analytics from session data
@@ -78,7 +82,7 @@ export async function GET(
     const durationSeconds = Math.floor((durationMs % 60000) / 1000);
 
     // Estimate tokens from message content
-    const tokensUsed = messages.reduce((sum: number, msg: any) =>
+    const tokensUsed = messages.reduce((sum: number, msg: SessionMessage) =>
       sum + Math.round((msg.content?.length || 0) * 0.75), 0
     );
 

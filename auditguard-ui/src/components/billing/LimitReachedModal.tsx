@@ -102,7 +102,7 @@ export function LimitReachedModal({
                         Current usage: {currentUsage.toLocaleString()} / {limit.toLocaleString()}
                       </p>
                       <p className="text-xs text-red-600 mt-1">
-                        You're currently on the {currentPlan} plan
+                        You&rsquo;re currently on the {currentPlan} plan
                       </p>
                     </div>
                   )}

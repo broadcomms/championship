@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { Button } from '@/components/common/Button';
@@ -40,16 +40,12 @@ export default function OrganizationMembersPage() {
   const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
   const [inviting, setInviting] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, [orgId]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       // Fetch members (this endpoint exists)
       // Note: api.get() returns data directly, not wrapped in .data property
-      const members = await api.get(`/api/organizations/${orgId}/members`);
-      setMembers(Array.isArray(members) ? members : []);
+      const fetchedMembers = await api.get<Member[]>(`/api/organizations/${orgId}/members`);
+      setMembers(Array.isArray(fetchedMembers) ? fetchedMembers : []);
 
       // Invitations at organization level not yet implemented
       // TODO: Implement organization-level invitations or use workspace invitations
@@ -61,7 +57,11 @@ export default function OrganizationMembersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [orgId]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();

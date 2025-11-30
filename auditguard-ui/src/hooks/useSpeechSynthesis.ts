@@ -47,7 +47,6 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
   });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const isSpeakingRef = useRef(false);
   const lastTextRef = useRef<string | null>(null);
   const lastSpeakTimeRef = useRef<number>(0);
@@ -119,7 +118,7 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
           onEnd?.();
         };
 
-        audio.onerror = (error) => {
+        audio.onerror = () => {
           isSpeakingRef.current = false;
           setState((prev) => ({
             ...prev,
@@ -193,7 +192,7 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
               setState((prev) => ({ ...prev, isSpeaking: false, currentText: null }));
               onEnd?.();
             };
-            utterance.onerror = (error) => {
+            utterance.onerror = () => {
               isSpeakingRef.current = false;
               setState((prev) => ({ ...prev, isSpeaking: false, isLoading: false, error: 'Browser TTS failed' }));
               onError?.(new Error('Browser TTS failed'));

@@ -87,7 +87,7 @@ export function IssueCard({ issue, onClick, selected = false }: IssueCardProps) 
       {issue.excerpt && (
         <div className="mt-3 pt-3 border-t border-gray-200">
           <p className="text-sm text-gray-700 italic line-clamp-2">
-            "{issue.excerpt}"
+            &ldquo;{issue.excerpt}&rdquo;
           </p>
         </div>
       )}

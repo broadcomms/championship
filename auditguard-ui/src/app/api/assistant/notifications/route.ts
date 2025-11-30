@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 /**
  * POST /api/assistant/notifications
  * This endpoint is deprecated - use /api/notifications instead
  * Returns empty response for backward compatibility
  */
-export async function POST(request: NextRequest) {
+export async function POST() {
   // Redirect to unified notification system
   // Return empty for backward compatibility
   return NextResponse.json({
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
  * GET /api/assistant/notifications
  * This endpoint is deprecated - use /api/notifications instead
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   return NextResponse.json({
     notifications: [],
     total: 0,

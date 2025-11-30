@@ -23,7 +23,7 @@ interface Notification {
     action: string;
     style: 'primary' | 'secondary' | 'danger';
   }>;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   created_at: number;
   read_at?: number;
 }
@@ -52,6 +52,7 @@ export default function NotificationsPage() {
   const { user } = useAuth();
   const accountId = user?.userId;
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const notificationsRef = useRef<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
@@ -62,11 +63,11 @@ export default function NotificationsPage() {
   // Load notifications
   const loadNotifications = useCallback(async (reset: boolean = false) => {
     try {
-      const offset = reset ? 0 : notifications.length;
+      const offset = reset ? 0 : notificationsRef.current.length;
       const unreadOnly = filter === 'unread';
 
       // Use POST to match backend API
-      const response = await api.post('/api/notifications', {
+      const response = await api.post<{ notifications?: Notification[] }>('/api/notifications', {
         filter: {
           unreadOnly,
           limit: 20,
@@ -76,9 +77,15 @@ export default function NotificationsPage() {
       const newNotifications = response.notifications || [];
 
       if (reset) {
-        setNotifications(Array.isArray(newNotifications) ? newNotifications : []);
+        const nextList = Array.isArray(newNotifications) ? newNotifications : [];
+        notificationsRef.current = nextList;
+        setNotifications(nextList);
       } else {
-        setNotifications(prev => [...prev, ...(Array.isArray(newNotifications) ? newNotifications : [])]);
+        setNotifications(prev => {
+          const merged = [...prev, ...(Array.isArray(newNotifications) ? newNotifications : [])];
+          notificationsRef.current = merged;
+          return merged;
+        });
       }
 
       setHasMore((Array.isArray(newNotifications) ? newNotifications : []).length === 20);
@@ -87,14 +94,15 @@ export default function NotificationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filter, notifications.length]);
+  }, [filter]);
 
   // Initial load
   useEffect(() => {
+    notificationsRef.current = [];
     setNotifications([]);
     setLoading(true);
     loadNotifications(true);
-  }, [filter]);
+  }, [filter, loadNotifications]);
 
   // Infinite scroll observer
   useEffect(() => {
@@ -121,11 +129,13 @@ export default function NotificationsPage() {
     try {
       await api.patch(`/api/notifications/${notificationId}/read`, {});
 
-      setNotifications(prev =>
-        prev.map(n =>
+      setNotifications(prev => {
+        const updated = prev.map(n =>
           n.id === notificationId ? { ...n, read: true, read_at: Date.now() } : n
-        )
-      );
+        );
+        notificationsRef.current = updated;
+        return updated;
+      });
     } catch (error) {
       console.error('Failed to mark as read:', error);
     }
@@ -139,9 +149,11 @@ export default function NotificationsPage() {
         category: filter === 'all' ? undefined : 'system' 
       });
 
-      setNotifications(prev =>
-        prev.map(n => ({ ...n, read: true, read_at: Date.now() }))
-      );
+      setNotifications(prev => {
+        const updated = prev.map(n => ({ ...n, read: true, read_at: Date.now() }));
+        notificationsRef.current = updated;
+        return updated;
+      });
     } catch (error) {
       console.error('Failed to mark all as read:', error);
     }
@@ -213,7 +225,7 @@ export default function NotificationsPage() {
               <div className="text-4xl mb-4">🔔</div>
               <p className="font-medium">No notifications yet</p>
               <p className="text-sm mt-2">
-                You'll see updates about issues, comments, and more here
+                You&rsquo;ll see updates about issues, comments, and more here
               </p>
             </div>
           ) : (
@@ -262,7 +274,7 @@ export default function NotificationsPage() {
 
                     <div className="flex items-center gap-4 text-xs text-gray-500">
                       <span>{formatRelativeTime(notification.created_at)}</span>
-                      {notification.metadata?.workspace_name && (
+                      {typeof notification.metadata?.workspace_name === 'string' && (
                         <>
                           <span>•</span>
                           <span>{notification.metadata.workspace_name}</span>
@@ -290,10 +302,18 @@ export default function NotificationsPage() {
           notification={selectedNotification}
           onClose={() => setSelectedNotification(null)}
           onUpdate={(updated) => {
-            setNotifications(prev => prev.map(n => n.id === updated.id ? updated : n));
+            setNotifications(prev => {
+              const nextList = prev.map(n => (n.id === updated.id ? updated : n));
+              notificationsRef.current = nextList;
+              return nextList;
+            });
           }}
           onDelete={(id) => {
-            setNotifications(prev => prev.filter(n => n.id !== id));
+            setNotifications(prev => {
+              const nextList = prev.filter(n => n.id !== id);
+              notificationsRef.current = nextList;
+              return nextList;
+            });
             setSelectedNotification(null);
           }}
         />

@@ -54,6 +54,7 @@ export default function ComplianceCheckDetailPage(props: PageProps) {
             <p className="text-sm text-gray-500 mt-1">
               View detailed analysis and identified issues
             </p>
+            <p className="text-xs text-gray-400 mt-1">Check ID: {checkId}</p>
           </div>
         </div>
 

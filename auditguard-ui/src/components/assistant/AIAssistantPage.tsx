@@ -7,12 +7,12 @@ import { DetailsSidebar } from './DetailsSidebar';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import NotificationSettingsPanel from './NotificationSettingsPanel';
 import { MessageSquare, BarChart3, Settings, Mic } from 'lucide-react';
-import type { Conversation, Message, FilterOptions } from '@/types/assistant';
+import type { Message } from '@/types/assistant';
 import { useKeyboardShortcuts } from '@/lib/keyboard';
 import { announceToScreenReader } from '@/lib/focus';
 import { useDeviceType, useViewportHeight } from '@/lib/mobile';
 import { SkeletonFullPage } from '@/components/common/Skeleton';
-import { TRANSITIONS, PAGE_TRANSITION } from '@/lib/animations';
+import { TRANSITIONS } from '@/lib/animations';
 import { useChatWidget } from '@/contexts/ChatWidgetContext';
 
 /**
@@ -30,18 +30,31 @@ import { useChatWidget } from '@/contexts/ChatWidgetContext';
 
 interface AIAssistantPageProps {
   workspaceId: string;
-  userId: string;
-  sessionId?: string;
 }
 
 type ViewMode = 'chat' | 'analytics' | 'settings';
+
+interface ConversationMessagesResponse {
+  sessionId?: string;
+  messages?: Array<{
+    id?: string;
+    role: Message['role'];
+    content: string;
+    created_at?: string;
+    timestamp?: string;
+    actions?: Message['actions'];
+    sources?: Message['sources'];
+  }>;
+}
+
+type ApiConversationMessage = NonNullable<ConversationMessagesResponse['messages']>[number];
 
 // localStorage key helper
 function getStorageKey(workspaceId: string): string {
   return `ai_session_${workspaceId}`;
 }
 
-export function AIAssistantPage({ workspaceId, userId, sessionId: initialSessionId }: AIAssistantPageProps) {
+export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('chat');
@@ -95,6 +108,15 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, isInitialized]); // Intentionally exclude chatWidget to prevent infinite loop
 
+  const mapApiMessage = useCallback((msg: ApiConversationMessage, index: number): Message => ({
+    id: msg.id || `msg_${Date.now()}_${index}`,
+    role: msg.role,
+    content: msg.content,
+    timestamp: msg.created_at ? new Date(msg.created_at) : new Date(msg.timestamp || Date.now()),
+    actions: msg.actions || [],
+    sources: msg.sources || [],
+  }), []);
+
   // Load conversation history for a session
   const loadSessionHistory = useCallback(async (sessionIdToLoad: string) => {
     try {
@@ -109,18 +131,13 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
       );
 
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as ConversationMessagesResponse;
         console.log('✅ Loaded messages:', data.messages?.length || 0);
 
         if (data.messages && Array.isArray(data.messages)) {
-          const loadedMessages: Message[] = data.messages.map((msg: any, index: number) => ({
-            id: msg.id || `msg_${Date.now()}_${index}`,
-            role: msg.role,
-            content: msg.content,
-            timestamp: msg.created_at ? new Date(msg.created_at) : new Date(msg.timestamp || Date.now()),
-            actions: msg.actions || [],
-            sources: msg.sources || [],
-          }));
+          const loadedMessages: Message[] = data.messages.map((msg, index) =>
+            mapApiMessage(msg, index)
+          );
 
           setMessages(loadedMessages);
           announceToScreenReader(`Loaded ${loadedMessages.length} messages from conversation history`);
@@ -136,10 +153,10 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
       console.error('Error loading session history:', error);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId]); // Intentionally exclude chatWidget
+  }, [workspaceId, mapApiMessage]); // Intentionally exclude chatWidget
 
   // Mobile and accessibility hooks
-  const deviceType = useDeviceType();
+  useDeviceType();
   useViewportHeight();
 
   // Keyboard shortcuts
@@ -196,8 +213,14 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setMessages(data.messages || []);
+        const data = (await response.json()) as ConversationMessagesResponse;
+        if (data.messages) {
+          setMessages(
+            data.messages.map((msg, index) => mapApiMessage(msg, index))
+          );
+        } else {
+          setMessages([]);
+        }
 
         // Update sessionId in context and localStorage
         if (data.sessionId) {
@@ -215,7 +238,7 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
       setIsLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId]); // Intentionally exclude chatWidget
+  }, [workspaceId, mapApiMessage]); // Intentionally exclude chatWidget
 
   // Handle creating a new conversation - CRITICAL: This is the ONLY place that clears session
   const handleNewConversation = useCallback(() => {
@@ -266,15 +289,6 @@ export function AIAssistantPage({ workspaceId, userId, sessionId: initialSession
     }, 500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]); // Intentionally exclude chatWidget
-
-  const handleNotificationAction = (notificationId: string, action: string) => {
-    console.log('Notification action:', action, notificationId);
-    if (action === 'view_issues' || action === 'view_checklist') {
-      setViewMode('chat');
-    } else if (action === 'view_report') {
-      setViewMode('analytics');
-    }
-  };
 
   const handleVoiceModeClick = () => {
     chatWidget.openVoiceMode();

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { DocumentChunk, ChunkFrameworkTag } from '@/types';
+import { useState, useEffect, useCallback } from 'react';
+import { DocumentChunk } from '@/types';
 import { api } from '@/lib/api';
 
 interface DocumentChunksViewerProps {
@@ -22,13 +22,7 @@ export function DocumentChunksViewer({
   const [error, setError] = useState('');
   const [expandedChunks, setExpandedChunks] = useState<Set<number>>(new Set());
 
-  useEffect(() => {
-    if (chunkCount > 0) {
-      fetchChunks();
-    }
-  }, [workspaceId, documentId, chunkCount]);
-
-  const fetchChunks = async () => {
+  const fetchChunks = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
@@ -36,12 +30,23 @@ export function DocumentChunksViewer({
         `/api/workspaces/${workspaceId}/documents/${documentId}/chunks`
       );
       setChunks(data);
-    } catch (err: any) {
-      setError(err.error || 'Failed to load chunks');
+    } catch (err: unknown) {
+      const apiError =
+        typeof err === 'object' && err && 'error' in err && typeof (err as { error?: string }).error === 'string'
+          ? (err as { error?: string }).error
+          : undefined;
+      const message = apiError ?? (err instanceof Error ? err.message : 'Failed to load chunks');
+      setError(message);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [documentId, workspaceId]);
+
+  useEffect(() => {
+    if (chunkCount > 0) {
+      fetchChunks();
+    }
+  }, [chunkCount, fetchChunks]);
 
   const toggleChunk = (chunkId: number) => {
     const newExpanded = new Set(expandedChunks);

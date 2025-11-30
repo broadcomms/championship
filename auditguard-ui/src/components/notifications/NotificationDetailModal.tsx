@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, ExternalLink, Archive, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -22,7 +22,7 @@ interface Notification {
   archived: boolean;
   action_url: string;
   actions?: NotificationAction[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   created_at: number;
   read_at?: number;
 }
@@ -43,21 +43,21 @@ export default function NotificationDetailModal({
   const [isArchiving, setIsArchiving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const markAsRead = useCallback(async () => {
+    try {
+      await api.patch(`/api/notifications/${notification.id}/read`, {});
+      onUpdate({ ...notification, read: true, read_at: Date.now() });
+    } catch (error: unknown) {
+      console.error('Failed to mark as read:', error);
+    }
+  }, [notification, onUpdate]);
+
   // Mark as read when opened
   useEffect(() => {
     if (!notification.read) {
       markAsRead();
     }
-  }, [notification.id]);
-
-  const markAsRead = async () => {
-    try {
-      await api.patch(`/api/notifications/${notification.id}/read`, {});
-      onUpdate({ ...notification, read: true, read_at: Date.now() });
-    } catch (error) {
-      console.error('Failed to mark as read:', error);
-    }
-  };
+  }, [markAsRead, notification.read]);
 
   const handleArchive = async () => {
     setIsArchiving(true);
@@ -65,7 +65,7 @@ export default function NotificationDetailModal({
       await api.patch(`/api/notifications/${notification.id}/archive`, {});
       onUpdate({ ...notification, archived: true });
       onClose();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to archive:', error);
     } finally {
       setIsArchiving(false);
@@ -80,7 +80,7 @@ export default function NotificationDetailModal({
       await api.delete(`/api/notifications/${notification.id}`);
       onDelete(notification.id);
       onClose();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to delete:', error);
     } finally {
       setIsDeleting(false);
@@ -98,7 +98,7 @@ export default function NotificationDetailModal({
       } else if (action.action === 'view' || action.action === 'upgrade' || action.action === 'view_plans') {
         window.location.href = notification.action_url;
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to execute action:', error);
     }
   };

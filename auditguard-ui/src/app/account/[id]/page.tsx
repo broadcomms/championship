@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { AccountLayout } from '@/components/layout/AccountLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
-import { Building2, Folder, Bell, TrendingUp, Clock, Shield, CheckCircle2 } from 'lucide-react';
+import { Building2, Folder, Bell, Clock, Shield, CheckCircle2 } from 'lucide-react';
 
 interface Organization {
   id: string;
@@ -138,8 +138,18 @@ export default function AccountDashboardPage() {
         }
         return item;
       }));
-    } catch (err: any) {
-      setError(err.error || 'Failed to load account data');
+    } catch (err: unknown) {
+      const fallbackMessage = 'Failed to load account data';
+      if (err instanceof Error) {
+        setError(err.message || fallbackMessage);
+        return;
+      }
+      if (typeof err === 'object' && err !== null && 'error' in err) {
+        const errorMessage = String((err as { error?: string }).error || fallbackMessage);
+        setError(errorMessage);
+        return;
+      }
+      setError(fallbackMessage);
     } finally {
       setIsLoading(false);
     }

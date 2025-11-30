@@ -11,7 +11,7 @@ export interface ErrorContext {
   documentId?: string;
   timestamp?: number;
   userMessage?: string;
-  debugInfo?: Record<string, any>;
+  debugInfo?: Record<string, unknown>;
 }
 
 /**
@@ -76,19 +76,20 @@ export class NetworkError extends AppError {
     );
   }
 
-  static fromFetchError(error: any, url: string, context: ErrorContext = {}): NetworkError {
-    const message = error.message || 'Network request failed';
+  static fromFetchError(error: unknown, url: string, context: ErrorContext = {}): NetworkError {
+    const message = error instanceof Error ? error.message : 'Network request failed';
+    const status = typeof error === 'object' && error && 'status' in error ? (error as { status?: number }).status : undefined;
     return new NetworkError(
       message,
       {
         ...context,
         debugInfo: {
           url,
-          originalError: error.toString(),
+          originalError: error instanceof Error ? error.toString() : String(error),
         },
         userMessage: 'Unable to connect to the server. Please check your internet connection and try again.',
       },
-      error.status
+      status
     );
   }
 

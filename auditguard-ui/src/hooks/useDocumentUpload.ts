@@ -52,7 +52,7 @@ export function useDocumentUpload(workspaceId: string): UseDocumentUploadReturn 
       if (category) metadata.category = category;
       if (frameworkId) metadata.frameworkId = String(frameworkId); // Phase 5
 
-      const document = await api.uploadFile(
+      const document = await api.uploadFile<Document>(
         `/api/workspaces/${workspaceId}/documents`,
         file,
         metadata
@@ -61,8 +61,15 @@ export function useDocumentUpload(workspaceId: string): UseDocumentUploadReturn 
       setProgress(100);
       setIsUploading(false);
       return document;
-    } catch (err: any) {
-      setError(err.error || 'Failed to upload document');
+    } catch (err: unknown) {
+      const rawMessage =
+        (typeof err === 'object' && err && 'error' in err && typeof (err as { error?: string }).error === 'string'
+          ? (err as { error?: string }).error
+          : err instanceof Error
+            ? err.message
+            : 'Failed to upload document');
+      const safeMessage = rawMessage && rawMessage.trim().length > 0 ? rawMessage : 'Failed to upload document';
+      setError(safeMessage);
       setIsUploading(false);
       setProgress(0);
       return null;

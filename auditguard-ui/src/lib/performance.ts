@@ -2,11 +2,14 @@
  * Performance Optimization Utilities
  * Helpers for debouncing, throttling, memoization, and lazy loading
  */
+import React from 'react';
+
+type AnyFunction = (...args: unknown[]) => unknown;
 
 /**
  * Debounce function - delays execution until after a wait period
  */
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends AnyFunction>(
   func: T,
   wait: number = 300
 ): (...args: Parameters<T>) => void {
@@ -28,7 +31,7 @@ export function debounce<T extends (...args: any[]) => any>(
 /**
  * Throttle function - limits execution to once per time period
  */
-export function throttle<T extends (...args: any[]) => any>(
+export function throttle<T extends AnyFunction>(
   func: T,
   limit: number = 300
 ): (...args: Parameters<T>) => void {
@@ -48,7 +51,7 @@ export function throttle<T extends (...args: any[]) => any>(
 /**
  * Memoize function results
  */
-export function memoize<T extends (...args: any[]) => any>(func: T): T {
+export function memoize<T extends AnyFunction>(func: T): T {
   const cache = new Map<string, ReturnType<T>>();
 
   return ((...args: Parameters<T>): ReturnType<T> => {
@@ -58,7 +61,7 @@ export function memoize<T extends (...args: any[]) => any>(func: T): T {
       return cache.get(key)!;
     }
 
-    const result = func(...args);
+    const result = func(...args) as ReturnType<T>;
     cache.set(key, result);
     return result;
   }) as T;
@@ -67,7 +70,7 @@ export function memoize<T extends (...args: any[]) => any>(func: T): T {
 /**
  * Lazy load component with retry logic
  */
-export function lazyWithRetry<T extends React.ComponentType<any>>(
+export function lazyWithRetry<T extends React.ComponentType<unknown>>(
   componentImport: () => Promise<{ default: T }>,
   retries: number = 3,
   interval: number = 1000
@@ -91,7 +94,7 @@ export function lazyWithRetry<T extends React.ComponentType<any>>(
  * Preload component for faster loading
  */
 export function preloadComponent(
-  componentImport: () => Promise<any>
+  componentImport: () => Promise<unknown>
 ): void {
   componentImport();
 }
@@ -118,7 +121,7 @@ export function createIntersectionObserver(
 /**
  * Request Animation Frame throttle
  */
-export function rafThrottle<T extends (...args: any[]) => any>(
+export function rafThrottle<T extends AnyFunction>(
   func: T
 ): (...args: Parameters<T>) => void {
   let rafId: number | null = null;
@@ -218,13 +221,13 @@ export function chunkArray<T>(array: T[], size: number): T[][] {
 /**
  * Deep freeze object for immutability
  */
-export function deepFreeze<T>(obj: T): Readonly<T> {
+export function deepFreeze<T extends Record<string, unknown>>(obj: T): Readonly<T> {
   Object.freeze(obj);
 
   Object.getOwnPropertyNames(obj).forEach((prop) => {
-    const value = (obj as any)[prop];
+    const value = obj[prop as keyof typeof obj];
     if (value && typeof value === 'object' && !Object.isFrozen(value)) {
-      deepFreeze(value);
+      deepFreeze(value as Record<string, unknown>);
     }
   });
 
@@ -245,7 +248,7 @@ export class OptimizedSet<T> {
 
   add(item: T): void {
     if (this.items.size >= this.maxSize) {
-      const firstItem = this.items.values().next().value as T;
+      const firstItem = this.items.values().next().value;
       if (firstItem !== undefined) {
         this.items.delete(firstItem);
       }
@@ -314,5 +317,3 @@ export class PerformanceMonitor {
  * Export singleton instance
  */
 export const perfMonitor = new PerformanceMonitor();
-
-import React from 'react';

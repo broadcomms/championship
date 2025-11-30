@@ -191,7 +191,7 @@ export function isTrialAccess(planId: PlanId, status: string): boolean {
 /**
  * Get upgrade message for a locked feature
  */
-export function getUpgradeMessage(featureId: FeatureId, currentPlan: PlanId): string {
+export function getUpgradeMessage(featureId: FeatureId): string {
   const requiredPlan = getRequiredPlan(featureId);
   const feature = FEATURE_METADATA[featureId];
   

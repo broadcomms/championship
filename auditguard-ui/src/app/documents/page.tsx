@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
 
 interface Document {
@@ -27,9 +26,10 @@ interface Workspace {
   name: string;
 }
 
+type WorkspaceDocumentResponse = Omit<Document, 'workspaceId' | 'workspaceName'>;
+
 export default function DocumentsPage() {
   const router = useRouter();
-  const { user } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>('all');
@@ -53,8 +53,8 @@ export default function DocumentsPage() {
       const allDocuments: Document[] = [];
       for (const workspace of workspacesResponse.workspaces || []) {
         try {
-          const docsResponse = await api.get<{ documents: any[] }>(`/api/workspaces/${workspace.id}/documents`);
-          const workspaceDocs = (docsResponse.documents || []).map((doc: any) => ({
+          const docsResponse = await api.get<{ documents: WorkspaceDocumentResponse[] }>(`/api/workspaces/${workspace.id}/documents`);
+          const workspaceDocs = (docsResponse.documents || []).map((doc) => ({
             ...doc,
             workspaceId: workspace.id,
             workspaceName: workspace.name,
@@ -68,8 +68,15 @@ export default function DocumentsPage() {
       // Sort by upload date (newest first)
       allDocuments.sort((a, b) => b.uploadedAt - a.uploadedAt);
       setDocuments(allDocuments);
-    } catch (err: any) {
-      setError(err.error || 'Failed to load documents');
+    } catch (err: unknown) {
+      const fallback = 'Failed to load documents';
+      if (err instanceof Error) {
+        setError(err.message || fallback);
+      } else if (typeof err === 'object' && err !== null && 'error' in err) {
+        setError(String((err as { error?: string }).error || fallback));
+      } else {
+        setError(fallback);
+      }
     } finally {
       setIsLoading(false);
     }

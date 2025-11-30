@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { Button } from '@/components/common/Button';
@@ -24,6 +24,12 @@ interface Document {
   chunkCount: number;
 }
 
+interface WorkspaceDocumentsResponse {
+  documents: Document[];
+}
+
+type DocumentStatusFilter = 'all' | 'pending' | 'processing' | 'completed' | 'failed';
+
 export default function WorkspaceDocumentsPage() {
   const params = useParams();
   const router = useRouter();
@@ -35,23 +41,23 @@ export default function WorkspaceDocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'processing' | 'completed' | 'failed'>('all');
+  const [filterStatus, setFilterStatus] = useState<DocumentStatusFilter>('all');
   const [filterFramework, setFilterFramework] = useState<string>('all');
 
-  useEffect(() => {
-    fetchDocuments();
-  }, [wsId]);
-
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     try {
-      const response = await api.get(`/api/workspaces/${wsId}/documents`);
+      const response = await api.get<WorkspaceDocumentsResponse>(`/api/workspaces/${wsId}/documents`);
       setDocuments(response.documents);
     } catch (error) {
       console.error('Failed to fetch documents:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [wsId]);
+
+  useEffect(() => {
+    void fetchDocuments();
+  }, [fetchDocuments]);
 
   const handleDelete = async (documentId: string) => {
     if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
@@ -167,7 +173,7 @@ export default function WorkspaceDocumentsPage() {
                 </label>
                 <select
                   value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value as any)}
+                  onChange={(e) => setFilterStatus(e.target.value as DocumentStatusFilter)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">All Status</option>

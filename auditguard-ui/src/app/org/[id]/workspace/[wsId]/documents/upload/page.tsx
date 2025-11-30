@@ -6,6 +6,7 @@ import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import type { ErrorResponse } from '@/types';
 
 type UploadStep = 'select' | 'metadata' | 'uploading' | 'complete';
 
@@ -27,6 +28,39 @@ interface UsageLimits {
   subscription_tier: string;
 }
 
+interface UsageForecastResponse {
+  current_usage?: {
+    documents?: number;
+  } | null;
+  plan_limits?: {
+    max_documents?: number;
+    tier?: string;
+  } | null;
+}
+
+interface UploadedDocumentSummary {
+  id?: string;
+  filename: string;
+  processingStatus?: string;
+}
+
+const getApiErrorMessage = (error: unknown): string => {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'error' in error &&
+    typeof (error as ErrorResponse).error === 'string'
+  ) {
+    return (error as ErrorResponse).error;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Something went wrong. Please try again.';
+};
+
 export default function DocumentUploadPage() {
   const params = useParams();
   const router = useRouter();
@@ -45,16 +79,15 @@ export default function DocumentUploadPage() {
   });
   const [tagInput, setTagInput] = useState('');
   const [uploadProgress, setUploadProgress] = useState<number>(0);
-  const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
+  const [uploadedDocuments, setUploadedDocuments] = useState<UploadedDocumentSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [usageLimits, setUsageLimits] = useState<UsageLimits | null>(null);
-  const [loadingLimits, setLoadingLimits] = useState(true);
 
   // Fetch usage limits on mount
   useEffect(() => {
     const fetchUsageLimits = async () => {
       try {
-        const data = await api.get(`/api/organizations/${orgId}/usage/forecast`);
+        const data = await api.get<UsageForecastResponse>(`/api/organizations/${orgId}/usage/forecast`);
         if (data && data.plan_limits && data.current_usage) {
           setUsageLimits({
             uploads_used: data.current_usage.documents || 0,
@@ -70,8 +103,6 @@ export default function DocumentUploadPage() {
           uploads_limit: 10,
           subscription_tier: 'Free',
         });
-      } finally {
-        setLoadingLimits(false);
       }
     };
 
@@ -153,7 +184,7 @@ export default function DocumentUploadPage() {
     setError(null);
 
     try {
-      const uploaded: any[] = [];
+      const uploaded: UploadedDocumentSummary[] = [];
       const totalFiles = selectedFiles.length;
 
       for (let i = 0; i < selectedFiles.length; i++) {
@@ -182,16 +213,16 @@ export default function DocumentUploadPage() {
           throw new Error(errorData.error || errorData.message || `Upload failed with status ${response.status}`);
         }
 
-        const data = await response.json();
+        const data: UploadedDocumentSummary = await response.json();
         uploaded.push(data);
         setUploadProgress(((i + 1) / totalFiles) * 100);
       }
 
       setUploadedDocuments(uploaded);
       setCurrentStep('complete');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Upload failed:', error);
-      setError(error.response?.data?.message || 'Failed to upload documents. Please try again.');
+      setError(getApiErrorMessage(error));
       setCurrentStep('metadata');
     }
   };
@@ -269,7 +300,7 @@ export default function DocumentUploadPage() {
             <div className="flex-1">
               <h3 className="font-semibold text-yellow-900 mb-1">Approaching Upload Limit</h3>
               <p className="text-sm text-yellow-800 mb-2">
-                After this upload, you'll have used {usage.used} of {usage.limit} monthly uploads ({Math.round(usage.percentage)}%).
+                After this upload, you&rsquo;ll have used {usage.used} of {usage.limit} monthly uploads ({Math.round(usage.percentage)}%).
                 Only {usage.remaining} upload(s) remaining.
               </p>
               <p className="text-xs text-yellow-700">
@@ -637,11 +668,11 @@ export default function DocumentUploadPage() {
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-        <h3 className="font-semibold text-blue-900 mb-2">What's Next?</h3>
+        <h3 className="font-semibold text-blue-900 mb-2">What&rsquo;s Next?</h3>
         <ul className="text-sm text-blue-800 space-y-2 text-left">
           <li>• Documents are being processed and indexed for compliance checking</li>
           <li>• You can run compliance checks once processing is complete</li>
-          <li>• You'll receive a notification when processing is finished</li>
+          <li>• You&rsquo;ll receive a notification when processing is finished</li>
           <li>• Processing typically takes 1-5 minutes depending on document size</li>
         </ul>
       </div>

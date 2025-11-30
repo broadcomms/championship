@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { Button } from '@/components/common/Button';
@@ -35,44 +35,71 @@ interface ComplianceIssue {
   framework?: string | null;
 }
 
+interface ComplianceIssuesResponse {
+  issues: ComplianceIssue[];
+}
+
+const normalizeApiResponse = <T,>(response: T | { data: T }): T => {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as { data: T }).data;
+  }
+  return response as T;
+};
+
+const getApiErrorMessage = (err: unknown, fallback: string): string => {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const responseErr = err as { response?: { data?: { message?: string } } };
+    return responseErr.response?.data?.message || fallback;
+  }
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message?: string }).message || fallback);
+  }
+  return fallback;
+};
+
 export default function ComplianceCheckDetailPage() {
-  const params = useParams();
+  const params = useParams<{ id: string; wsId: string; checkId: string }>();
   const router = useRouter();
   const { user } = useAuth();
   const accountId = user?.userId;
 
-  const orgId = params.id as string;
-  const wsId = params.wsId as string;
-  const checkId = params.checkId as string;
+  const orgId = params.id;
+  const wsId = params.wsId;
+  const checkId = params.checkId;
 
   const [check, setCheck] = useState<ComplianceCheck | null>(null);
   const [issues, setIssues] = useState<ComplianceIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchComplianceCheck();
-  }, [checkId]);
-
-  const fetchComplianceCheck = async () => {
+  const fetchComplianceCheck = useCallback(async () => {
+    if (!wsId || !checkId) return;
     try {
       setLoading(true);
-      
-      // Fetch compliance check details
-      const checkResponse = await api.get(`/api/workspaces/${wsId}/compliance/${checkId}`);
-      setCheck(checkResponse);
 
-      // Fetch compliance issues
-      const issuesResponse = await api.get(`/api/workspaces/${wsId}/compliance/${checkId}/issues`);
-      setIssues(issuesResponse.issues || []);
+      const checkResponse = await api.get<ComplianceCheck>(
+        `/api/workspaces/${wsId}/compliance/${checkId}`
+      );
+      const checkData = normalizeApiResponse(checkResponse);
+      setCheck(checkData);
 
-    } catch (error) {
-      console.error('Failed to fetch compliance check:', error);
-      setError('Failed to load compliance check details');
+      const issuesResponse = await api.get<ComplianceIssuesResponse>(
+        `/api/workspaces/${wsId}/compliance/${checkId}/issues`
+      );
+      const issuesData = normalizeApiResponse(issuesResponse);
+      setIssues(issuesData.issues || []);
+      setError(null);
+    } catch (fetchError) {
+      console.error('Failed to fetch compliance check:', fetchError);
+      setError(getApiErrorMessage(fetchError, 'Failed to load compliance check details'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [checkId, wsId]);
+
+  useEffect(() => {
+    fetchComplianceCheck();
+  }, [fetchComplianceCheck]);
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {

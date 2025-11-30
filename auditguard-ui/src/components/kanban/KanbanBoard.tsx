@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   DndContext,
@@ -15,7 +15,7 @@ import {
   useDraggable,
 } from '@dnd-kit/core';
 import { api } from '@/lib/api';
-import { ComplianceIssue, IssueStatus, SEVERITY_COLORS, PRIORITY_COLORS, PriorityLevel } from '@/types/compliance';
+import { ComplianceIssue, IssueStatus, SEVERITY_COLORS, PRIORITY_COLORS } from '@/types/compliance';
 
 interface KanbanColumn {
   id: IssueStatus;
@@ -50,17 +50,13 @@ export function KanbanBoard({ workspaceId, orgId }: KanbanBoardProps) {
     })
   );
 
-  useEffect(() => {
-    fetchIssues();
-  }, [workspaceId]);
-
-  const fetchIssues = async () => {
+  const fetchIssues = useCallback(async () => {
     try {
-      const response = await api.get(`/api/workspaces/${workspaceId}/issues`);
+      const response = await api.get<{ issues: ComplianceIssue[] }>(`/api/workspaces/${workspaceId}/issues`);
       console.log('📥 Issues API Response:', response);
       
       // Handle different response structures
-      const issuesData = response?.data?.issues || response?.issues || [];
+      const issuesData = response?.issues || [];
       console.log('📋 Issues data:', issuesData);
       
       setIssues(issuesData);
@@ -70,7 +66,11 @@ export function KanbanBoard({ workspaceId, orgId }: KanbanBoardProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [workspaceId]);
+
+  useEffect(() => {
+    fetchIssues();
+  }, [fetchIssues]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;

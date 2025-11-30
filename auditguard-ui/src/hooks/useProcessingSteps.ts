@@ -11,7 +11,7 @@ export interface ProcessingStep {
   completedAt?: number;
   progressCurrent?: number;
   progressTotal?: number;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   errorMessage?: string;
   createdAt: number;
   updatedAt: number;
@@ -64,6 +64,17 @@ export function useProcessingSteps(
   const pollingStartTime = useRef<number>(0);
 
   /**
+   * Stop polling
+   */
+  const stopPolling = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setIsPolling(false);
+  }, []);
+
+  /**
    * Fetch processing steps from API
    */
   const fetchSteps = useCallback(async () => {
@@ -99,12 +110,13 @@ export function useProcessingSteps(
           stopPolling();
         }
       }
-    } catch (err: any) {
-      setError(err.error || 'Failed to fetch processing steps');
+    } catch (err: unknown) {
+      const message = typeof err === 'object' && err && 'error' in err ? (err as { error?: string }).error : null;
+      setError(message || 'Failed to fetch processing steps');
       setSteps([]);
       // Don't stop polling on error - might be temporary
     }
-  }, [workspaceId, documentId, maxPollDuration, isPolling]);
+  }, [documentId, isPolling, maxPollDuration, stopPolling, workspaceId]);
 
   /**
    * Start polling for processing steps
@@ -127,17 +139,6 @@ export function useProcessingSteps(
       fetchSteps();
     }, pollInterval);
   }, [fetchSteps, pollInterval]);
-
-  /**
-   * Stop polling
-   */
-  const stopPolling = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    setIsPolling(false);
-  }, []);
 
   // Auto-start polling if enabled
   useEffect(() => {

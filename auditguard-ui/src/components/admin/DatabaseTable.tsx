@@ -12,9 +12,13 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
+interface TableRow {
+  [key: string]: unknown;
+}
+
 interface TableData {
   columns: string[];
-  rows: any[];
+  rows: TableRow[];
   totalRows: number;
   page: number;
   pageSize: number;
@@ -82,6 +86,26 @@ export function DatabaseTable({ tableName }: DatabaseTableProps) {
       setOrderBy(column);
       setOrderDir('ASC');
     }
+  };
+
+  const renderCellValue = (value: unknown) => {
+    if (value === null || value === undefined) {
+      return <span className="text-gray-400 italic">null</span>;
+    }
+
+    if (typeof value === 'object') {
+      return (
+        <span className="text-xs font-mono text-gray-600">
+          {JSON.stringify(value)}
+        </span>
+      );
+    }
+
+    return (
+      <span className="truncate max-w-xs block">
+        {String(value)}
+      </span>
+    );
   };
 
   return (
@@ -159,17 +183,7 @@ export function DatabaseTable({ tableName }: DatabaseTableProps) {
                       key={column}
                       className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
                     >
-                      {row[column] === null ? (
-                        <span className="text-gray-400 italic">null</span>
-                      ) : typeof row[column] === 'object' ? (
-                        <span className="text-xs font-mono text-gray-600">
-                          {JSON.stringify(row[column])}
-                        </span>
-                      ) : (
-                        <span className="truncate max-w-xs block">
-                          {String(row[column])}
-                        </span>
-                      )}
+                      {renderCellValue(row[column])}
                     </td>
                   ))}
                 </tr>

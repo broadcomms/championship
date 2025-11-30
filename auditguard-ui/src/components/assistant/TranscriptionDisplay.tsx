@@ -71,7 +71,7 @@ export function TranscriptionDisplay({
           <div className="flex-1">
             <p className="text-sm text-blue-900">Transcribing audio...</p>
             {text && (
-              <p className="text-sm text-blue-700 mt-2 italic">"{text}"</p>
+              <p className="text-sm text-blue-700 mt-2 italic">&ldquo;{text}&rdquo;</p>
             )}
           </div>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ComplianceIssueDetails, IssueStatus } from '@/types/compliance';
 import { 
   X, 
@@ -34,13 +34,7 @@ export function IssueDetailPanel({
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && issueId) {
-      fetchIssueDetails();
-    }
-  }, [isOpen, issueId]);
-
-  const fetchIssueDetails = async () => {
+  const fetchIssueDetails = useCallback(async () => {
     if (!issueId) return;
 
     setLoading(true);
@@ -61,7 +55,13 @@ export function IssueDetailPanel({
     } finally {
       setLoading(false);
     }
-  };
+  }, [issueId, workspaceId]);
+
+  useEffect(() => {
+    if (isOpen && issueId) {
+      fetchIssueDetails();
+    }
+  }, [fetchIssueDetails, isOpen, issueId]);
 
   const handleStatusChange = async (newStatus: IssueStatus) => {
     if (!issue) return;
@@ -268,7 +268,7 @@ export function IssueDetailPanel({
                           </h4>
                           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                             <p className="text-sm text-gray-700 italic">
-                              "{issue.excerpt}"
+                              &ldquo;{issue.excerpt}&rdquo;
                             </p>
                           </div>
                         </div>

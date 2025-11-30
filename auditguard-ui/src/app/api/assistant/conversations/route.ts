@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { Conversation } from '@/types/assistant';
 
+interface BackendConversation {
+  id?: string;
+  session_id?: string;
+  title?: string;
+  last_message?: string;
+  lastMessage?: string;
+  lastActivityAt?: string;
+  last_activity_at?: string;
+  updated_at?: string;
+  created_at?: string;
+  messageCount?: number;
+  message_count?: number;
+  status?: string;
+  is_pinned?: boolean;
+  isPinned?: boolean;
+  is_archived?: boolean;
+  isArchived?: boolean;
+  is_unread?: boolean;
+  isUnread?: boolean;
+  tags?: string[];
+  frameworks?: string[];
+  completion_percentage?: number;
+}
+
 // Simple session validation
 async function getSession(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
@@ -67,7 +91,7 @@ export async function GET(request: NextRequest) {
 
     // Transform backend sessions to Conversation format
     // Backend returns: { id, title, startedAt, lastActivityAt, messageCount }
-    const conversations: Conversation[] = (data.sessions || []).map((s: any) => ({
+    const conversations: Conversation[] = (data.sessions || []).map((s: BackendConversation) => ({
       id: s.id || s.session_id,
       title: s.title || 'Untitled Conversation',
       lastMessage: s.last_message || s.lastMessage || '',
@@ -146,7 +170,7 @@ export async function POST(request: NextRequest) {
 
     // Transform backend sessions to Conversation format
     // Backend returns: { id, title, startedAt, lastActivityAt, messageCount }
-    const conversations: Conversation[] = (data.sessions || []).map((s: any) => ({
+    const conversations: Conversation[] = (data.sessions || []).map((s: BackendConversation) => ({
       id: s.id || s.session_id,
       title: s.title || 'Untitled Conversation',
       lastMessage: s.last_message || s.lastMessage || '',

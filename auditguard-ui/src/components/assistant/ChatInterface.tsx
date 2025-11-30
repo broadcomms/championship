@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, Download, Copy, FileText } from 'lucide-react';
+import { Download, Copy, FileText } from 'lucide-react';
 import type { Message as MessageType } from '@/types/assistant';
 import { Message } from './Message';
 import { EnhancedInput } from './EnhancedInput';
-import { SuggestionChips, generateSuggestions } from './SuggestionChips';
+import { SuggestionChips, generateSuggestions, type Suggestion } from './SuggestionChips';
 import { StreamingIndicator, useStreamingMessage } from './StreamingMessage';
 import { useChatWidget, BroadcastMessage } from '@/contexts/ChatWidgetContext';
 import { exportConversation, copyConversationToClipboard } from '@/lib/exportConversation';
@@ -26,6 +26,14 @@ interface ChatInterfaceProps {
   onSessionCreated: (sessionId: string) => void;
 }
 
+interface AssistantResponse {
+  message: string;
+  sessionId?: string;
+  actions?: MessageType['actions'];
+  sources?: MessageType['sources'];
+  suggestions?: Array<Suggestion | string>;
+}
+
 export function ChatInterface({
   workspaceId,
   messages: externalMessages,
@@ -35,14 +43,14 @@ export function ChatInterface({
   const [messages, setMessages] = useState<MessageType[]>(externalMessages);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState(() =>
+  const [suggestions, setSuggestions] = useState<Suggestion[]>(() =>
     generateSuggestions({ workspaceData: {} })
   );
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied'>('idle');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { streamingContent, isStreaming, startStreaming } = useStreamingMessage();
+  const { streamingContent } = useStreamingMessage();
 
   // Get chat widget context - use getSessionId() for synchronous reads
   const chatWidget = useChatWidget();
@@ -88,6 +96,18 @@ export function ChatInterface({
   useEffect(() => {
     scrollToBottom();
   }, [messages, streamingContent]);
+
+  const normalizeSuggestions = useCallback((items?: Array<Suggestion | string>): Suggestion[] => {
+    if (!items || items.length === 0) return [];
+    return items.map((item, index) =>
+      typeof item === 'string'
+        ? {
+            id: `api-suggestion-${Date.now()}-${index}`,
+            text: item,
+          }
+        : item
+    );
+  }, []);
 
   const sendMessage = useCallback(async (messageText?: string) => {
     const messageToSend = messageText || input;
@@ -148,7 +168,7 @@ export function ChatInterface({
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as AssistantResponse;
 
       // If backend created a new session, notify parent (who will update context and localStorage)
       if (data.sessionId && !currentSessionId) {
@@ -187,7 +207,7 @@ export function ChatInterface({
 
       // Generate context-aware suggestions
       if (data.suggestions && data.suggestions.length > 0) {
-        setSuggestions(data.suggestions);
+        setSuggestions(normalizeSuggestions(data.suggestions));
       } else {
         setSuggestions(
           generateSuggestions({
@@ -216,9 +236,9 @@ export function ChatInterface({
       setStreamingMessageId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [input, isLoading, workspaceId, onMessageSent, onSessionCreated]); // Exclude chatWidget
+  }, [input, isLoading, workspaceId, onMessageSent, onSessionCreated, normalizeSuggestions]); // Exclude chatWidget
 
-  const handleSuggestionClick = (suggestion: any) => {
+  const handleSuggestionClick = (suggestion: string | Suggestion) => {
     const text = typeof suggestion === 'string' ? suggestion : suggestion.text;
     sendMessage(text);
   };
@@ -376,7 +396,7 @@ export function ChatInterface({
               Welcome to AI Compliance Assistant
             </h2>
             <p className="text-gray-600 mb-8 max-w-md mx-auto">
-              I'm here to help with compliance questions, document analysis, and regulatory guidance.
+              I&rsquo;m here to help with compliance questions, document analysis, and regulatory guidance.
             </p>
             <div className="grid grid-cols-1 gap-3 max-w-2xl mx-auto">
               <button

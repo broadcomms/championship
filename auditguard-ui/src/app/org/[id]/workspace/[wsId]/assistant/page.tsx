@@ -8,9 +8,9 @@ import { ToastProvider } from '@/components/assistant/ToastProvider';
 import ProactiveAlerts from '@/components/assistant/ProactiveAlerts';
 
 export default function WorkspaceAssistantPage() {
-  const params = useParams();
-  const orgId = params.id as string;
-  const wsId = params.wsId as string;
+  const params = useParams<{ id: string; wsId: string }>();
+  const orgId = params.id;
+  const wsId = params.wsId;
   const { user } = useAuth();
   const accountId = user?.userId;
 
@@ -19,7 +19,6 @@ export default function WorkspaceAssistantPage() {
       <ToastProvider maxToasts={5} defaultPosition="top-right">
         <AIAssistantPage
           workspaceId={wsId}
-          userId={accountId || ''}
         />
         <ProactiveAlerts workspaceId={wsId} enabled={true} />
       </ToastProvider>

@@ -170,7 +170,7 @@ export default function LoginPage() {
             </div>
 
             <div className="text-center text-sm">
-              <span className="text-gray-600">Don't have an account? </span>
+              <span className="text-gray-600">Don&rsquo;t have an account? </span>
               <Link
                 href="/register"
                 className="font-medium text-blue-600 hover:text-blue-500"
@@ -230,7 +230,7 @@ export default function LoginPage() {
             </form>
 
             <div className="text-center text-sm">
-              <span className="text-gray-600">Don't have an account? </span>
+              <span className="text-gray-600">Don&rsquo;t have an account? </span>
               <Link
                 href="/register"
                 className="font-medium text-blue-600 hover:text-blue-500"

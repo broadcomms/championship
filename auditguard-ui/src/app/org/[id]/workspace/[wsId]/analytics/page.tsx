@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { useAuth } from '@/contexts/AuthContext';
@@ -44,31 +44,64 @@ interface AnalyticsData {
   };
 }
 
+const normalizeApiResponse = <T,>(response: T | { data: T }): T => {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as { data: T }).data;
+  }
+  return response as T;
+};
+
+const getApiErrorMessage = (err: unknown): string => {
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message?: string }).message || 'Failed to load analytics');
+  }
+  return 'Failed to load analytics';
+};
+
 export default function WorkspaceAnalyticsPage() {
-  const params = useParams();
-  const orgId = params.id as string;
-  const wsId = params.wsId as string;
+  const params = useParams<{ id: string; wsId: string }>();
+  const orgId = params.id;
+  const wsId = params.wsId;
   const { user } = useAuth();
   const accountId = user?.userId;
 
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, [wsId, timeRange]);
+  const fetchAnalytics = useCallback(async () => {
+    if (!wsId) return;
 
-  const fetchAnalytics = async () => {
+    setLoading(true);
     try {
-      const response = await api.get(`/workspaces/${wsId}/analytics?range=${timeRange}`);
-      setAnalytics(response.data);
-    } catch (error) {
-      console.error('Failed to fetch analytics:', error);
+      const response = await api.get<AnalyticsData>(`/workspaces/${wsId}/analytics?range=${timeRange}`);
+      setAnalytics(normalizeApiResponse(response));
+      setError(null);
+    } catch (fetchError) {
+      console.error('Failed to fetch analytics:', fetchError);
+      setError(getApiErrorMessage(fetchError));
+      setAnalytics(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeRange, wsId]);
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, [fetchAnalytics]);
+
+  const resolutionRate = useMemo(() => {
+    if (!analytics || analytics.activity_summary.total_issues === 0) return 0;
+    return Math.round(
+      (analytics.activity_summary.resolved_issues / analytics.activity_summary.total_issues) * 100
+    );
+  }, [analytics]);
+
+  const maxUploadCount = useMemo(() => {
+    if (!analytics || analytics.document_uploads.length === 0) return 0;
+    return Math.max(...analytics.document_uploads.map((upload) => upload.count));
+  }, [analytics]);
 
   if (loading) {
     return (
@@ -80,31 +113,25 @@ export default function WorkspaceAnalyticsPage() {
     );
   }
 
-  if (!analytics) {
+  if (error || !analytics) {
     return (
       <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
         <div className="flex items-center justify-center p-8">
           <div className="text-center">
             <div className="text-6xl mb-4">📊</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              No analytics data available
+              {error ? 'Unable to load analytics' : 'No analytics data available'}
             </h3>
             <p className="text-gray-600">
-              Analytics will appear once you start running compliance checks
+              {error
+                ? error
+                : 'Analytics will appear once you start running compliance checks'}
             </p>
           </div>
         </div>
       </OrganizationLayout>
     );
   }
-
-  const resolutionRate =
-    analytics.activity_summary.total_issues > 0
-      ? Math.round(
-          (analytics.activity_summary.resolved_issues / analytics.activity_summary.total_issues) *
-            100
-        )
-      : 0;
 
   return (
     <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
@@ -428,30 +455,29 @@ export default function WorkspaceAnalyticsPage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Document Upload Activity
             </h3>
-            {analytics.document_uploads.length > 0 ? (
+              {analytics.document_uploads.length > 0 ? (
               <div className="flex items-end gap-2 h-48">
-                {analytics.document_uploads.map((upload, index) => {
-                  const maxCount = Math.max(...analytics.document_uploads.map((u) => u.count));
-                  const height = (upload.count / maxCount) * 100;
+                  {analytics.document_uploads.map((upload, index) => {
+                    const height = maxUploadCount ? (upload.count / maxUploadCount) * 100 : 0;
 
-                  return (
-                    <div key={index} className="flex-1 flex flex-col items-center">
-                      <div className="flex-1 flex items-end w-full">
-                        <div
-                          className="w-full bg-blue-500 rounded-t hover:bg-blue-600 transition"
-                          style={{ height: `${height}%` }}
-                          title={`${upload.count} uploads`}
-                        />
+                    return (
+                      <div key={index} className="flex-1 flex flex-col items-center">
+                        <div className="flex-1 flex items-end w-full">
+                          <div
+                            className="w-full bg-blue-500 rounded-t hover:bg-blue-600 transition"
+                            style={{ height: `${height}%` }}
+                            title={`${upload.count} uploads`}
+                          />
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2 text-center">
+                          {new Date(upload.date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-500 mt-2 text-center">
-                        {new Date(upload.date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">No upload activity</div>

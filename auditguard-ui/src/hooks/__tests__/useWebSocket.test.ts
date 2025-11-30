@@ -40,7 +40,7 @@ class MockWebSocket {
     }, 0)
   }
 
-  addEventListener(event: string, handler: any) {
+  addEventListener(event: string, handler: (event: CloseEvent) => void) {
     if (event === 'close') {
       const originalOnClose = this.onclose
       this.onclose = (e) => {
@@ -68,6 +68,17 @@ class MockWebSocket {
   }
 }
 
+type GlobalWithWebSocket = typeof global & {
+  WebSocket: jest.Mock & {
+    CONNECTING?: number
+    OPEN?: number
+    CLOSING?: number
+    CLOSED?: number
+  }
+}
+
+const globalWithWebSocket = global as GlobalWithWebSocket
+
 describe('useWebSocket', () => {
   let mockWebSocket: MockWebSocket
 
@@ -75,14 +86,14 @@ describe('useWebSocket', () => {
     jest.clearAllMocks()
     MockWebSocket.lastInstance = null
     // Set global WebSocket constants
-    ;(global as any).WebSocket = jest.fn((url: string) => {
+    globalWithWebSocket.WebSocket = jest.fn((url: string) => {
       mockWebSocket = new MockWebSocket(url)
       return mockWebSocket
     })
-    ;(global as any).WebSocket.CONNECTING = MockWebSocket.CONNECTING
-    ;(global as any).WebSocket.OPEN = MockWebSocket.OPEN
-    ;(global as any).WebSocket.CLOSING = MockWebSocket.CLOSING
-    ;(global as any).WebSocket.CLOSED = MockWebSocket.CLOSED
+    globalWithWebSocket.WebSocket.CONNECTING = MockWebSocket.CONNECTING
+    globalWithWebSocket.WebSocket.OPEN = MockWebSocket.OPEN
+    globalWithWebSocket.WebSocket.CLOSING = MockWebSocket.CLOSING
+    globalWithWebSocket.WebSocket.CLOSED = MockWebSocket.CLOSED
   })
 
   afterEach(() => {

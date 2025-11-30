@@ -68,10 +68,16 @@ export function useDocumentPolling(
         stopPolling();
         return false;
       }
-
       return shouldContinuePolling;
-    } catch (err: any) {
-      setError(err.error || 'Failed to fetch document status');
+    } catch (err: unknown) {
+      const rawMessage =
+        (typeof err === 'object' && err && 'error' in err && typeof (err as { error?: string }).error === 'string'
+          ? (err as { error?: string }).error
+          : err instanceof Error
+            ? err.message
+            : 'Failed to fetch document status');
+      const safeMessage = rawMessage && rawMessage.trim().length > 0 ? rawMessage : 'Failed to fetch document status';
+      setError(safeMessage);
       stopPolling();
       return false;
     }

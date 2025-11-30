@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
@@ -9,11 +9,7 @@ function SSOCallbackContent() {
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    handleCallback();
-  }, []);
-
-  const handleCallback = async () => {
+  const handleCallback = useCallback(async () => {
     try {
       // Get authorization code from URL query parameters
       const code = searchParams.get('code');
@@ -45,10 +41,23 @@ function SSOCallbackContent() {
         // Fallback to organizations if account ID not available
         router.push('/organizations');
       }
-    } catch (err: any) {
-      setError(err.error || 'SSO authentication failed. Please try again.');
+    } catch (err: unknown) {
+      const fallback = 'SSO authentication failed. Please try again.';
+      if (err instanceof Error) {
+        setError(err.message || fallback);
+        return;
+      }
+      if (typeof err === 'object' && err !== null && 'error' in err) {
+        setError(String((err as { error?: string }).error || fallback));
+        return;
+      }
+      setError(fallback);
     }
-  };
+  }, [router, searchParams]);
+
+  useEffect(() => {
+    handleCallback();
+  }, [handleCallback]);
 
   if (error) {
     return (

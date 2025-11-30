@@ -3,16 +3,13 @@
 import React, { useState } from 'react';
 import {
   FileText,
-  AlertTriangle,
   BarChart3,
-  Download,
   Shield,
-  CheckCircle2,
   HelpCircle,
   Lightbulb,
 } from 'lucide-react';
 
-interface Suggestion {
+export interface Suggestion {
   id: string;
   text: string;
   category?: 'compliance' | 'documents' | 'analytics' | 'help' | 'action';

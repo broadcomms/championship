@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Copy, Check, Share2, RefreshCw, Download, ThumbsUp, ThumbsDown } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
@@ -32,7 +32,7 @@ export function Message({ message, onRegenerate, onFeedback }: MessageProps) {
           title: 'AI Assistant Response',
           text: message.content,
         });
-      } catch (error) {
+      } catch {
         // User cancelled or share failed
         console.log('Share cancelled');
       }
@@ -57,6 +57,69 @@ export function Message({ message, onRegenerate, onFeedback }: MessageProps) {
   };
 
   const isUser = message.role === 'user';
+
+  const markdownComponents: Components = {
+    code({ inline, className, children, ...rest }: { inline?: boolean; className?: string; children?: React.ReactNode }) {
+      const isBlockCode = !inline;
+      const match = /language-(\w+)/.exec(className || '');
+      if (isBlockCode && match) {
+        return (
+          <div className="relative group/code">
+            <div className="absolute right-2 top-2 opacity-0 group-hover/code:opacity-100 transition-opacity">
+              <button
+                onClick={() =>
+                  navigator.clipboard.writeText(String(children).replace(/\n$/, ''))
+                }
+                className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs rounded"
+              >
+                Copy
+              </button>
+            </div>
+            <code className={className} {...rest}>
+              {children}
+            </code>
+          </div>
+        );
+      }
+      return (
+        <code className={className} {...rest}>
+          {children}
+        </code>
+      );
+    },
+    table({ children }) {
+      return (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">{children}</table>
+        </div>
+      );
+    },
+    a({ href, children }) {
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1"
+        >
+          {children}
+          <svg
+            className="w-3 h-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+            />
+          </svg>
+        </a>
+      );
+    },
+  };
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} group`}>
@@ -96,71 +159,7 @@ export function Message({ message, onRegenerate, onFeedback }: MessageProps) {
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeHighlight, rehypeRaw]}
-                components={{
-                  // Enhanced code block rendering
-                  code(props) {
-                    const { node, className, children, ...rest } = props as any;
-                    const inline = !(props as any).inline;
-                    const match = /language-(\w+)/.exec(className || '');
-                    return inline && match ? (
-                      <div className="relative group/code">
-                        <div className="absolute right-2 top-2 opacity-0 group-hover/code:opacity-100 transition-opacity">
-                          <button
-                            onClick={() =>
-                              navigator.clipboard.writeText(String(children).replace(/\n$/, ''))
-                            }
-                            className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs rounded"
-                          >
-                            Copy
-                          </button>
-                        </div>
-                        <code className={className} {...rest}>
-                          {children}
-                        </code>
-                      </div>
-                    ) : (
-                      <code className={className} {...rest}>
-                        {children}
-                      </code>
-                    );
-                  },
-                  // Enhanced table rendering
-                  table({ children }) {
-                    return (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          {children}
-                        </table>
-                      </div>
-                    );
-                  },
-                  // Enhanced link rendering
-                  a({ href, children }) {
-                    return (
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1"
-                      >
-                        {children}
-                        <svg
-                          className="w-3 h-3"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                          />
-                        </svg>
-                      </a>
-                    );
-                  },
-                }}
+                components={markdownComponents}
               >
                 {message.content}
               </ReactMarkdown>

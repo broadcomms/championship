@@ -6,21 +6,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/common/Button';
 
 interface LimitWarningBannerProps {
   workspaceId: string;
 }
 
-interface LimitData {
-  documents: { used: number; limit: number };
-  compliance_checks: { used: number; limit: number };
-  ai_messages: { used: number; limit: number };
-  storage_bytes: { used: number; limit: number };
-  team_members: { used: number; limit: number };
-}
-
 type LimitType = 'documents' | 'compliance_checks' | 'ai_messages' | 'storage_bytes' | 'team_members';
+
+interface LimitUsage {
+  used: number;
+  limit: number;
+}
 
 interface LimitWarning {
   type: LimitType;
@@ -46,6 +42,12 @@ const LIMIT_ICONS: Record<LimitType, string> = {
   team_members: '👥',
 };
 
+const LIMIT_TYPES: LimitType[] = ['documents', 'compliance_checks', 'ai_messages', 'storage_bytes', 'team_members'];
+
+function isLimitType(value: string): value is LimitType {
+  return LIMIT_TYPES.includes(value as LimitType);
+}
+
 function formatStorage(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))} MB`;
@@ -66,7 +68,6 @@ function getWarningLevel(percentage: number): 'warning' | 'critical' | 'blocked'
  * Banner component showing limit warnings
  */
 export function LimitWarningBanner({ workspaceId }: LimitWarningBannerProps) {
-  const [limits, setLimits] = useState<LimitData | null>(null);
   const [warnings, setWarnings] = useState<LimitWarning[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -78,19 +79,21 @@ export function LimitWarningBanner({ workspaceId }: LimitWarningBannerProps) {
         const response = await fetch(`/api/workspaces/${workspaceId}/usage`);
         if (!response.ok) throw new Error('Failed to fetch limits');
         
-        const data = await response.json();
-        setLimits(data.limits);
+        const data: { limits?: Record<string, LimitUsage> } = await response.json();
         
         // Calculate warnings
         const newWarnings: LimitWarning[] = [];
         
-        Object.entries(data.limits).forEach(([key, value]: [string, any]) => {
+        Object.entries(data.limits ?? {}).forEach(([key, value]) => {
+          if (!isLimitType(key) || typeof value?.used !== 'number' || typeof value?.limit !== 'number') {
+            return;
+          }
           const percentage = (value.used / value.limit) * 100;
           const level = getWarningLevel(percentage);
           
           if (level) {
             newWarnings.push({
-              type: key as LimitType,
+              type: key,
               percentage,
               used: value.used,
               limit: value.limit,

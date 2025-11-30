@@ -5,12 +5,11 @@ import { useParams } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
-import { Button } from '@/components/common/Button';
 
 export default function WorkspaceIssuesPage() {
-  const params = useParams();
-  const orgId = params.id as string;
-  const wsId = params.wsId as string;
+  const params = useParams<{ id: string; wsId: string }>();
+  const orgId = params.id;
+  const wsId = params.wsId;
   const { user } = useAuth();
   const accountId = user?.userId;
 

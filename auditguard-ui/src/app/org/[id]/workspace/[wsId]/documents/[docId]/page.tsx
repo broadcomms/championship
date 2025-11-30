@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { Button } from '@/components/common/Button';
@@ -40,20 +40,20 @@ export default function DocumentDetailPage() {
   const [document, setDocument] = useState<DocumentDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDocument();
-  }, [docId]);
-
-  const fetchDocument = async () => {
+  const fetchDocument = useCallback(async () => {
     try {
-      const response = await api.get(`/api/workspaces/${wsId}/documents/${docId}`);
+      const response = await api.get<DocumentDetail>(`/api/workspaces/${wsId}/documents/${docId}`);
       setDocument(response);
     } catch (error) {
       console.error('Failed to fetch document:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [docId, wsId]);
+
+  useEffect(() => {
+    void fetchDocument();
+  }, [fetchDocument]);
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ComplianceReport } from '@/types/compliance';
 import { 
   X, 
@@ -37,13 +37,7 @@ export function ComplianceReportDetailModal({
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && reportId) {
-      fetchReport();
-    }
-  }, [isOpen, reportId]);
-
-  const fetchReport = async () => {
+  const fetchReport = useCallback(async () => {
     if (!reportId) return;
 
     setLoading(true);
@@ -64,7 +58,13 @@ export function ComplianceReportDetailModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [reportId, workspaceId]);
+
+  useEffect(() => {
+    if (isOpen && reportId) {
+      fetchReport();
+    }
+  }, [fetchReport, isOpen, reportId]);
 
   const handleExport = async (format: 'json' | 'csv' | 'pdf') => {
     if (!report) return;

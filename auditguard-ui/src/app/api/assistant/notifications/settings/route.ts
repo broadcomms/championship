@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { NotificationSettings, DEFAULT_NOTIFICATION_SETTINGS } from '@/types/notification';
 
+interface NotificationSettingsPayload {
+  workspaceId: string;
+  settings: NotificationSettings;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -8,6 +13,7 @@ export async function GET(request: NextRequest) {
 
     // Mock settings - return default
     return NextResponse.json({
+      workspaceId,
       settings: DEFAULT_NOTIFICATION_SETTINGS,
     });
   } catch (error) {
@@ -21,7 +27,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as NotificationSettingsPayload;
     const { workspaceId, settings } = body;
 
     console.log('Saving notification settings for workspace:', workspaceId);

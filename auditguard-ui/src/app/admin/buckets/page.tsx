@@ -18,7 +18,7 @@ interface BucketObject {
   size: number;
   lastModified: string;
   contentType: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, string | number | boolean | null>;
 }
 
 interface BucketListResponse {

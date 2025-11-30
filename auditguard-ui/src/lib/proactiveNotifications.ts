@@ -13,14 +13,19 @@ export interface ProactiveNotification {
   actionLabel?: string;
   createdAt: Date;
   expiresAt?: Date;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, string | number | boolean | string[] | number[] | undefined>;
 }
 
-interface ComplianceIssue {
+interface ComplianceFrameworkMetric {
   framework: string;
   score: number;
   trend: 'improving' | 'declining' | 'stable';
   criticalGaps: number;
+}
+
+interface WorkspaceComplianceData {
+  overall_score: number;
+  frameworks: ComplianceFrameworkMetric[];
 }
 
 interface DocumentStatus {
@@ -29,6 +34,17 @@ interface DocumentStatus {
   lastChecked: Date;
   status: 'compliant' | 'issues' | 'pending';
   issueCount?: number;
+}
+
+type IssueSeverity = 'low' | 'medium' | 'high' | 'critical' | 'info' | 'warning';
+type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'closed' | 'pending';
+
+interface IssueSummary {
+  id: string;
+  title: string;
+  severity: IssueSeverity;
+  status: IssueStatus;
+  description?: string;
 }
 
 /**
@@ -67,7 +83,7 @@ export async function generateProactiveNotifications(
     }
 
     // Check for framework-specific issues
-    complianceData.frameworks?.forEach((framework: ComplianceIssue) => {
+    complianceData.frameworks?.forEach((framework: ComplianceFrameworkMetric) => {
       if (framework.score < 75 && framework.criticalGaps > 0) {
         notifications.push({
           id: `notif_${Date.now()}_${framework.framework.toLowerCase()}`,
@@ -89,7 +105,7 @@ export async function generateProactiveNotifications(
 
     // Check for documents with issues
     const documentsWithIssues = documentsData.filter(
-      (doc: DocumentStatus) => doc.status === 'issues' && doc.issueCount && doc.issueCount > 0
+      (doc: DocumentStatus) => doc.status === 'issues' && !!doc.issueCount && doc.issueCount > 0
     );
 
     if (documentsWithIssues.length > 0) {
@@ -111,7 +127,7 @@ export async function generateProactiveNotifications(
 
     // Check for high-priority issues
     const criticalIssues = issuesData.filter(
-      (issue: any) => issue.severity === 'critical' && issue.status === 'open'
+      (issue: IssueSummary) => issue.severity === 'critical' && issue.status === 'open'
     );
 
     if (criticalIssues.length > 0) {
@@ -126,7 +142,7 @@ export async function generateProactiveNotifications(
         createdAt: new Date(),
         metadata: {
           issueCount: criticalIssues.length,
-          issues: criticalIssues.slice(0, 5).map((i: any) => i.title),
+          issues: criticalIssues.slice(0, 5).map((issue) => issue.title),
         },
       });
     }
@@ -145,14 +161,18 @@ export async function generateProactiveNotifications(
 /**
  * Fetch workspace compliance data
  */
-async function fetchWorkspaceCompliance(workspaceId: string): Promise<any> {
+async function fetchWorkspaceCompliance(workspaceId: string): Promise<WorkspaceComplianceData> {
   try {
     const response = await fetch(`/api/workspaces/${workspaceId}/compliance`, {
       credentials: 'include',
     });
 
     if (response.ok) {
-      return await response.json();
+      const data = (await response.json()) as WorkspaceComplianceData;
+      return {
+        overall_score: data.overall_score,
+        frameworks: data.frameworks || [],
+      };
     }
   } catch (error) {
     console.error('Failed to fetch compliance data:', error);
@@ -187,14 +207,14 @@ async function fetchRecentDocuments(workspaceId: string): Promise<DocumentStatus
 /**
  * Fetch compliance issues
  */
-async function fetchComplianceIssues(workspaceId: string): Promise<any[]> {
+async function fetchComplianceIssues(workspaceId: string): Promise<IssueSummary[]> {
   try {
     const response = await fetch(`/api/workspaces/${workspaceId}/issues`, {
       credentials: 'include',
     });
 
     if (response.ok) {
-      const data = await response.json();
+      const data = (await response.json()) as { issues?: IssueSummary[] };
       return data.issues || [];
     }
   } catch (error) {
@@ -209,7 +229,7 @@ async function fetchComplianceIssues(workspaceId: string): Promise<any[]> {
  */
 async function generateAuditRecommendations(
   workspaceId: string,
-  complianceData: any
+  complianceData: WorkspaceComplianceData
 ): Promise<ProactiveNotification[]> {
   const recommendations: ProactiveNotification[] = [];
 
@@ -233,7 +253,7 @@ async function generateAuditRecommendations(
 
   // Example: Framework updates
   const frameworksNeedingUpdate = complianceData.frameworks?.filter(
-    (f: any) => f.score < 80
+    (framework) => framework.score < 80
   ) || [];
 
   if (frameworksNeedingUpdate.length > 0) {
@@ -247,7 +267,7 @@ async function generateAuditRecommendations(
       actionLabel: 'Review Frameworks',
       createdAt: new Date(),
       metadata: {
-        frameworks: frameworksNeedingUpdate.map((f: any) => f.framework),
+        frameworks: frameworksNeedingUpdate.map((framework) => framework.framework),
       },
     });
   }

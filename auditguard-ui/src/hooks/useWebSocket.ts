@@ -5,7 +5,7 @@ export type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'err
 export interface WebSocketMessage {
   type: string;
   channel?: string;
-  data?: any;
+  data?: Record<string, unknown>;
 }
 
 export interface UseWebSocketOptions {
@@ -113,7 +113,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
           }
 
           onMessage?.(message);
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Failed to parse WebSocket message:', error);
         }
       };
@@ -162,7 +162,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
         clearInterval(pingInterval);
       });
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to connect WebSocket:', error);
       setStatus('error');
     }

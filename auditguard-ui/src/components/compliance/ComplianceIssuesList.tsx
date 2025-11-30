@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ComplianceIssue, IssueSeverity, IssueStatus } from '@/types/compliance';
 import { ComplianceFramework } from '@/types';
 import { 
@@ -40,11 +40,7 @@ export function ComplianceIssuesList({
   // Selection
   const [selectedIssues, setSelectedIssues] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetchIssues();
-  }, [workspaceId]);
-
-  const fetchIssues = async () => {
+  const fetchIssues = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -63,7 +59,11 @@ export function ComplianceIssuesList({
     } finally {
       setLoading(false);
     }
-  };
+  }, [workspaceId]);
+
+  useEffect(() => {
+    fetchIssues();
+  }, [fetchIssues]);
 
   const getSeverityIcon = (severity: IssueSeverity) => {
     switch (severity) {

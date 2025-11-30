@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Settings, Save, Bell, Mail, Smartphone, Moon, Clock } from 'lucide-react';
 import {
   NotificationSettings as NotificationSettingsType,
@@ -20,24 +20,24 @@ export default function NotificationSettingsPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Load settings on mount
-  useEffect(() => {
-    loadSettings();
-  }, [workspaceId]);
-
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       const response = await fetch(`/api/assistant/notifications/settings?workspaceId=${workspaceId}`);
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as { settings?: NotificationSettingsType };
         setSettings(data.settings || DEFAULT_NOTIFICATION_SETTINGS);
       }
     } catch (error) {
       console.error('Failed to load notification settings:', error);
     }
-  };
+  }, [workspaceId]);
 
-  const saveSettings = async () => {
+  // Load settings on mount
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  const saveSettings = useCallback(async () => {
     setIsSaving(true);
     setSaveSuccess(false);
     try {
@@ -62,23 +62,24 @@ export default function NotificationSettingsPanel({
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [onSave, settings, workspaceId]);
 
-  const updateSettings = (path: string, value: any) => {
+  const updateSettings = useCallback((path: string, value: boolean | string) => {
     setSettings((prev) => {
       const keys = path.split('.');
-      const updated = { ...prev };
-      let current: any = updated;
+      const updated: NotificationSettingsType = { ...prev };
+      let current = updated as unknown as Record<string, unknown>;
 
       for (let i = 0; i < keys.length - 1; i++) {
-        current[keys[i]] = { ...current[keys[i]] };
-        current = current[keys[i]];
+        const key = keys[i];
+        current[key] = { ...(current[key] as Record<string, unknown>) };
+        current = current[key] as Record<string, unknown>;
       }
 
       current[keys[keys.length - 1]] = value;
       return updated;
     });
-  };
+  }, []);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">

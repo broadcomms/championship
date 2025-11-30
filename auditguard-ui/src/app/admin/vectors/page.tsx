@@ -4,16 +4,13 @@ import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   Activity,
-  AlertCircle,
   CheckCircle,
-  Clock,
   Database,
   Loader2,
   RefreshCw,
   Search,
   Server,
   Trash2,
-  XCircle,
 } from 'lucide-react';
 
 interface VectorStats {
@@ -71,9 +68,21 @@ interface ServiceHealth {
   error?: string;
 }
 
+interface VectorSearchResult {
+  documentId: string;
+  chunkIndex: number;
+  score: number;
+  text: string;
+}
+
+interface VectorSearchResponse {
+  results: VectorSearchResult[];
+  searchTime: number;
+}
+
 export default function VectorIndexPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any>(null);
+  const [searchResults, setSearchResults] = useState<VectorSearchResponse | null>(null);
   const [cleanupResult, setCleanupResult] = useState<{
     totalEmbeddings: number;
     validDocuments: number;
@@ -117,7 +126,7 @@ export default function VectorIndexPage() {
     },
   });
 
-  const searchMutation = useMutation({
+  const searchMutation = useMutation<VectorSearchResponse, Error, string>({
     mutationFn: async (query: string) => {
       const response = await fetch('/api/admin/vectors/search-test', {
         method: 'POST',
@@ -554,7 +563,7 @@ export default function VectorIndexPage() {
 
             {searchResults.results && searchResults.results.length > 0 ? (
               <div className="space-y-2">
-                {searchResults.results.map((result: any, idx: number) => (
+                {searchResults.results.map((result, idx: number) => (
                   <div key={idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <div className="flex items-start justify-between mb-2">
                       <span className="text-xs font-mono text-gray-500">

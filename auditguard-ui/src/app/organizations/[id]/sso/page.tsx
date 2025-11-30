@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -30,10 +30,36 @@ interface SSOConnection {
   updatedAt: number;
 }
 
+const extractErrorMessage = (err: unknown): string | undefined => {
+  if (err && typeof err === 'object') {
+    if ('response' in err) {
+      const responseErr = err as { response?: { data?: { message?: string } } };
+      return responseErr.response?.data?.message;
+    }
+    if ('message' in err) {
+      const message = (err as { message?: string }).message;
+      return message ? String(message) : undefined;
+    }
+  }
+  return undefined;
+};
+
+const getApiErrorMessage = (err: unknown, fallback = 'Something went wrong'): string => {
+  return extractErrorMessage(err) || fallback;
+};
+
+const getErrorStatus = (err: unknown): number | undefined => {
+  if (err && typeof err === 'object' && 'status' in err) {
+    const status = (err as { status?: number }).status;
+    return typeof status === 'number' ? status : undefined;
+  }
+  return undefined;
+};
+
 export default function OrganizationSSOPage() {
-  const params = useParams();
+  const params = useParams<{ id: string }>();
   const router = useRouter();
-  const organizationId = params.id as string;
+  const organizationId = params.id;
 
   const [ssoConfig, setSsoConfig] = useState<SSOConnection | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,11 +79,8 @@ export default function OrganizationSSOPage() {
     resolver: zodResolver(ssoConfigSchema),
   });
 
-  useEffect(() => {
-    fetchSSOConfig();
-  }, [organizationId]);
-
-  const fetchSSOConfig = async () => {
+  const fetchSSOConfig = useCallback(async () => {
+    if (!organizationId) return;
     setIsLoading(true);
     setError('');
     try {
@@ -66,21 +89,27 @@ export default function OrganizationSSOPage() {
       );
       setSsoConfig(data);
       reset({
-        provider: data.provider as any,
+        provider: data.provider as SSOConfigForm['provider'],
         workosOrganizationId: data.workosOrganizationId,
         workosConnectionId: data.workosConnectionId || '',
       });
-    } catch (err: any) {
-      // If SSO is not configured, it's not an error - just show the setup form
-      if (err.error?.includes('not configured') || err.status === 404) {
+    } catch (err) {
+      const status = getErrorStatus(err);
+      const rawMessage = extractErrorMessage(err)?.toLowerCase();
+      // If SSO is not configured, show the setup form without surfacing an error
+      if (status === 404 || rawMessage?.includes('not configured')) {
         setSsoConfig(null);
       } else {
-        setError(err.error || 'Failed to load SSO configuration');
+        setError(getApiErrorMessage(err, 'Failed to load SSO configuration'));
       }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [organizationId, reset]);
+
+  useEffect(() => {
+    fetchSSOConfig();
+  }, [fetchSSOConfig]);
 
   const onSubmit = async (data: SSOConfigForm) => {
     setIsSaving(true);
@@ -101,8 +130,8 @@ export default function OrganizationSSOPage() {
 
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err: any) {
-      setError(err.error || 'Failed to save SSO configuration');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to save SSO configuration'));
     } finally {
       setIsSaving(false);
     }
@@ -120,15 +149,15 @@ export default function OrganizationSSOPage() {
         `/api/organizations/${organizationId}/sso/config`,
         { enabled: !ssoConfig.enabled }
       );
-      setSsoConfig({ ...ssoConfig, enabled: !ssoConfig.enabled });
+      setSsoConfig((prev) => (prev ? { ...prev, enabled: !prev.enabled } : prev));
       setSuccessMessage(
         `SSO ${!ssoConfig.enabled ? 'enabled' : 'disabled'} successfully`
       );
 
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err: any) {
-      setError(err.error || 'Failed to toggle SSO');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to toggle SSO'));
     } finally {
       setIsToggling(false);
     }
@@ -152,8 +181,8 @@ export default function OrganizationSSOPage() {
 
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err: any) {
-      setError(err.error || 'Failed to delete SSO configuration');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to delete SSO configuration'));
     } finally {
       setIsDeleting(false);
     }
@@ -237,7 +266,7 @@ export default function OrganizationSSOPage() {
           <div className="mb-8 rounded-lg bg-white p-6 shadow">
             <h2 className="mb-4 text-lg font-semibold text-gray-900">Setup SSO</h2>
             <p className="mb-6 text-sm text-gray-600">
-              Configure your WorkOS SSO connection. You'll need to create an organization
+              Configure your WorkOS SSO connection. You&rsquo;ll need to create an organization
               and connection in the WorkOS dashboard first.
             </p>
 

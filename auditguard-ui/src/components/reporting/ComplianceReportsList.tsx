@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ComplianceReportListItem } from '@/types/compliance';
-import { FileText, Calendar, TrendingUp, AlertCircle, Clock } from 'lucide-react';
+import { ComplianceFramework } from '@/types';
+import { FileText, Calendar, TrendingUp, AlertCircle } from 'lucide-react';
 
 interface ComplianceReportsListProps {
   workspaceId: string;
@@ -10,16 +11,43 @@ interface ComplianceReportsListProps {
   refreshTrigger?: number;
 }
 
+interface BackendReportSummary {
+  overview?: {
+    overallScore?: number;
+    totalIssues?: number;
+    criticalIssues?: number;
+  };
+}
+
+interface BackendReport {
+  id: string;
+  name: string;
+  createdAt: number;
+  frameworks: string[];
+  status: string;
+  summary?: BackendReportSummary;
+}
+
+const normalizeFrameworks = (frameworks: string[]): ComplianceFramework[] => {
+  return frameworks
+    .filter((framework): framework is string => typeof framework === 'string')
+    .map((framework) => framework as ComplianceFramework);
+};
+
+const validStatuses: ComplianceReportListItem['status'][] = ['completed', 'failed', 'processing'];
+
+const normalizeStatus = (status: string): ComplianceReportListItem['status'] => {
+  return validStatuses.includes(status as ComplianceReportListItem['status'])
+    ? (status as ComplianceReportListItem['status'])
+    : 'processing';
+};
+
 export function ComplianceReportsList({ workspaceId, onReportClick, refreshTrigger }: ComplianceReportsListProps) {
   const [reports, setReports] = useState<ComplianceReportListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchReports();
-  }, [workspaceId, refreshTrigger]);
-
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -32,27 +60,33 @@ export function ComplianceReportsList({ workspaceId, onReportClick, refreshTrigg
         throw new Error('Failed to fetch reports');
       }
 
-      const data = await response.json();
+      const data: BackendReport[] | unknown = await response.json();
       // Backend returns array directly, not wrapped in {reports: [...]}
       // Transform to match ComplianceReportListItem structure
-      const transformedReports = Array.isArray(data) ? data.map((report: any) => ({
-        id: report.id,
-        name: report.name,
-        createdAt: report.createdAt,
-        frameworks: report.frameworks,
-        overallScore: report.summary?.overview?.overallScore || 0,
-        totalIssues: report.summary?.overview?.totalIssues || 0,
-        criticalIssues: report.summary?.overview?.criticalIssues || 0,
-        status: report.status,
-      })) : [];
+      const transformedReports = Array.isArray(data)
+        ? (data as BackendReport[]).map((report) => ({
+            id: report.id,
+            name: report.name,
+            createdAt: report.createdAt,
+            frameworks: normalizeFrameworks(report.frameworks || []),
+            overallScore: report.summary?.overview?.overallScore || 0,
+            totalIssues: report.summary?.overview?.totalIssues || 0,
+            criticalIssues: report.summary?.overview?.criticalIssues || 0,
+            status: normalizeStatus(report.status),
+          }))
+        : [];
       setReports(transformedReports);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Error fetching reports:', err);
       setError(err instanceof Error ? err.message : 'Failed to load reports');
     } finally {
       setLoading(false);
     }
-  };
+  }, [workspaceId]);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports, refreshTrigger]);
 
   const getScoreColor = (score: number) => {
     if (score >= 90) return 'text-green-600 bg-green-50';

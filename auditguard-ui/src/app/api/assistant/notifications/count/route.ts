@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 /**
  * GET /api/assistant/notifications/count
  * This endpoint is deprecated - use /api/notifications/count instead
  * Returns zero counts for backward compatibility
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   return NextResponse.json({
     unreadCount: 0,
     total: 0,

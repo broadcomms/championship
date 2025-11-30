@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 
 export type LimitType = 'documents' | 'compliance_checks' | 'assistant_messages' | 'api_calls';
@@ -12,6 +12,40 @@ interface LimitStatus {
   isAtLimit: boolean; // >=100%
   percentage: number;
 }
+
+interface WorkspaceLimitsResponse {
+  documentsUsed: number;
+  documentsLimit: number;
+  complianceChecksUsed: number;
+  complianceChecksLimit: number;
+  assistantMessagesUsed: number;
+  assistantMessagesLimit: number;
+  apiCallsUsed: number;
+  apiCallsLimit: number;
+}
+
+const calculateLimitStatus = (current: number, limit: number): LimitStatus => {
+  // -1 means unlimited
+  if (limit === -1) {
+    return {
+      current,
+      limit,
+      isNearLimit: false,
+      isAtLimit: false,
+      percentage: 0,
+    };
+  }
+
+  const percentage = (current / limit) * 100;
+
+  return {
+    current,
+    limit,
+    isNearLimit: percentage > 80,
+    isAtLimit: percentage >= 100,
+    percentage,
+  };
+};
 
 interface UseLimitCheckResult {
   limits: Record<LimitType, LimitStatus> | null;
@@ -27,16 +61,16 @@ export function useLimitCheck(workspaceId: string): UseLimitCheckResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadLimits = async () => {
+  const loadLimits = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await api.get(`/api/workspaces/${workspaceId}/limits`);
+      const data = await api.get<WorkspaceLimitsResponse>(`/api/workspaces/${workspaceId}/limits`);
 
       const limitStatus: Record<LimitType, LimitStatus> = {
-        documents: calculateStatus(data.documentsUsed, data.documentsLimit),
-        compliance_checks: calculateStatus(data.complianceChecksUsed, data.complianceChecksLimit),
-        assistant_messages: calculateStatus(data.assistantMessagesUsed, data.assistantMessagesLimit),
-        api_calls: calculateStatus(data.apiCallsUsed, data.apiCallsLimit),
+        documents: calculateLimitStatus(data.documentsUsed, data.documentsLimit),
+        compliance_checks: calculateLimitStatus(data.complianceChecksUsed, data.complianceChecksLimit),
+        assistant_messages: calculateLimitStatus(data.assistantMessagesUsed, data.assistantMessagesLimit),
+        api_calls: calculateLimitStatus(data.apiCallsUsed, data.apiCallsLimit),
       };
 
       setLimits(limitStatus);
@@ -47,34 +81,11 @@ export function useLimitCheck(workspaceId: string): UseLimitCheckResult {
     } finally {
       setLoading(false);
     }
-  };
+  }, [workspaceId]);
 
   useEffect(() => {
     loadLimits();
-  }, [workspaceId]);
-
-  const calculateStatus = (current: number, limit: number): LimitStatus => {
-    // -1 means unlimited
-    if (limit === -1) {
-      return {
-        current,
-        limit,
-        isNearLimit: false,
-        isAtLimit: false,
-        percentage: 0,
-      };
-    }
-
-    const percentage = (current / limit) * 100;
-
-    return {
-      current,
-      limit,
-      isNearLimit: percentage > 80,
-      isAtLimit: percentage >= 100,
-      percentage,
-    };
-  };
+  }, [loadLimits]);
 
   const checkLimit = (type: LimitType): LimitStatus | null => {
     return limits ? limits[type] : null;

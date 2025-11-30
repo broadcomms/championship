@@ -6,7 +6,7 @@ import { Play, Download, AlertCircle, Clock, Loader2 } from 'lucide-react';
 
 interface QueryResult {
   columns: string[];
-  rows: any[];
+  rows: Array<Record<string, unknown>>;
   rowCount: number;
   executionTime: number;
   warning?: string;
@@ -35,8 +35,9 @@ export function SqlEditor() {
       setResult(data);
       setError(null);
     },
-    onError: (err: any) => {
-      setError(err.message);
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Query failed';
+      setError(message);
       setResult(null);
     },
   });

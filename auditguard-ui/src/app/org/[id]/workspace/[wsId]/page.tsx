@@ -1,13 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
-import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import type { ErrorResponse } from '@/types';
 
-interface Workspace {
+const isErrorResponse = (error: unknown): error is ErrorResponse => {
+  return Boolean(
+    error &&
+    typeof error === 'object' &&
+    'status' in error &&
+    typeof (error as ErrorResponse).status === 'number'
+  );
+};
+
+interface WorkspaceDetails {
   id: string;
   name: string;
   description?: string;
@@ -48,21 +57,17 @@ export default function WorkspaceDashboardPage() {
   const wsId = params.wsId as string;
   const accountId = user?.userId;
 
-  const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [workspace, setWorkspace] = useState<WorkspaceDetails | null>(null);
   const [stats, setStats] = useState<WorkspaceStats | null>(null);
   const [activity, setActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchData();
-  }, [orgId, wsId]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       // Fetch workspace and stats (core data)
       const [workspaceRes, statsRes] = await Promise.all([
-        api.get(`/api/workspaces/${wsId}`),
-        api.get(`/api/workspaces/${wsId}/stats`),
+        api.get<WorkspaceDetails>(`/api/workspaces/${wsId}`),
+        api.get<WorkspaceStats>(`/api/workspaces/${wsId}/stats`),
       ]);
 
       // API returns data directly (not wrapped in .data)
@@ -71,12 +76,12 @@ export default function WorkspaceDashboardPage() {
 
       // Fetch activity separately (optional - may not be implemented yet)
       try {
-        const activityRes = await api.get(`/api/workspaces/${wsId}/activity?limit=10`);
+        const activityRes = await api.get<RecentActivity[]>(`/api/workspaces/${wsId}/activity?limit=10`);
         setActivity(Array.isArray(activityRes) ? activityRes : []);
-      } catch (activityError: any) {
+      } catch (activityError) {
         // Activity endpoint not implemented yet - gracefully degrade
         // Silently handle 404 errors for optional features
-        if (activityError?.status !== 404) {
+        if (!isErrorResponse(activityError) || activityError.status !== 404) {
           console.warn('Activity endpoint error:', activityError);
         }
         setActivity([]);
@@ -86,7 +91,12 @@ export default function WorkspaceDashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [wsId]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
+
 
   const quickActions: QuickAction[] = [
     {

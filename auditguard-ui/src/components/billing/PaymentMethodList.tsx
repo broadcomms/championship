@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 
 interface PaymentMethod {
@@ -23,14 +23,10 @@ export function PaymentMethodList({ workspaceId }: PaymentMethodListProps) {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadPaymentMethods();
-  }, [workspaceId]);
-
-  const loadPaymentMethods = async () => {
+  const loadPaymentMethods = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await api.get(`/api/workspaces/${workspaceId}/payment-methods`);
+      const data = await api.get<{ paymentMethods?: PaymentMethod[] }>(`/api/workspaces/${workspaceId}/payment-methods`);
       setPaymentMethods(data.paymentMethods || []);
       setError(null);
     } catch (err) {
@@ -39,7 +35,11 @@ export function PaymentMethodList({ workspaceId }: PaymentMethodListProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [workspaceId]);
+
+  useEffect(() => {
+    loadPaymentMethods();
+  }, [loadPaymentMethods]);
 
   const handleSetDefault = async (paymentMethodId: string) => {
     try {

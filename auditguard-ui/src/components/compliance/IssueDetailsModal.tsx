@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ComplianceIssueDetails,
   IssueStatus,
@@ -31,13 +31,7 @@ export function IssueDetailsModal({
   const [error, setError] = useState<string | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState('');
 
-  useEffect(() => {
-    if (isOpen && issueId) {
-      fetchIssueDetails();
-    }
-  }, [isOpen, issueId]);
-
-  const fetchIssueDetails = async () => {
+  const fetchIssueDetails = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -57,7 +51,13 @@ export function IssueDetailsModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [issueId, workspaceId]);
+
+  useEffect(() => {
+    if (isOpen && issueId) {
+      fetchIssueDetails();
+    }
+  }, [fetchIssueDetails, isOpen, issueId]);
 
   const updateStatus = async (newStatus: IssueStatus) => {
     if (!issue) return;

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 
 interface Workspace {
   id: string;
@@ -31,7 +31,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   const [error, setError] = useState<string | null>(null);
 
   // Load workspaces from API
-  const refreshWorkspaces = async () => {
+  const refreshWorkspaces = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -46,14 +46,19 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
       const data = await response.json();
       setWorkspaces(data.workspaces || []);
 
-      // If no current workspace is set, set the first one
-      if (!currentWorkspace && data.workspaces && data.workspaces.length > 0) {
-        const savedWorkspaceId = localStorage.getItem('currentWorkspaceId');
-        const workspace = savedWorkspaceId
-          ? data.workspaces.find((w: Workspace) => w.id === savedWorkspaceId)
-          : data.workspaces[0];
+      if (data.workspaces && data.workspaces.length > 0) {
+        setCurrentWorkspaceState((prev) => {
+          if (prev) {
+            return prev;
+          }
 
-        setCurrentWorkspaceState(workspace || data.workspaces[0]);
+          const savedWorkspaceId = localStorage.getItem('currentWorkspaceId');
+          const workspace = savedWorkspaceId
+            ? data.workspaces.find((w: Workspace) => w.id === savedWorkspaceId)
+            : data.workspaces[0];
+
+          return workspace || data.workspaces[0];
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -61,7 +66,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // Set current workspace and persist to localStorage
   const setCurrentWorkspace = (workspace: Workspace) => {
@@ -72,7 +77,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   // Load workspaces on mount
   useEffect(() => {
     refreshWorkspaces();
-  }, []);
+  }, [refreshWorkspaces]);
 
   const value: WorkspaceContextType = {
     currentWorkspace,

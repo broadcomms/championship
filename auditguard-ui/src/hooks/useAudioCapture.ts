@@ -50,6 +50,46 @@ export function useAudioCapture(options: AudioCaptureOptions) {
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isRecordingRef = useRef<boolean>(false);
 
+  // Process audio for transcription
+  const processAudioForTranscription = useCallback(async (audioBlob: Blob) => {
+    try {
+      // Convert blob to base64 or send directly to API
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+
+      console.log('🎙️ Sending audio for transcription:', {
+        size: `${(audioBlob.size / 1024).toFixed(2)} KB`,
+        type: audioBlob.type,
+      });
+
+      // Call transcription API with workspaceId and language hint
+      const response = await fetch(
+        `/api/assistant/transcribe?workspaceId=${workspaceId}&language=en`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Transcription failed: ${errorText}`);
+      }
+
+      const data = await response.json();
+      const transcription = data.text || '';
+
+      console.log('✅ Transcription received:', transcription.substring(0, 100));
+
+      onTranscription?.(transcription);
+      setState((prev) => ({ ...prev, isProcessing: false, error: null }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Transcription failed';
+      setState((prev) => ({ ...prev, isProcessing: false, error: errorMessage }));
+      onError?.(error instanceof Error ? error : new Error(errorMessage));
+    }
+  }, [workspaceId, onTranscription, onError]);
+
   // Initialize audio context and analyzer
   const initializeAudio = useCallback(async () => {
     try {
@@ -177,47 +217,43 @@ export function useAudioCapture(options: AudioCaptureOptions) {
       onError?.(error instanceof Error ? error : new Error(errorMessage));
       return false;
     }
-  }, [onError]);
+  }, [onError, processAudioForTranscription]);
 
-  // Process audio for transcription
-  const processAudioForTranscription = useCallback(async (audioBlob: Blob) => {
+  // Stop recording
+  const stopRecording = useCallback(() => {
+    if (!isRecordingRef.current || !mediaRecorderRef.current) {
+      console.log('⏹️ Stop recording called but not recording');
+      return;
+    }
+
     try {
-      // Convert blob to base64 or send directly to API
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
+      console.log('⏹️ Stopping recording...');
+      mediaRecorderRef.current.stop();
+      isRecordingRef.current = false;
 
-      console.log('🎙️ Sending audio for transcription:', {
-        size: `${(audioBlob.size / 1024).toFixed(2)} KB`,
-        type: audioBlob.type,
-      });
-
-      // Call transcription API with workspaceId and language hint
-      const response = await fetch(
-        `/api/assistant/transcribe?workspaceId=${workspaceId}&language=en`,
-        {
-          method: 'POST',
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Transcription failed: ${errorText}`);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
 
-      const data = await response.json();
-      const transcription = data.text || '';
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+        durationIntervalRef.current = null;
+      }
 
-      console.log('✅ Transcription received:', transcription.substring(0, 100));
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
 
-      onTranscription?.(transcription);
-      setState((prev) => ({ ...prev, isProcessing: false, error: null }));
+      setState((prev) => ({ ...prev, audioLevel: 0 }));
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Transcription failed';
-      setState((prev) => ({ ...prev, isProcessing: false, error: errorMessage }));
+      isRecordingRef.current = false;
+      const errorMessage = error instanceof Error ? error.message : 'Failed to stop recording';
+      setState((prev) => ({ ...prev, error: errorMessage }));
       onError?.(error instanceof Error ? error : new Error(errorMessage));
     }
-  }, [workspaceId, onTranscription, onError]);
+  }, [onError]);
 
   // Monitor audio levels
   const monitorAudioLevel = useCallback(() => {
@@ -261,7 +297,7 @@ export function useAudioCapture(options: AudioCaptureOptions) {
     };
 
     updateLevel();
-  }, [inputMode, voiceActivationThreshold, silenceTimeout, state.isRecording]);
+  }, [inputMode, silenceTimeout, state.isRecording, stopRecording, voiceActivationThreshold]);
 
   // Start recording
   const startRecording = useCallback(async () => {
@@ -294,41 +330,6 @@ export function useAudioCapture(options: AudioCaptureOptions) {
     }
   }, [state.isProcessing, initializeAudio, monitorAudioLevel, onError, inputMode]);
 
-  // Stop recording
-  const stopRecording = useCallback(() => {
-    if (!isRecordingRef.current || !mediaRecorderRef.current) {
-      console.log('⏹️ Stop recording called but not recording');
-      return;
-    }
-
-    try {
-      console.log('⏹️ Stopping recording...');
-      mediaRecorderRef.current.stop();
-      isRecordingRef.current = false;
-
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-        durationIntervalRef.current = null;
-      }
-
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
-
-      setState((prev) => ({ ...prev, audioLevel: 0 }));
-    } catch (error) {
-      isRecordingRef.current = false;
-      const errorMessage = error instanceof Error ? error.message : 'Failed to stop recording';
-      setState((prev) => ({ ...prev, error: errorMessage }));
-      onError?.(error instanceof Error ? error : new Error(errorMessage));
-    }
-  }, [onError]);
 
   // Toggle recording
   const toggleRecording = useCallback(() => {

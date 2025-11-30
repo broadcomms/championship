@@ -4,6 +4,16 @@ import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 
+interface WorkspaceSummary {
+  id: string;
+  organization_id?: string;
+  organizationId?: string;
+}
+
+interface OrganizationSummary {
+  id: string;
+}
+
 export default function WorkspaceDashboardRedirect() {
   const params = useParams();
   const router = useRouter();
@@ -13,7 +23,7 @@ export default function WorkspaceDashboardRedirect() {
     // Fetch workspace to get organization ID, then redirect to new route structure
     const redirectToNewRoute = async () => {
       try {
-        const workspace = await api.get(`/api/workspaces/${workspaceId}`);
+        const workspace = await api.get<WorkspaceSummary>(`/api/workspaces/${workspaceId}`);
         const orgId = workspace.organization_id || workspace.organizationId;
 
         if (orgId) {
@@ -21,12 +31,12 @@ export default function WorkspaceDashboardRedirect() {
           router.replace(`/org/${orgId}/workspace/${workspaceId}`);
         } else {
           // If no org ID, try to get from organizations list
-          const orgs = await api.get('/api/organizations');
+          const orgs = await api.get<OrganizationSummary[]>('/api/organizations');
           if (orgs && orgs.length > 0) {
             // Find the org that contains this workspace
             for (const org of orgs) {
-              const workspaces = await api.get(`/api/organizations/${org.id}/workspaces`);
-              if (workspaces.some((ws: any) => ws.id === workspaceId)) {
+              const workspaces = await api.get<WorkspaceSummary[]>(`/api/organizations/${org.id}/workspaces`);
+              if (workspaces.some((ws) => ws.id === workspaceId)) {
                 router.replace(`/org/${org.id}/workspace/${workspaceId}`);
                 return;
               }

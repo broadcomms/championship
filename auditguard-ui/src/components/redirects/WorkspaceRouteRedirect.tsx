@@ -16,7 +16,9 @@ export function WorkspaceRouteRedirect({ subPath = '' }: WorkspaceRouteRedirectP
   useEffect(() => {
     const redirectToNewRoute = async () => {
       try {
-        const workspace = await api.get(`/api/workspaces/${workspaceId}`);
+        const workspace = await api.get<{ organization_id?: string; organizationId?: string }>(
+          `/api/workspaces/${workspaceId}`
+        );
         const orgId = workspace.organization_id || workspace.organizationId;
 
         if (orgId) {

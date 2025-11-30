@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Bell,
   X,
@@ -9,32 +9,23 @@ import {
   Info,
   CheckCircle,
   Archive,
-  Trash2,
   Filter,
-  Settings,
-  ChevronDown,
 } from 'lucide-react';
 import {
   Notification,
   NotificationFilter,
   NotificationStatus,
-  NotificationType,
-  NotificationCategory,
-  NotificationPriority,
-  NOTIFICATION_ICONS,
   NOTIFICATION_COLORS,
 } from '@/types/notification';
 import { formatDistanceToNow } from 'date-fns';
 
 interface NotificationCenterProps {
   workspaceId: string;
-  userId?: string;
   onNotificationAction?: (notificationId: string, action: string) => void;
 }
 
 export default function NotificationCenter({
   workspaceId,
-  userId,
   onNotificationAction,
 }: NotificationCenterProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -49,18 +40,7 @@ export default function NotificationCenter({
   });
 
   // Load notifications
-  useEffect(() => {
-    if (isOpen) {
-      loadNotifications();
-    }
-  }, [isOpen, filter, page]);
-
-  // Load unread count on mount
-  useEffect(() => {
-    loadUnreadCount();
-  }, [workspaceId]);
-
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`/api/assistant/notifications`, {
@@ -91,9 +71,15 @@ export default function NotificationCenter({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filter, page, workspaceId]);
 
-  const loadUnreadCount = async () => {
+  useEffect(() => {
+    if (isOpen) {
+      loadNotifications();
+    }
+  }, [isOpen, loadNotifications]);
+
+  const loadUnreadCount = useCallback(async () => {
     try {
       const response = await fetch(`/api/assistant/notifications/count?workspaceId=${workspaceId}`);
       if (response.ok) {
@@ -103,7 +89,12 @@ export default function NotificationCenter({
     } catch (error) {
       console.error('Failed to load unread count:', error);
     }
-  };
+  }, [workspaceId]);
+
+  // Load unread count on mount
+  useEffect(() => {
+    loadUnreadCount();
+  }, [loadUnreadCount]);
 
   const markAsRead = async (notificationId: string) => {
     try {

@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { OrganizationNav } from '@/components/organizations/OrganizationNav';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
 import { OrganizationSettings } from '@/types/organization';
-import { AlertTriangle, TrendingUp, DollarSign, Calendar, AlertCircle } from 'lucide-react';
+import { AlertTriangle, TrendingUp, DollarSign, Calendar } from 'lucide-react';
 
 interface UsageData {
   organization_id: string;
@@ -70,10 +70,23 @@ interface ForecastData {
   }>;
 }
 
+const getApiErrorMessage = (err: unknown): string => {
+  if (err && typeof err === 'object') {
+    if ('response' in err) {
+      const responseErr = err as { response?: { data?: { message?: string } } };
+      return responseErr.response?.data?.message || 'Failed to load billing data';
+    }
+    if ('message' in err) {
+      return String((err as { message?: string }).message || 'Failed to load billing data');
+    }
+  }
+  return 'Failed to load billing data';
+};
+
 export default function OrganizationBillingPage() {
-  const params = useParams();
+  const params = useParams<{ id: string }>();
   const router = useRouter();
-  const organizationId = params.id as string;
+  const organizationId = params.id;
 
   const [organization, setOrganization] = useState<OrganizationSettings | null>(null);
   const [usage, setUsage] = useState<UsageData | null>(null);
@@ -82,11 +95,8 @@ export default function OrganizationBillingPage() {
   const [error, setError] = useState('');
   const [period, setPeriod] = useState<'current' | 'last30days' | 'all-time'>('current');
 
-  useEffect(() => {
-    fetchData();
-  }, [organizationId, period]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (!organizationId) return;
     setIsLoading(true);
     setError('');
     try {
@@ -98,12 +108,16 @@ export default function OrganizationBillingPage() {
       setOrganization(orgData);
       setUsage(usageData);
       setForecast(forecastData);
-    } catch (err: any) {
-      setError(err.error || 'Failed to load billing data');
+    } catch (err) {
+      setError(getApiErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [organizationId, period]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B';
@@ -433,6 +447,7 @@ export default function OrganizationBillingPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {usage.by_workspace
+                    .slice()
                     .sort((a, b) => b.storage_bytes - a.storage_bytes)
                     .map((workspace) => (
                       <tr key={workspace.workspace_id} className="hover:bg-gray-50">

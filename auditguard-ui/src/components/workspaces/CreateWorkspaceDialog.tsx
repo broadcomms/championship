@@ -67,7 +67,7 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWork
         const ownerOrg = data.find(org => org.role === 'owner');
         setSelectedOrgId(ownerOrg?.id || data[0].id);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to fetch organizations:', err);
       setError('Failed to load organizations. Please try again.');
     } finally {
@@ -80,7 +80,7 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWork
     try {
       const data = await api.get<WorkspaceLimits>('/api/workspaces/limits');
       setLimits(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to fetch workspace limits:', err);
       // Don't show error to user, just log it
     } finally {
@@ -101,8 +101,15 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWork
       reset();
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.error || 'Failed to create workspace');
+    } catch (err: unknown) {
+      const rawMessage =
+        (typeof err === 'object' && err && 'error' in err && typeof (err as { error?: string }).error === 'string'
+          ? (err as { error?: string }).error
+          : err instanceof Error
+            ? err.message
+            : 'Failed to create workspace');
+      const safeMessage = rawMessage && rawMessage.trim().length > 0 ? rawMessage : 'Failed to create workspace';
+      setError(safeMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -190,7 +197,7 @@ export function CreateWorkspaceDialog({ isOpen, onClose, onSuccess }: CreateWork
                   Workspace Limit Reached
                 </h3>
                 <p className="mt-1 text-sm text-red-800">
-                  You've reached your limit of <span className="font-bold">{limits.maxWorkspaces}</span> workspace
+                  You&rsquo;ve reached your limit of <span className="font-bold">{limits.maxWorkspaces}</span> workspace
                   {limits.maxWorkspaces !== 1 ? 's' : ''} on the <span className="font-semibold">{limits.planName}</span> plan.
                   Please upgrade your plan to create more workspaces.
                 </p>

@@ -11,7 +11,7 @@ interface ErrorLogRequest {
   message: string;
   stack?: string;
   componentStack?: string;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
   timestamp: number;
   level?: 'error' | 'warning' | 'info';
   userAgent?: string;
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
  * GET endpoint to retrieve error logs
  * Currently returns empty - can be implemented when database is added
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   return NextResponse.json({
     errors: [],
     count: 0,

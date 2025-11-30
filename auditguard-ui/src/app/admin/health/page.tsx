@@ -24,7 +24,7 @@ interface SystemHealth {
     lastCheck: number;
     uptime: number;
     errorRate: number;
-    details?: Record<string, any>;
+    details?: Record<string, string | number | boolean | null>;
   }>;
   database: {
     status: 'healthy' | 'degraded' | 'unhealthy';

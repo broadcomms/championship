@@ -1,14 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -28,17 +21,13 @@ import {
   Users,
   Activity,
   Zap,
-  DollarSign,
-  BarChart3,
   Download,
   RefreshCw,
-  Calendar,
 } from 'lucide-react';
 import {
   AnalyticsDashboard as AnalyticsDashboardType,
   Metric,
   TimeRange,
-  TimeRangeFilter,
   TIME_RANGE_LABELS,
   TOOL_COLORS,
   FRAMEWORK_COLORS,
@@ -55,11 +44,7 @@ export default function AnalyticsDashboard({ workspaceId, initialTimeRange = 'we
   const [analytics, setAnalytics] = useState<AnalyticsDashboardType | null>(null);
 
   // Load analytics data
-  useEffect(() => {
-    loadAnalytics();
-  }, [workspaceId, timeRange]);
-
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`/api/assistant/analytics`, {
@@ -81,7 +66,11 @@ export default function AnalyticsDashboard({ workspaceId, initialTimeRange = 'we
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [workspaceId, timeRange]);
+
+  useEffect(() => {
+    loadAnalytics();
+  }, [loadAnalytics]);
 
   const handleExport = async () => {
     try {

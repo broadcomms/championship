@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { OrganizationNav } from '@/components/organizations/OrganizationNav';
@@ -9,17 +9,32 @@ import { Input } from '@/components/common/Input';
 import { api } from '@/lib/api';
 import { OrganizationSettings, OrganizationMember } from '@/types/organization';
 
-const roleColors = {
+type OrganizationRole = 'owner' | 'admin' | 'member' | 'billing';
+
+const roleColors: Record<OrganizationRole, string> = {
   owner: 'bg-purple-100 text-purple-800',
   admin: 'bg-blue-100 text-blue-800',
   member: 'bg-green-100 text-green-800',
   billing: 'bg-yellow-100 text-yellow-800',
 };
 
+const getApiErrorMessage = (err: unknown, fallback = 'Something went wrong'): string => {
+  if (err && typeof err === 'object') {
+    if ('response' in err) {
+      const responseErr = err as { response?: { data?: { message?: string } } };
+      return responseErr.response?.data?.message || fallback;
+    }
+    if ('message' in err) {
+      return String((err as { message?: string }).message || fallback);
+    }
+  }
+  return fallback;
+};
+
 export default function OrganizationMembersPage() {
-  const params = useParams();
+  const params = useParams<{ id: string }>();
   const router = useRouter();
-  const organizationId = params.id as string;
+  const organizationId = params.id;
 
   const [organization, setOrganization] = useState<OrganizationSettings | null>(null);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
@@ -28,15 +43,12 @@ export default function OrganizationMembersPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [isInviteFormOpen, setIsInviteFormOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'member' | 'billing'>('member');
+  const [inviteRole, setInviteRole] = useState<Exclude<OrganizationRole, 'owner'>>('member');
   const [isInviting, setIsInviting] = useState(false);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, [organizationId]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (!organizationId) return;
     setIsLoading(true);
     setError('');
     try {
@@ -46,12 +58,16 @@ export default function OrganizationMembersPage() {
       ]);
       setOrganization(orgData);
       setMembers(membersData);
-    } catch (err: any) {
-      setError(err.error || 'Failed to load organization members');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to load organization members'));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [organizationId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleInviteMember = async () => {
     if (!inviteEmail) {
@@ -76,14 +92,14 @@ export default function OrganizationMembersPage() {
 
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err: any) {
-      setError(err.error || 'Failed to invite member');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to invite member'));
     } finally {
       setIsInviting(false);
     }
   };
 
-  const handleRoleChange = async (memberId: string, newRole: 'admin' | 'member' | 'billing') => {
+  const handleRoleChange = async (memberId: string, newRole: Exclude<OrganizationRole, 'owner'>) => {
     setUpdatingMemberId(memberId);
     setError('');
     try {
@@ -91,8 +107,8 @@ export default function OrganizationMembersPage() {
         role: newRole,
       });
       await fetchData();
-    } catch (err: any) {
-      setError(err.error || 'Failed to update role');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to update role'));
     } finally {
       setUpdatingMemberId(null);
     }
@@ -111,8 +127,8 @@ export default function OrganizationMembersPage() {
 
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err: any) {
-      setError(err.error || 'Failed to remove member');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to remove member'));
     }
   };
 
@@ -204,7 +220,7 @@ export default function OrganizationMembersPage() {
                 <select
                   value={inviteRole}
                   onChange={(e) =>
-                    setInviteRole(e.target.value as 'admin' | 'member' | 'billing')
+                    setInviteRole(e.target.value as Exclude<OrganizationRole, 'owner'>)
                   }
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
@@ -270,7 +286,7 @@ export default function OrganizationMembersPage() {
                         onChange={(e) =>
                           handleRoleChange(
                             member.id,
-                            e.target.value as 'admin' | 'member' | 'billing'
+                            e.target.value as Exclude<OrganizationRole, 'owner'>
                           )
                         }
                         disabled={updatingMemberId === member.id}

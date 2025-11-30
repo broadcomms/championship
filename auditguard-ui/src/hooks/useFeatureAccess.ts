@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { hasFeature, getRequiredPlan, FEATURE_METADATA, type FeatureId, type PlanId } from '../utils/feature-gates';
+import { getRequiredPlan, FEATURE_METADATA, type FeatureId, type PlanId } from '../utils/feature-gates';
 
 interface UseFeatureAccessResult {
   hasAccess: boolean;

@@ -1,16 +1,14 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ComplianceIssue, IssueStatus } from '@/types/compliance';
 import { 
   X, 
   AlertCircle, 
   CheckCircle, 
-  Clock,
   User,
   Calendar,
   FileText,
-  MessageSquare,
   ExternalLink,
   Info,
   AlertTriangle,
@@ -21,7 +19,6 @@ import {
   GitCompare,
   Wrench,
   TrendingUp,
-  Zap
 } from 'lucide-react';
 
 interface EnhancedIssueDetailPanelProps {
@@ -44,13 +41,7 @@ export function EnhancedIssueDetailPanel({
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && issueId) {
-      fetchIssueDetails();
-    }
-  }, [isOpen, issueId]);
-
-  const fetchIssueDetails = async () => {
+  const fetchIssueDetails = useCallback(async () => {
     if (!issueId) return;
 
     setLoading(true);
@@ -71,7 +62,13 @@ export function EnhancedIssueDetailPanel({
     } finally {
       setLoading(false);
     }
-  };
+  }, [issueId, workspaceId]);
+
+  useEffect(() => {
+    if (isOpen && issueId) {
+      fetchIssueDetails();
+    }
+  }, [fetchIssueDetails, isOpen, issueId]);
 
   const handleStatusChange = async (newStatus: IssueStatus) => {
     if (!issue) return;
@@ -159,19 +156,6 @@ export function EnhancedIssueDetailPanel({
         return <Info className="w-5 h-5 text-blue-600" />;
       default:
         return <Info className="w-5 h-5 text-gray-600" />;
-    }
-  };
-
-  const getStatusIcon = (status: IssueStatus) => {
-    switch (status) {
-      case 'open':
-        return <AlertCircle className="w-5 h-5 text-gray-600" />;
-      case 'in_progress':
-        return <Clock className="w-5 h-5 text-blue-600" />;
-      case 'resolved':
-        return <CheckCircle className="w-5 h-5 text-green-600" />;
-      case 'dismissed':
-        return <X className="w-5 h-5 text-gray-400" />;
     }
   };
 
@@ -301,7 +285,7 @@ export function EnhancedIssueDetailPanel({
                           </h3>
                           <div className="bg-white border border-yellow-300 rounded-md p-4">
                             <p className="text-gray-800 italic leading-relaxed">
-                              "{issue.llmResponse.original_text}"
+                              &ldquo;{issue.llmResponse.original_text}&rdquo;
                             </p>
                           </div>
                         </div>

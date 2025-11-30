@@ -11,7 +11,7 @@ import { ComponentType } from 'react';
  * Preload a lazy-loaded component
  * @param factory - The lazy component factory function
  */
-export function preloadComponent<T extends ComponentType<any>>(
+export function preloadComponent<T extends ComponentType<unknown>>(
   factory: () => Promise<{ default: T }>
 ): void {
   factory().catch(err => {
@@ -23,7 +23,7 @@ export function preloadComponent<T extends ComponentType<any>>(
  * Create a preload function for a lazy component
  * Usage: const preloadModal = createPreloader(() => import('./Modal'))
  */
-export function createPreloader<T extends ComponentType<any>>(
+export function createPreloader<T extends ComponentType<unknown>>(
   factory: () => Promise<{ default: T }>
 ) {
   let preloaded = false;
@@ -41,7 +41,7 @@ export function createPreloader<T extends ComponentType<any>>(
  * @param factory - The lazy component factory
  * @returns Event handler for onMouseEnter
  */
-export function preloadOnHover<T extends ComponentType<any>>(
+export function preloadOnHover<T extends ComponentType<unknown>>(
   factory: () => Promise<{ default: T }>
 ) {
   return () => preloadComponent(factory);
@@ -52,7 +52,7 @@ export function preloadOnHover<T extends ComponentType<any>>(
  * @param factory - The lazy component factory
  * @returns Event handler for onFocus
  */
-export function preloadOnFocus<T extends ComponentType<any>>(
+export function preloadOnFocus<T extends ComponentType<unknown>>(
   factory: () => Promise<{ default: T }>
 ) {
   return () => preloadComponent(factory);

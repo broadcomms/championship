@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Compliance automation illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#EFF6FF" />
+      <stop offset="100%" stop-color="#DBEAFE" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" rx="48" fill="url(#bg)" />
+  <rect x="120" y="120" width="420" height="300" rx="28" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="4" />
+  <rect x="620" y="180" width="360" height="220" rx="24" fill="#FFFFFF" stroke="#C4B5FD" stroke-width="4" />
+  <text x="150" y="190" font-size="40" font-family="Inter, Arial, sans-serif" fill="#1E3A8A" font-weight="700">Automation Playbook</text>
+  <text x="150" y="240" font-size="20" font-family="Inter, Arial, sans-serif" fill="#1F2937">AuditGuardX workflow</text>
+  <circle cx="800" cy="260" r="60" fill="#312E81" opacity="0.08" />
+  <path d="M760 260h120" stroke="#7C3AED" stroke-width="8" stroke-linecap="round" />
+  <path d="M800 220v120" stroke="#7C3AED" stroke-width="8" stroke-linecap="round" />
+  <text x="640" y="360" font-size="24" font-family="Inter, Arial, sans-serif" fill="#4338CA">AuditGuardX</text>
+</svg>

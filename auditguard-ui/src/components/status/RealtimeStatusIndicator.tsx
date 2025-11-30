@@ -68,7 +68,7 @@ export function RealtimeStatusIndicator({ position = 'fixed', workspaceId }: Rea
               // Connection is alive
               setLastConnectedAt(Date.now());
             }
-          } catch (error) {
+          } catch {
             // Ignore parse errors
           }
         };

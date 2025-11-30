@@ -66,10 +66,7 @@ export interface LLMIssueResponse {
   confidence: number;
 }
 
-export interface ComplianceIssueDetails extends ComplianceIssue {
-  // Already included in ComplianceIssue now, so this interface is for backward compatibility
-  // or for future additional enriched fields
-}
+export type ComplianceIssueDetails = ComplianceIssue;
 
 export interface ComplianceCheck {
   id: string;

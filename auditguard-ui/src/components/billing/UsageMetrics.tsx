@@ -132,7 +132,7 @@ export function UsageMetrics({ limits }: UsageMetricsProps) {
               </h3>
               <div className="mt-2 text-sm text-red-700">
                 <p>
-                  You've reached your plan's limit for one or more resources. Upgrade your plan to continue using these features.
+                  You&rsquo;ve reached your plan&rsquo;s limit for one or more resources. Upgrade your plan to continue using these features.
                 </p>
               </div>
             </div>
@@ -163,7 +163,7 @@ export function UsageMetrics({ limits }: UsageMetricsProps) {
               </h3>
               <div className="mt-2 text-sm text-yellow-700">
                 <p>
-                  You're approaching your plan's limits. Consider upgrading to avoid service interruptions.
+                  You&rsquo;re approaching your plan&rsquo;s limits. Consider upgrading to avoid service interruptions.
                 </p>
               </div>
             </div>

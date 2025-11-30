@@ -31,6 +31,22 @@ interface Notification {
   ai_session_id?: string;
 }
 
+interface NotificationQueryFilter {
+  limit: number;
+  offset: number;
+  category?: NotificationCategory[];
+}
+
+interface NotificationsResponse {
+  notifications?: Notification[];
+  total?: number;
+  unreadCount?: number;
+}
+
+interface NotificationActionResponse {
+  redirect_url?: string;
+}
+
 interface NotificationCount {
   total: number;
   unread: number;
@@ -64,13 +80,6 @@ const NOTIFICATION_TYPE_ICONS: Record<string, string> = {
   ai_insight: '✨',
 };
 
-const PRIORITY_COLORS = {
-  critical: 'text-red-600 bg-red-50 border-red-200',
-  high: 'text-orange-600 bg-orange-50 border-orange-200',
-  medium: 'text-yellow-600 bg-yellow-50 border-yellow-200',
-  low: 'text-blue-600 bg-blue-50 border-blue-200',
-};
-
 export function NotificationBell() {
   const [counts, setCounts] = useState<NotificationCount>({
     total: 0,
@@ -88,7 +97,7 @@ export function NotificationBell() {
   // Fetch notification counts
   const fetchCounts = async () => {
     try {
-      const response = await api.post('/api/notifications', { filter: {} });
+      const response = await api.post<NotificationsResponse>('/api/notifications', { filter: {} });
       // Extract counts from response
       setCounts({
         total: response.total || 0,
@@ -96,7 +105,7 @@ export function NotificationBell() {
         by_category: { ai: 0, workspace: 0, system: 0 },
         by_priority: { critical: 0, high: 0, medium: 0, low: 0 }
       });
-    } catch (error) {
+    } catch {
       // Silently handle errors - notifications are optional
       // Default counts are already set in state
     }
@@ -106,7 +115,7 @@ export function NotificationBell() {
   const fetchNotifications = async (category?: NotificationCategory) => {
     setLoading(true);
     try {
-      const filter: any = {
+      const filter: NotificationQueryFilter = {
         limit: 10,
         offset: 0
       };
@@ -115,9 +124,9 @@ export function NotificationBell() {
         filter.category = [category];
       }
 
-      const response = await api.post('/api/notifications', { filter });
+      const response = await api.post<NotificationsResponse>('/api/notifications', { filter });
       setNotifications(response.notifications || []);
-    } catch (error) {
+    } catch {
       // Silently handle errors - notifications are optional
       setNotifications([]);
     } finally {
@@ -167,7 +176,7 @@ export function NotificationBell() {
       }));
       // Refresh counts from server
       await fetchCounts();
-    } catch (error) {
+    } catch {
       // Silently handle errors
     }
   };
@@ -181,7 +190,7 @@ export function NotificationBell() {
       // Refresh notifications and counts
       fetchNotifications(category);
       fetchCounts();
-    } catch (error) {
+    } catch {
       // Silently handle errors
     }
   };
@@ -191,7 +200,10 @@ export function NotificationBell() {
     e.stopPropagation();
     
     try {
-      const response = await api.post(`/api/notifications/${notification.id}/action`, { action: action.action });
+      const response = await api.post<NotificationActionResponse>(
+        `/api/notifications/${notification.id}/action`,
+        { action: action.action }
+      );
       
       // Remove notification from list if dismissed/archived
       if (['dismiss', 'archive'].includes(action.action)) {
@@ -209,7 +221,7 @@ export function NotificationBell() {
         window.location.href = response.redirect_url;
         setIsOpen(false);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to execute action:', error);
     }
   };

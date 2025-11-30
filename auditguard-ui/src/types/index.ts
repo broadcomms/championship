@@ -539,7 +539,7 @@ export interface ExportData {
 export interface ErrorResponse {
   error: string;
   status: number;
-  details?: any;
+  details?: unknown;
 }
 
 export interface ApiResponse<T> {

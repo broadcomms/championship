@@ -1,13 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import type { ErrorResponse, SubscriptionPlan } from '@/types';
+import type { Organization } from '@/types/organization';
 
-interface Subscription {
+interface OrganizationBillingData extends Organization {
+  subscription_plan?: string | null;
+  subscription_status?: SubscriptionDetails['status'];
+}
+
+interface SubscriptionDetails {
   plan_id: string;
   plan_name: string;
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete';
@@ -61,8 +68,60 @@ interface PlanTier {
   };
 }
 
+type PlanWithLimits = Pick<SubscriptionPlan, 'limits' | 'features'>;
+
+interface BillingPlansResponse {
+  plans: SubscriptionPlan[];
+}
+
+interface UsageForecastResponse {
+  current_usage?: {
+    documents?: number;
+    checks?: number;
+    messages?: number;
+  } | null;
+  plan_limits?: {
+    max_documents?: number;
+    max_checks?: number;
+    max_messages?: number;
+  } | null;
+}
+
+interface OrganizationSubscriptionResponse {
+  plan_id?: string;
+  plan_name?: string;
+  status?: SubscriptionDetails['status'];
+  current_period_start?: number;
+  current_period_end?: number;
+  cancel_at_period_end?: boolean;
+  trial_start?: number;
+  trial_end?: number;
+}
+
+interface CheckoutSessionResponse {
+  url: string;
+  sessionId?: string;
+}
+
+const getApiErrorMessage = (error: unknown) => {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'error' in error &&
+    typeof (error as ErrorResponse).error === 'string'
+  ) {
+    return (error as ErrorResponse).error;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Unknown error';
+};
+
 // Helper function to format plan features into human-readable list
-function formatPlanFeatures(plan: any): string[] {
+function formatPlanFeatures(plan: PlanWithLimits): string[] {
   const features: string[] = [];
   
   // Add document limit
@@ -90,7 +149,7 @@ function formatPlanFeatures(plan: any): string[] {
   }
   
   // Add team members limit
-  const teamLimit = plan.limits.team_members;
+  const teamLimit = typeof plan.limits.users === 'number' ? plan.limits.users : 0;
   if (teamLimit === -1) {
     features.push('Unlimited team members');
   } else if (teamLimit > 0) {
@@ -154,7 +213,7 @@ function formatPlanFeatures(plan: any): string[] {
   
   // Add feature flags
   if (plan.features && Array.isArray(plan.features)) {
-    plan.features.forEach((feature: string) => {
+    plan.features.forEach((feature) => {
       const readable = featureMap[feature];
       if (readable) {
         features.push(readable);
@@ -167,12 +226,11 @@ function formatPlanFeatures(plan: any): string[] {
 
 export default function OrganizationBillingPage() {
   const params = useParams();
-  const router = useRouter();
   const { user } = useAuth();
   const orgId = params.id as string;
   const accountId = user?.userId;
 
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionDetails | null>(null);
   const [usage, setUsage] = useState<UsageMetrics | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [plans, setPlans] = useState<PlanTier[]>([]);
@@ -209,17 +267,18 @@ export default function OrganizationBillingPage() {
         }
 
         // Fetch organization data to get subscription info
-        const orgResponse = await api.get(`/api/organizations/${orgId}`).catch(err => {
-          console.error('Failed to fetch organization:', err);
-          return null;
-        });
+        const orgData = await api
+          .get<OrganizationBillingData>(`/api/organizations/${orgId}`)
+          .catch((err) => {
+            console.error('Failed to fetch organization:', err);
+            return null;
+          });
 
-        const orgData = orgResponse?.data || orgResponse;
         console.log('Organization data for billing:', orgData);
 
         // Fetch subscription plans from API
-        const plansResponse = await api.get('/api/billing/plans');
-        const fetchedPlans: PlanTier[] = plansResponse.plans.map((plan: any) => ({
+        const plansResponse = await api.get<BillingPlansResponse>('/api/billing/plans');
+        const fetchedPlans: PlanTier[] = plansResponse.plans.map((plan) => ({
           id: plan.id,
           name: plan.name,
           displayName: plan.displayName,
@@ -230,23 +289,34 @@ export default function OrganizationBillingPage() {
           uploads: plan.limits.documents,
           checks: plan.limits.compliance_checks,
           features: formatPlanFeatures(plan),
-          limits: plan.limits,
+          limits: {
+            documents: plan.limits.documents,
+            compliance_checks: plan.limits.compliance_checks,
+            assistant_messages: plan.limits.assistant_messages,
+            storage_gb: plan.limits.storage_gb,
+            team_members: plan.limits.users ?? 0,
+            api_calls: plan.limits.api_calls ?? 0,
+          },
         }));
         setPlans(fetchedPlans);
 
         // Fetch usage forecast (includes current usage + plan limits)
-        const forecast = await api.get(`/api/organizations/${orgId}/usage/forecast`).catch((err) => {
-          console.error('Failed to fetch usage forecast:', err);
-          return null;
-        });
+        const forecast = await api
+          .get<UsageForecastResponse>(`/api/organizations/${orgId}/usage/forecast`)
+          .catch((err) => {
+            console.error('Failed to fetch usage forecast:', err);
+            return null;
+          });
 
         console.log('Usage forecast data:', forecast);
 
         // Fetch subscription details using the proper API endpoint
-        const subscriptionData = await api.get(`/api/organizations/${orgId}/subscription`).catch((err) => {
-          console.error('Failed to fetch subscription:', err);
-          return null;
-        });
+        const subscriptionData = await api
+          .get<OrganizationSubscriptionResponse>(`/api/organizations/${orgId}/subscription`)
+          .catch((err) => {
+            console.error('Failed to fetch subscription:', err);
+            return null;
+          });
 
         console.log('Subscription data:', subscriptionData);
 
@@ -254,14 +324,19 @@ export default function OrganizationBillingPage() {
         if (subscriptionData && subscriptionData.plan_id) {
           // Find the plan details from fetched plans
           const planDetails = fetchedPlans.find(p => p.id === subscriptionData.plan_id);
+          const safePlanName =
+            subscriptionData.plan_name ||
+            planDetails?.displayName ||
+            planDetails?.name ||
+            'Custom Plan';
           
           setSubscription({
             plan_id: subscriptionData.plan_id,
-            plan_name: subscriptionData.plan_name,
-            status: subscriptionData.status,
-            current_period_start: subscriptionData.current_period_start,
-            current_period_end: subscriptionData.current_period_end,
-            cancel_at_period_end: subscriptionData.cancel_at_period_end,
+            plan_name: safePlanName,
+            status: subscriptionData.status || 'active',
+            current_period_start: subscriptionData.current_period_start || Date.now(),
+            current_period_end: subscriptionData.current_period_end || Date.now() + 30 * 24 * 60 * 60 * 1000,
+            cancel_at_period_end: Boolean(subscriptionData.cancel_at_period_end),
             trial_start: subscriptionData.trial_start,
             trial_end: subscriptionData.trial_end,
             billing_cycle: 'monthly',
@@ -379,11 +454,11 @@ export default function OrganizationBillingPage() {
 
         try {
           // Cancel subscription (will downgrade at period end or immediately)
-          const result = await api.delete(`/api/organizations/${orgId}/subscription`);
+          await api.delete(`/api/organizations/${orgId}/subscription`);
           alert('Your subscription will be canceled at the end of the current billing period.');
           window.location.reload();
-        } catch (error: any) {
-          alert(`Failed to cancel subscription: ${error.error || 'Unknown error'}`);
+        } catch (error) {
+          alert(`Failed to cancel subscription: ${getApiErrorMessage(error)}`);
         }
         return;
       }
@@ -398,7 +473,7 @@ export default function OrganizationBillingPage() {
 
       try {
         // Create Stripe Checkout session
-        const result = await api.post(`/api/organizations/${orgId}/checkout`, {
+        const result = await api.post<CheckoutSessionResponse>(`/api/organizations/${orgId}/checkout`, {
           planId: planId,
         });
 
@@ -409,13 +484,13 @@ export default function OrganizationBillingPage() {
         } else {
           alert('Failed to create checkout session: Invalid response from server');
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error('Checkout error:', error);
-        alert(`Failed to create checkout session: ${error.error || 'Unknown error'}`);
+        alert(`Failed to create checkout session: ${getApiErrorMessage(error)}`);
       }
     } catch (error) {
       console.error('Upgrade error:', error);
-      alert('Failed to process upgrade. Please try again.');
+      alert(`Failed to process upgrade. ${getApiErrorMessage(error)}`);
     } finally {
       setLoading(false);
     }
@@ -434,13 +509,11 @@ export default function OrganizationBillingPage() {
       setLoading(true);
 
       // API client already returns parsed JSON or throws error
-      const result = await api.delete(`/api/organizations/${orgId}/subscription`);
-
       alert('Your subscription has been canceled and will end at the current billing period.');
       window.location.reload();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Cancellation error:', error);
-      alert(`Failed to cancel subscription: ${error.error || 'Unknown error'}`);
+      alert(`Failed to cancel subscription: ${getApiErrorMessage(error)}`);
     } finally {
       setLoading(false);
     }
@@ -612,7 +685,7 @@ export default function OrganizationBillingPage() {
                   </div>
                   {usagePercentUploads > 75 && (
                     <p className="text-xs text-red-600 mt-1">
-                      ⚠️ You're approaching your upload limit. Consider upgrading your plan.
+                      ⚠️ You&rsquo;re approaching your upload limit. Consider upgrading your plan.
                     </p>
                   )}
                 </div>
@@ -643,7 +716,7 @@ export default function OrganizationBillingPage() {
                   </div>
                   {usagePercentChecks > 75 && (
                     <p className="text-xs text-red-600 mt-1">
-                      ⚠️ You're approaching your check limit. Consider upgrading your plan.
+                      ⚠️ You&rsquo;re approaching your check limit. Consider upgrading your plan.
                     </p>
                   )}
                 </div>
@@ -674,7 +747,7 @@ export default function OrganizationBillingPage() {
                   </div>
                   {usagePercentMessages > 75 && (
                     <p className="text-xs text-red-600 mt-1">
-                      ⚠️ You're approaching your AI message limit. Consider upgrading your plan.
+                      ⚠️ You&rsquo;re approaching your AI message limit. Consider upgrading your plan.
                     </p>
                   )}
                 </div>

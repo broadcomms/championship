@@ -50,10 +50,10 @@ export function useStreamingMessage() {
 
   const startStreaming = async (
     endpoint: string,
-    body: any,
+    body: Record<string, unknown>,
     onComplete?: (content: string) => void,
     onError?: (error: Error) => void
-  ) => {
+  ): Promise<void> => {
     setIsStreaming(true);
     setStreamingContent('');
 
@@ -96,7 +96,8 @@ export function useStreamingMessage() {
       onComplete?.(fullContent);
     } catch (error) {
       setIsStreaming(false);
-      onError?.(error as Error);
+      const normalizedError = error instanceof Error ? error : new Error('Streaming failed');
+      onError?.(normalizedError);
     }
   };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { Button } from '@/components/common/Button';
@@ -29,14 +29,10 @@ export default function OrganizationSSOPage() {
   const [selectedProvider, setSelectedProvider] = useState<'workos' | 'okta' | 'azure' | 'google'>('workos');
   const [domain, setDomain] = useState('');
 
-  useEffect(() => {
-    fetchConfig();
-  }, [orgId]);
-
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     try {
       // Note: api.get() returns data directly, not wrapped in .data property
-      const config = await api.get(`/api/organizations/${orgId}/sso/config`);
+      const config = await api.get<SSOConfiguration | null>(`/api/organizations/${orgId}/sso/config`);
       setConfig(config || { enabled: false, provider: null });
     } catch (error) {
       console.error('Failed to fetch SSO config:', error);
@@ -44,13 +40,17 @@ export default function OrganizationSSOPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [orgId]);
+
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
   const handleEnableSSO = async () => {
     setSaving(true);
     try {
       // Note: api.post() returns data directly, not wrapped in .data property
-      const response = await api.post(`/api/organizations/${orgId}/sso/config`, {
+      const response = await api.post<{ setup_url?: string }>(`/api/organizations/${orgId}/sso/config`, {
         provider: selectedProvider === 'workos' ? 'saml' : selectedProvider,
         enabled: true,
         // Note: The backend expects workosOrganizationId and workosConnectionId
@@ -332,7 +332,7 @@ export default function OrganizationSSOPage() {
 
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-sm text-blue-900">
-                      After clicking Continue, you'll be redirected to complete the SSO
+                      After clicking Continue, you&rsquo;ll be redirected to complete the SSO
                       configuration with your identity provider.
                     </p>
                   </div>

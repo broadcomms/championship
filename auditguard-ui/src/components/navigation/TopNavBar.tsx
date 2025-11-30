@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Settings, LogOut, User, Shield, ShieldCheck, Building2, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -23,7 +23,6 @@ interface TopNavBarProps {
 export function TopNavBar({ currentOrgId, showOrgSwitcher = true }: TopNavBarProps) {
   const { user, logout } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isOrgMenuOpen, setIsOrgMenuOpen] = useState(false);
   const [organizations, setOrganizations] = useState<Organization[]>([]);

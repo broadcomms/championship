@@ -42,6 +42,17 @@ interface OrganizationStats {
   checks_limit: number;
 }
 
+interface UsageForecast {
+  current_usage?: {
+    documents?: number;
+    checks?: number;
+  } | null;
+  plan_limits?: {
+    max_documents?: number;
+    max_checks?: number;
+  } | null;
+}
+
 export default function OrganizationOverviewPage() {
   const params = useParams();
   const router = useRouter();
@@ -58,22 +69,26 @@ export default function OrganizationOverviewPage() {
     const fetchData = async () => {
       try {
         // Fetch organization data (includes subscription info)
-        const orgRes = await api.get(`/api/organizations/${orgId}`).catch(err => {
+        const orgRes = await api.get<Organization | { data: Organization }>(`/api/organizations/${orgId}`).catch(err => {
           console.error('Failed to fetch organization:', err);
           return null;
         });
 
         // Backend wraps response in { data: ... }
-        const orgData = orgRes?.data || orgRes;
+        const orgData = orgRes && typeof orgRes === 'object' && 'data' in orgRes
+          ? orgRes.data
+          : orgRes;
         console.log('Organization data:', orgData);
 
         // Fetch workspaces
-        const workspacesRes = await api.get(`/api/organizations/${orgId}/workspaces`).catch(err => {
+        const workspacesRes = await api.get<Workspace[] | { data: Workspace[] }>(`/api/organizations/${orgId}/workspaces`).catch(err => {
           console.error('Failed to fetch workspaces:', err);
           return [];
         });
 
-        const workspacesList = workspacesRes?.data || workspacesRes;
+        const workspacesList = workspacesRes && typeof workspacesRes === 'object' && 'data' in workspacesRes
+          ? workspacesRes.data
+          : workspacesRes;
         console.log('Workspaces:', workspacesList);
 
         setOrganization(orgData || null);
@@ -81,7 +96,7 @@ export default function OrganizationOverviewPage() {
 
         // Fetch usage forecast to get accurate limits from backend
         if (orgData) {
-          const forecast = await api.get(`/api/organizations/${orgId}/usage/forecast`).catch(err => {
+          const forecast = await api.get<UsageForecast>(`/api/organizations/${orgId}/usage/forecast`).catch(err => {
             console.error('Failed to fetch usage forecast:', err);
             return null;
           });

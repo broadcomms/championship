@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,10 +21,23 @@ const updateOrganizationSchema = z.object({
 
 type UpdateOrganizationForm = z.infer<typeof updateOrganizationSchema>;
 
+const getApiErrorMessage = (err: unknown, fallback = 'Something went wrong'): string => {
+  if (err && typeof err === 'object') {
+    if ('response' in err) {
+      const responseErr = err as { response?: { data?: { message?: string } } };
+      return responseErr.response?.data?.message || fallback;
+    }
+    if ('message' in err) {
+      return String((err as { message?: string }).message || fallback);
+    }
+  }
+  return fallback;
+};
+
 export default function OrganizationSettingsPage() {
-  const params = useParams();
+  const params = useParams<{ id: string }>();
   const router = useRouter();
-  const organizationId = params.id as string;
+  const organizationId = params.id;
 
   const [organization, setOrganization] = useState<OrganizationSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,11 +54,8 @@ export default function OrganizationSettingsPage() {
     resolver: zodResolver(updateOrganizationSchema),
   });
 
-  useEffect(() => {
-    fetchOrganization();
-  }, [organizationId]);
-
-  const fetchOrganization = async () => {
+  const fetchOrganization = useCallback(async () => {
+    if (!organizationId) return;
     setIsLoading(true);
     setError('');
     try {
@@ -58,12 +68,16 @@ export default function OrganizationSettingsPage() {
         slug: data.slug,
         billing_email: data.billing_email || '',
       });
-    } catch (err: any) {
-      setError(err.error || 'Failed to load organization');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to load organization'));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [organizationId, reset]);
+
+  useEffect(() => {
+    fetchOrganization();
+  }, [fetchOrganization]);
 
   const onSubmit = async (data: UpdateOrganizationForm) => {
     setIsSaving(true);
@@ -71,7 +85,7 @@ export default function OrganizationSettingsPage() {
     setSuccessMessage('');
 
     try {
-      const updateData: any = {
+      const updateData: Partial<Pick<OrganizationSettings, 'name' | 'slug' | 'billing_email'>> = {
         name: data.name,
         slug: data.slug,
       };
@@ -90,8 +104,8 @@ export default function OrganizationSettingsPage() {
 
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err: any) {
-      setError(err.error || 'Failed to update organization');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to update organization'));
     } finally {
       setIsSaving(false);
     }
@@ -140,7 +154,7 @@ export default function OrganizationSettingsPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Organization Settings</h1>
           <p className="mt-2 text-sm text-gray-600">
-            Manage your organization's information and billing settings
+            Manage your organization&rsquo;s information and billing settings
           </p>
         </div>
 

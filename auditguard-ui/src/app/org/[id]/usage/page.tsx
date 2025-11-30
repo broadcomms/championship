@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { api } from '@/lib/api';
@@ -46,6 +46,41 @@ interface WorkspaceUsage {
   documents: number;
 }
 
+interface OrganizationUsageApiResponse {
+  total_documents?: number;
+  total_checks?: number;
+  total_messages?: number;
+  total_storage_bytes?: number;
+  start_date?: string;
+  end_date?: string;
+  by_workspace?: WorkspaceBreakdown[];
+}
+
+interface WorkspaceBreakdown {
+  workspace_id: string;
+  workspace_name: string;
+  documents?: number;
+  checks?: number;
+  messages?: number;
+  storage_bytes?: number;
+}
+
+interface UsageForecastPlanLimits {
+  max_documents?: number;
+  max_checks?: number;
+  max_messages?: number;
+  max_storage_gb?: number;
+}
+
+interface UsageForecastResponse {
+  current_usage?: {
+    documents?: number;
+    checks?: number;
+    messages?: number;
+  } | null;
+  plan_limits?: UsageForecastPlanLimits | null;
+}
+
 export default function OrganizationUsagePage() {
   const params = useParams();
   const { user } = useAuth();
@@ -57,17 +92,12 @@ export default function OrganizationUsagePage() {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'current' | 'last30days' | 'all-time'>('current');
 
-  useEffect(() => {
-    fetchData();
-  }, [orgId, timeRange]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       // Fetch usage data and plan limits
-      const [usageRes, workspaces, forecast] = await Promise.all([
-        api.get(`/api/organizations/${orgId}/usage?period=${timeRange}`),
-        api.get(`/api/organizations/${orgId}/workspaces`),
-        api.get(`/api/organizations/${orgId}/usage/forecast`).catch(() => null),
+      const [usageRes, forecast] = await Promise.all([
+        api.get<OrganizationUsageApiResponse>(`/api/organizations/${orgId}/usage?period=${timeRange}`),
+        api.get<UsageForecastResponse>(`/api/organizations/${orgId}/usage/forecast`).catch(() => null),
       ]);
 
       // Get actual limits from forecast API (uses subscription plan limits)
@@ -82,29 +112,34 @@ export default function OrganizationUsagePage() {
       console.log('Plan limits from forecast:', limits);
 
       // Map backend data structure to frontend expected format
+      const documentLimit = limits.max_documents ?? 0;
+      const checkLimit = limits.max_checks ?? 0;
+      const messageLimit = limits.max_messages ?? 0;
+      const storageLimit = limits.max_storage_gb ?? 0;
+
       const mappedUsage: UsageData = {
         uploads: {
           current: usageRes?.total_documents || 0,
-          limit: limits.max_documents,
-          percentage: limits.max_documents > 0 ? ((usageRes?.total_documents || 0) / limits.max_documents) * 100 : 0,
+          limit: documentLimit,
+          percentage: documentLimit > 0 ? ((usageRes?.total_documents || 0) / documentLimit) * 100 : 0,
           history: [],
         },
         checks: {
           current: usageRes?.total_checks || 0,
-          limit: limits.max_checks,
-          percentage: limits.max_checks > 0 ? ((usageRes?.total_checks || 0) / limits.max_checks) * 100 : 0,
+          limit: checkLimit,
+          percentage: checkLimit > 0 ? ((usageRes?.total_checks || 0) / checkLimit) * 100 : 0,
           history: [],
         },
         messages: {
           current: usageRes?.total_messages || 0,
-          limit: limits.max_messages,
-          percentage: limits.max_messages > 0 ? ((usageRes?.total_messages || 0) / limits.max_messages) * 100 : 0,
+          limit: messageLimit,
+          percentage: messageLimit > 0 ? ((usageRes?.total_messages || 0) / messageLimit) * 100 : 0,
           history: [],
         },
         storage: {
           current_bytes: usageRes?.total_storage_bytes || 0,
-          limit_gb: limits.max_storage_gb,
-          percentage: limits.max_storage_gb > 0 ? ((usageRes?.total_storage_bytes || 0) / (limits.max_storage_gb * 1024 * 1024 * 1024)) * 100 : 0,
+          limit_gb: storageLimit,
+          percentage: storageLimit > 0 ? ((usageRes?.total_storage_bytes || 0) / (storageLimit * 1024 * 1024 * 1024)) * 100 : 0,
           current_gb: (usageRes?.total_storage_bytes || 0) / (1024 * 1024 * 1024),
         },
         period_start: usageRes?.start_date ? new Date(usageRes.start_date).getTime() : Date.now() - 30 * 24 * 60 * 60 * 1000,
@@ -114,7 +149,7 @@ export default function OrganizationUsagePage() {
       setUsage(mappedUsage);
 
       // Map workspace data - backend returns by_workspace array
-      const mappedWorkspaces = (usageRes?.by_workspace || []).map((ws: any) => ({
+      const mappedWorkspaces = (usageRes?.by_workspace || []).map((ws) => ({
         workspace_id: ws.workspace_id,
         workspace_name: ws.workspace_name,
         uploads: ws.documents || 0,
@@ -161,7 +196,11 @@ export default function OrganizationUsagePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [orgId, timeRange]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
   if (loading) {
     return (

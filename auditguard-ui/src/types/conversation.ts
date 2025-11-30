@@ -72,7 +72,7 @@ export interface SortOptions {
 export interface BatchOperation {
   conversationIds: string[];
   operation: 'pin' | 'unpin' | 'archive' | 'unarchive' | 'delete' | 'tag' | 'untag';
-  data?: any;
+  data?: unknown;
 }
 
 export interface ConversationListState {

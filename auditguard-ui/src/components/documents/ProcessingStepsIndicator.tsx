@@ -224,32 +224,43 @@ function ProcessingStepRow({ step, compact }: ProcessingStepRowProps) {
   };
 
   const getDetail = () => {
-    if (!step.metadata) return null;
+    if (!step.metadata || typeof step.metadata !== 'object') return null;
 
+    const metadata = step.metadata as Record<string, unknown>;
     const details: string[] = [];
 
-    if (step.metadata.wordCount) {
-      details.push(`${step.metadata.wordCount.toLocaleString()} words`);
+    const wordCount = metadata.wordCount;
+    if (typeof wordCount === 'number' && Number.isFinite(wordCount) && wordCount > 0) {
+      details.push(`${wordCount.toLocaleString()} words`);
     }
 
-    if (step.metadata.pageCount) {
-      details.push(`${step.metadata.pageCount} pages`);
+    const pageCount = metadata.pageCount;
+    if (typeof pageCount === 'number' && Number.isFinite(pageCount) && pageCount > 0) {
+      details.push(`${pageCount} pages`);
     }
 
-    if (step.metadata.chunkCount) {
-      details.push(`${step.metadata.chunkCount} chunks`);
+    const chunkCount = metadata.chunkCount;
+    if (typeof chunkCount === 'number' && Number.isFinite(chunkCount) && chunkCount > 0) {
+      details.push(`${chunkCount} chunks`);
     }
 
-    if (step.metadata.embeddingsGenerated) {
-      details.push(`${step.metadata.embeddingsGenerated} embeddings`);
+    const embeddingsGenerated = metadata.embeddingsGenerated;
+    if (
+      typeof embeddingsGenerated === 'number' &&
+      Number.isFinite(embeddingsGenerated) &&
+      embeddingsGenerated > 0
+    ) {
+      details.push(`${embeddingsGenerated} embeddings`);
     }
 
-    if (step.metadata.title) {
-      details.push(`"${step.metadata.title}"`);
+    const title = metadata.title;
+    if (typeof title === 'string' && title.trim().length > 0) {
+      details.push(`"${title}"`);
     }
 
-    if (step.metadata.category) {
-      details.push(step.metadata.category);
+    const category = metadata.category;
+    if (typeof category === 'string' && category.trim().length > 0) {
+      details.push(category);
     }
 
     return details.length > 0 ? details.join(' • ') : null;

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Voice AI illustration">
+  <rect width="1200" height="630" rx="48" fill="#FDF2F8" />
+  <circle cx="320" cy="320" r="160" fill="#F472B6" opacity="0.15" />
+  <path d="M260 320c0-40 12-72 60-72s60 32 60 72-12 72-60 72-60-32-60-72z" fill="#EC4899" />
+  <rect x="480" y="200" width="520" height="240" rx="40" fill="#FFFFFF" stroke="#FBCFE8" stroke-width="4" />
+  <text x="520" y="270" font-size="32" font-family="Inter, Arial, sans-serif" fill="#BE185D">Voice Mode Timeline</text>
+  <text x="520" y="320" font-size="20" font-family="Inter, Arial, sans-serif" fill="#9D174D">“Show HIPAA access logs” → 0.12s response</text>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Framework mapping illustration">
+  <rect width="1200" height="630" rx="48" fill="#ECFDF5" />
+  <rect x="140" y="140" width="360" height="220" rx="24" fill="#FFFFFF" stroke="#A7F3D0" stroke-width="4" />
+  <rect x="520" y="180" width="360" height="220" rx="24" fill="#FFFFFF" stroke="#6EE7B7" stroke-width="4" />
+  <rect x="320" y="360" width="360" height="140" rx="24" fill="#FFFFFF" stroke="#34D399" stroke-width="4" />
+  <text x="180" y="200" font-size="28" font-family="Inter, Arial, sans-serif" fill="#065F46">SOC 2</text>
+  <text x="560" y="240" font-size="28" font-family="Inter, Arial, sans-serif" fill="#047857">HIPAA</text>
+  <text x="360" y="420" font-size="24" font-family="Inter, Arial, sans-serif" fill="#047857">GDPR + ISO 27001</text>
+  <path d="M340 240h200" stroke="#10B981" stroke-width="6" stroke-linecap="round" />
+  <path d="M520 420h160" stroke="#34D399" stroke-width="6" stroke-linecap="round" />
+</svg>

@@ -1,36 +1,47 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { TopNavBar } from '@/components/navigation/TopNavBar';
-import { useAuth } from '@/contexts/AuthContext';
 import { OrganizationCard } from '@/components/organizations/OrganizationCard';
 import { api } from '@/lib/api';
 import { OrganizationWithRole } from '@/types/organization';
 import { Building2 } from 'lucide-react';
 
 export default function OrganizationsPage() {
-  const { user } = useAuth();
   const [organizations, setOrganizations] = useState<OrganizationWithRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchOrganizations = async () => {
+  const getApiErrorMessage = (err: unknown): string => {
+    if (err && typeof err === 'object') {
+      if ('response' in err) {
+        const responseErr = err as { response?: { data?: { message?: string } } };
+        return responseErr.response?.data?.message || 'Failed to load organizations';
+      }
+      if ('message' in err) {
+        return String((err as { message?: string }).message || 'Failed to load organizations');
+      }
+    }
+    return 'Failed to load organizations';
+  };
+
+  const fetchOrganizations = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
       const data = await api.get<OrganizationWithRole[]>('/api/organizations');
       setOrganizations(data || []);
-    } catch (err: any) {
-      setError(err.error || 'Failed to load organizations');
+    } catch (err) {
+      setError(getApiErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchOrganizations();
-  }, []);
+  }, [fetchOrganizations]);
 
   return (
     <ProtectedRoute>

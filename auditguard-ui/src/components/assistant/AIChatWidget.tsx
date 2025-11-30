@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, Send, X, Minimize2, Maximize2, ExternalLink, Download, Shield, ShieldCheck, MessageSquare, Mic } from 'lucide-react';
+import { Bot, Send, X, ExternalLink, Download, Shield, ShieldCheck, MessageSquare, Mic } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
@@ -34,6 +34,51 @@ interface LocalMessage {
 }
 
 type ChatMode = 'chat' | 'voice';
+
+interface ConversationHistoryResponse {
+  messages?: Array<{
+    id?: string;
+    role: 'user' | 'assistant';
+    content: string;
+    created_at?: string;
+    timestamp?: string;
+    actions?: ActionType[];
+  }>;
+}
+
+interface AssistantWidgetResponse {
+  message: string;
+  sessionId?: string;
+  actions?: ActionType[];
+  suggestions?: string[];
+}
+
+const markdownComponents: Components = {
+  h1: (props) => <h1 className="text-lg font-bold" {...props} />,
+  h2: (props) => <h2 className="text-base font-bold" {...props} />,
+  h3: (props) => <h3 className="text-sm font-bold" {...props} />,
+  p: (props) => <p className="text-sm" {...props} />,
+  code({ inline, className, children, ...props }: { inline?: boolean; className?: string; children?: React.ReactNode }) {
+    if (inline) {
+      return (
+        <code className="bg-gray-200 px-1 rounded text-xs" {...props}>
+          {children}
+        </code>
+      );
+    }
+    return (
+      <code className={className || 'text-xs'} {...props}>
+        {children}
+      </code>
+    );
+  },
+  pre: (props) => (
+    <pre className="bg-gray-800 text-gray-100 p-2 rounded overflow-x-auto" {...props} />
+  ),
+  ul: (props) => <ul className="list-disc list-inside text-sm" {...props} />,
+  ol: (props) => <ol className="list-decimal list-inside text-sm" {...props} />,
+  a: (props) => <a className="text-blue-600 hover:underline" {...props} />,
+};
 
 interface Props {
   workspaceId?: string;
@@ -108,12 +153,14 @@ export function AIChatWidget({
       );
 
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as ConversationHistoryResponse;
         if (data.messages && Array.isArray(data.messages)) {
-          const loadedMessages: LocalMessage[] = data.messages.map((msg: any) => ({
+          const loadedMessages: LocalMessage[] = data.messages.map((msg) => ({
             role: msg.role,
             content: msg.content,
-            timestamp: msg.created_at ? new Date(msg.created_at) : new Date(msg.timestamp || Date.now()),
+            timestamp: msg.created_at
+              ? new Date(msg.created_at)
+              : new Date(msg.timestamp || Date.now()),
             actions: msg.actions || [],
           }));
           console.log('✅ Widget: Loaded', loadedMessages.length, 'messages');
@@ -251,7 +298,7 @@ export function AIChatWidget({
         throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as AssistantWidgetResponse;
       console.log('✅ Widget: Received response');
 
       // If a new session was created, the main page will handle updating context
@@ -449,7 +496,7 @@ export function AIChatWidget({
               {messages.length === 0 && (
                 <div className="text-center text-gray-500 mt-8">
                   <Bot className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                  <p className="mb-2 font-semibold">Hi! I'm your AI compliance assistant.</p>
+                  <p className="mb-2 font-semibold">Hi! I&rsquo;m your AI compliance assistant.</p>
                   <p className="text-sm">Ask me anything about your documents, compliance status, or regulations.</p>
                   <div className="mt-6 space-y-2">
                     <button
@@ -491,22 +538,7 @@ export function AIChatWidget({
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           rehypePlugins={[rehypeHighlight]}
-                          components={{
-                            h1: ({node, ...props}) => <h1 className="text-lg font-bold" {...props} />,
-                            h2: ({node, ...props}) => <h2 className="text-base font-bold" {...props} />,
-                            h3: ({node, ...props}) => <h3 className="text-sm font-bold" {...props} />,
-                            p: ({node, ...props}) => <p className="text-sm" {...props} />,
-                            code: ({node, inline, ...props}: any) =>
-                              inline ? (
-                                <code className="bg-gray-200 px-1 rounded text-xs" {...props} />
-                              ) : (
-                                <code className="text-xs" {...props} />
-                              ),
-                            pre: ({node, ...props}) => <pre className="bg-gray-800 text-gray-100 p-2 rounded overflow-x-auto" {...props} />,
-                            ul: ({node, ...props}) => <ul className="list-disc list-inside text-sm" {...props} />,
-                            ol: ({node, ...props}) => <ol className="list-decimal list-inside text-sm" {...props} />,
-                            a: ({node, ...props}) => <a className="text-blue-600 hover:underline" {...props} />,
-                          }}
+                          components={markdownComponents}
                         >
                           {message.content}
                         </ReactMarkdown>

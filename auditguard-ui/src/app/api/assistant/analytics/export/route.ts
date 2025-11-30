@@ -1,9 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+interface TimeRange {
+  start: string;
+  end: string;
+}
+
+interface AnalyticsExportRequest {
+  workspaceId: string;
+  format?: 'csv' | 'json';
+  timeRange?: TimeRange;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { workspaceId, format, timeRange } = body;
+    const body = (await request.json()) as AnalyticsExportRequest;
+    const {
+      workspaceId,
+      format = 'csv',
+      timeRange,
+    } = body;
+
+    if (format !== 'csv') {
+      return NextResponse.json(
+        { error: 'Only CSV export is currently supported' },
+        { status: 400 }
+      );
+    }
 
     // Generate CSV export data
     const csvData = generateCSV(workspaceId, timeRange);
@@ -23,7 +45,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function generateCSV(workspaceId: string, timeRange: any): string {
+function generateCSV(workspaceId: string, timeRange?: TimeRange): string {
   const rows = [
     ['Metric', 'Value', 'Change', 'Trend'],
     ['Conversations', '248', '+15.3%', 'Up'],
@@ -45,6 +67,12 @@ function generateCSV(workspaceId: string, timeRange: any): string {
     ['HIPAA', '3', '2', '67%'],
     ['PCI', '7', '5', '71%'],
   ];
+
+  if (timeRange) {
+    rows.unshift(['Workspace', workspaceId, `${timeRange.start} - ${timeRange.end}`, '']);
+  } else {
+    rows.unshift(['Workspace', workspaceId, 'All Time', '']);
+  }
 
   return rows.map((row) => row.join(',')).join('\n');
 }

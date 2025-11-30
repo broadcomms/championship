@@ -3,14 +3,15 @@
  * 
  * Automatically retries failed async operations with increasing delays.
  */
+import React from 'react';
 
 export interface RetryOptions {
   maxAttempts?: number;
   initialDelay?: number;
   maxDelay?: number;
   backoffMultiplier?: number;
-  shouldRetry?: (error: any, attempt: number) => boolean;
-  onRetry?: (error: any, attempt: number, nextDelay: number) => void;
+  shouldRetry?: (error: unknown, attempt: number) => boolean;
+  onRetry?: (error: unknown, attempt: number, nextDelay: number) => void;
 }
 
 const DEFAULT_OPTIONS: Required<RetryOptions> = {
@@ -38,7 +39,7 @@ export async function retryWithBackoff<T>(
   options: RetryOptions = {}
 ): Promise<T> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  let lastError: any;
+  let lastError: unknown;
   let delay = opts.initialDelay;
 
   for (let attempt = 1; attempt <= opts.maxAttempts; attempt++) {
@@ -66,7 +67,7 @@ export async function retryWithBackoff<T>(
     }
   }
 
-  throw lastError;
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 /**
@@ -100,7 +101,7 @@ export async function retryFetch(
       ...retryOptions,
       shouldRetry: (error, attempt) => {
         // Don't retry client errors (4xx)
-        if (error.message.includes('HTTP 4')) {
+        if (error instanceof Error && error.message.includes('HTTP 4')) {
           return false;
         }
         
@@ -131,7 +132,7 @@ export async function retryFetch(
  * const user = await fetchUserData('123');
  * ```
  */
-export function createRetryable<TArgs extends any[], TReturn>(
+export function createRetryable<TArgs extends unknown[], TReturn>(
   fn: (...args: TArgs) => Promise<TReturn>,
   options?: RetryOptions
 ): (...args: TArgs) => Promise<TReturn> {
@@ -141,24 +142,27 @@ export function createRetryable<TArgs extends any[], TReturn>(
 /**
  * Utility to check if an error is retryable
  */
-export function isRetryableError(error: any): boolean {
+export function isRetryableError(error: unknown): boolean {
   // Network errors
   if (error instanceof TypeError && error.message.includes('fetch')) {
     return true;
   }
 
   // Timeout errors
-  if (error.name === 'AbortError' || error.message.includes('timeout')) {
+  if (
+    (error instanceof Error && error.name === 'AbortError') ||
+    (error instanceof Error && error.message.includes('timeout'))
+  ) {
     return true;
   }
 
   // Server errors (5xx)
-  if (error.message.includes('HTTP 5')) {
+  if (error instanceof Error && error.message.includes('HTTP 5')) {
     return true;
   }
 
   // Rate limiting
-  if (error.message.includes('HTTP 429')) {
+  if (error instanceof Error && error.message.includes('HTTP 429')) {
     return true;
   }
 
@@ -218,5 +222,3 @@ export function useRetry<T>(
   return { execute, loading, error, data, retry };
 }
 
-// Re-export React for the hook
-import React from 'react';

@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+interface BackendMessage {
+  id?: string;
+  role: string;
+  content: string;
+  createdAt?: string;
+}
+
 async function getSession(request: NextRequest) {
   const sessionCookie = request.cookies.get('session');
   if (!sessionCookie?.value) return null;
@@ -70,7 +77,7 @@ export async function GET(
 
     const data = await response.json();
     // Transform backend format to frontend format
-    const messages = (data.messages || []).map((m: any) => ({
+    const messages = (data.messages || []).map((m: BackendMessage) => ({
       id: m.id || `msg_${m.createdAt || Date.now()}`,
       role: m.role,
       content: m.content,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { api } from '@/lib/api';
@@ -36,7 +36,6 @@ export function AssignmentModal({
   const [priorityLevel, setPriorityLevel] = useState<PriorityLevel>(
     currentPriority || 'P3'
   );
-  const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -52,6 +51,24 @@ export function AssignmentModal({
     }
   }, [isOpen, currentDueDate, currentPriority]);
 
+  const searchMembers = useCallback(async (query: string) => {
+    setSearching(true);
+    try {
+      const response = await api.get<{ members: WorkspaceMember[] }>(
+        `/api/workspaces/${workspaceId}/members/search?q=${encodeURIComponent(query)}&limit=20`
+      );
+      setMembers(response.members || []);
+      // Clear selection when new search results arrive
+      setSelectedMember(null);
+    } catch (error) {
+      console.error('Failed to search members:', error);
+      setMembers([]);
+      setSelectedMember(null);
+    } finally {
+      setSearching(false);
+    }
+  }, [workspaceId]);
+
   useEffect(() => {
     const debounce = setTimeout(() => {
       if (searchTerm.trim()) {
@@ -62,26 +79,7 @@ export function AssignmentModal({
       }
     }, 300);
     return () => clearTimeout(debounce);
-  }, [searchTerm]);
-
-  const searchMembers = async (query: string) => {
-    setSearching(true);
-    try {
-      const response = await api.get(
-        `/api/workspaces/${workspaceId}/members/search?q=${encodeURIComponent(query)}&limit=20`
-      );
-      const data = response.data || response;
-      setMembers(data.members || []);
-      // Clear selection when new search results arrive
-      setSelectedMember(null);
-    } catch (error) {
-      console.error('Failed to search members:', error);
-      setMembers([]);
-      setSelectedMember(null);
-    } finally {
-      setSearching(false);
-    }
-  };
+  }, [searchMembers, searchTerm]);
 
   const handleAssign = async () => {
     if (!selectedMember) {

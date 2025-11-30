@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40" viewBox="0 0 160 40" role="img" aria-label="Raindrop Platform logo">
+  <rect width="160" height="40" rx="8" fill="#E0F2FE" />
+  <circle cx="24" cy="20" r="10" fill="#0EA5E9" />
+  <path d="M20 22c0-4 4-9 4-9s4 5 4 9a4 4 0 1 1-8 0z" fill="#38BDF8" />
+  <text x="48" y="25" font-family="Inter, Arial, sans-serif" font-size="16" fill="#0F172A" font-weight="600">Raindrop</text>
+</svg>

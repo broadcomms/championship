@@ -44,7 +44,7 @@ export function VectorSearch({ workspaceId }: VectorSearchProps) {
           `/api/workspaces/${workspaceId}/frameworks`
         );
         setFrameworks(data);
-      } catch (err) {
+      } catch (err: unknown) {
         console.error('Failed to load frameworks:', err);
       }
     };
@@ -74,8 +74,15 @@ export function VectorSearch({ workspaceId }: VectorSearchProps) {
 
       setResults(response.results || []);
       setSearchTime(Date.now() - startTime);
-    } catch (err: any) {
-      setError(err.error || 'Search failed');
+    } catch (err: unknown) {
+      const rawMessage =
+        (typeof err === 'object' && err && 'error' in err && typeof (err as { error?: string }).error === 'string'
+          ? (err as { error?: string }).error
+          : err instanceof Error
+            ? err.message
+            : 'Search failed');
+      const safeMessage = rawMessage && rawMessage.trim().length > 0 ? rawMessage : 'Search failed';
+      setError(safeMessage);
       setResults([]);
     } finally {
       setIsSearching(false);
@@ -293,7 +300,7 @@ export function VectorSearch({ workspaceId }: VectorSearchProps) {
       {/* No Results */}
       {!isSearching && results.length === 0 && query && !error && (
         <div className="rounded-lg bg-gray-50 p-8 text-center">
-          <p className="text-gray-600">No results found for "{query}"</p>
+          <p className="text-gray-600">No results found for &ldquo;{query}&rdquo;</p>
           <p className="mt-2 text-sm text-gray-500">
             Try different keywords or remove the framework filter
           </p>
@@ -311,9 +318,9 @@ export function VectorSearch({ workspaceId }: VectorSearchProps) {
           <div className="mt-4 text-left inline-block">
             <p className="text-sm font-medium text-gray-700 mb-2">Try searching for:</p>
             <ul className="text-sm text-gray-600 space-y-1">
-              <li>• "data privacy requirements"</li>
-              <li>• "access control policies"</li>
-              <li>• "incident response procedures"</li>
+              <li>• &ldquo;data privacy requirements&rdquo;</li>
+              <li>• &ldquo;access control policies&rdquo;</li>
+              <li>• &ldquo;incident response procedures&rdquo;</li>
             </ul>
           </div>
         </div>

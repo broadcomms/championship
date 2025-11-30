@@ -16,6 +16,16 @@ import { Document, DocumentCategory } from '@/types';
 
 type TabType = 'overview' | 'fulltext' | 'compliance';
 
+const getErrorMessage = (err: unknown, fallback: string): string => {
+  if (err instanceof Error) {
+    return err.message || fallback;
+  }
+  if (err && typeof err === 'object' && 'error' in err) {
+    return String((err as { error?: string }).error || fallback);
+  }
+  return fallback;
+};
+
 export default function DocumentDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -25,7 +35,6 @@ export default function DocumentDetailsPage() {
   // Use polling hook for real-time status updates
   const {
     document: polledDocument,
-    isPolling,
     error: pollingError,
     startPolling
   } = useDocumentPolling(workspaceId, documentId);
@@ -65,24 +74,7 @@ export default function DocumentDetailsPage() {
   // Start polling when component mounts
   useEffect(() => {
     startPolling();
-  }, [workspaceId, documentId]);
-
-  const fetchDocument = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      const data = await api.get<Document>(
-        `/api/workspaces/${workspaceId}/documents/${documentId}`
-      );
-      setDocument(data);
-      setEditFilename(data.filename);
-      setEditCategory(data.category || 'other');
-    } catch (err: any) {
-      setError(err.error || err.message || 'Failed to load document');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [documentId, startPolling, workspaceId]);
 
   const handleDownload = async () => {
     try {
@@ -106,8 +98,8 @@ export default function DocumentDetailsPage() {
       a.click();
       window.document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      setError('Failed to download document');
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, 'Failed to download document'));
     }
   };
 
@@ -123,8 +115,8 @@ export default function DocumentDetailsPage() {
       );
       setDocument(updated);
       setIsEditing(false);
-    } catch (err: any) {
-      setError(err.error || 'Failed to update document');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to update document'));
     }
   };
 
@@ -159,8 +151,8 @@ export default function DocumentDetailsPage() {
       // CRITICAL FIX: Restart polling to get real-time updates
       // Polling may have stopped when document was previously completed
       startPolling();
-    } catch (err: any) {
-      setError(err.error || err.message || 'Failed to process document');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to process document'));
     } finally {
       setIsProcessing(false);
     }
@@ -172,8 +164,8 @@ export default function DocumentDetailsPage() {
     try {
       await api.delete(`/api/workspaces/${workspaceId}/documents/${documentId}`);
       router.push(`/workspaces/${workspaceId}/documents`);
-    } catch (err: any) {
-      setError(err.error || 'Failed to delete document');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to delete document'));
       setIsDeleting(false);
     }
   };

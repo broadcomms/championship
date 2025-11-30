@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { FileText, TrendingUp, AlertCircle, Download, Share2, Pin, Archive } from 'lucide-react';
 import type { SessionDetails, ComplianceScore, RelatedDocument } from '@/types/assistant';
 
@@ -11,32 +11,61 @@ interface DetailsSidebarProps {
   messageCount?: number; // Optional: pass message count directly for reliability
 }
 
+interface SessionAnalyticsResponse {
+  messageCount?: number;
+  startedAt?: string | number;
+  duration?: string;
+  tokensUsed?: number;
+  estimatedCost?: number;
+}
+
+interface ComplianceApiResponse {
+  overall_score?: number;
+  frameworks?: ComplianceScore['frameworks'];
+}
+
+interface WorkspaceDocumentApiItem {
+  id: string;
+  filename: string;
+  last_checked_at?: number | string;
+  compliance_status?: string;
+  issue_count?: number;
+}
+
+interface WorkspaceDocumentsResponse {
+  documents?: WorkspaceDocumentApiItem[];
+}
+
 export function DetailsSidebar({ sessionId, conversationId, workspaceId, messageCount = 0 }: DetailsSidebarProps) {
   const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
   const [complianceScore, setComplianceScore] = useState<ComplianceScore | null>(null);
   const [relatedDocuments, setRelatedDocuments] = useState<RelatedDocument[]>([]);
-  const [hasMessages, setHasMessages] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
 
   // Determine if we have an active session based on sessionId OR messageCount
   const hasActiveSession = !!sessionId || messageCount > 0;
 
-  // Load real data from APIs
-  useEffect(() => {
-    if (sessionId || messageCount > 0) {
-      setHasMessages(true);
-      loadSessionData();
-    } else {
-      // Clear data when no session
-      setHasMessages(false);
-      setSessionDetails(null);
-      setComplianceScore(null);
-      setRelatedDocuments([]);
-    }
-  }, [sessionId, workspaceId, messageCount]);
+  const getRelativeTime = useCallback((timestamp: number | string | undefined): string => {
+    if (!timestamp && timestamp !== 0) return 'never';
+    const numericTimestamp = typeof timestamp === 'string' ? Date.parse(timestamp) : timestamp;
+    if (!numericTimestamp) return 'never';
+    const now = Date.now();
+    const diff = now - numericTimestamp;
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
 
-  const loadSessionData = async () => {
-    setIsLoading(true);
+    if (days > 0) return `${days}d`;
+    if (hours > 0) return `${hours}h`;
+    return 'just now';
+  }, []);
+
+  const mapDocumentStatus = useCallback((status?: string): RelatedDocument['status'] => {
+    if (status === 'compliant' || status === 'issues' || status === 'pending') {
+      return status;
+    }
+    return 'pending';
+  }, []);
+
+  const loadSessionData = useCallback(async () => {
     try {
       // If we have sessionId, try to fetch analytics
       if (sessionId) {
@@ -46,8 +75,7 @@ export function DetailsSidebar({ sessionId, conversationId, workspaceId, message
           });
 
           if (analyticsRes.ok) {
-            const analytics = await analyticsRes.json();
-            setHasMessages(analytics.messageCount > 0 || messageCount > 0);
+            const analytics = (await analyticsRes.json()) as SessionAnalyticsResponse;
             setSessionDetails({
               id: sessionId,
               startedAt: new Date(analytics.startedAt || Date.now()),
@@ -97,8 +125,8 @@ export function DetailsSidebar({ sessionId, conversationId, workspaceId, message
       });
 
       if (complianceRes.ok) {
-        const complianceData = await complianceRes.json();
-        if (complianceData.overall_score !== undefined && complianceData.frameworks) {
+        const complianceData = (await complianceRes.json()) as ComplianceApiResponse;
+        if (typeof complianceData.overall_score === 'number' && complianceData.frameworks) {
           setComplianceScore({
             overall: complianceData.overall_score,
             frameworks: complianceData.frameworks,
@@ -115,36 +143,34 @@ export function DetailsSidebar({ sessionId, conversationId, workspaceId, message
       );
 
       if (docsRes.ok) {
-        const docsData = await docsRes.json();
+        const docsData = (await docsRes.json()) as WorkspaceDocumentsResponse;
         setRelatedDocuments(
-          (docsData.documents || []).map((doc: any) => ({
+          (docsData.documents || []).map((doc) => ({
             id: doc.id,
             name: doc.filename,
             lastChecked: getRelativeTime(doc.last_checked_at),
-            status: doc.compliance_status || 'pending',
+            status: mapDocumentStatus(doc.compliance_status),
             issueCount: doc.issue_count || 0,
           }))
         );
       }
     } catch (error) {
       console.error('Failed to load session data:', error);
-      setHasMessages(false);
     } finally {
-      setIsLoading(false);
     }
-  };
+  }, [sessionId, workspaceId, messageCount, getRelativeTime, mapDocumentStatus]);
 
-  const getRelativeTime = (timestamp: number | undefined): string => {
-    if (!timestamp) return 'never';
-    const now = Date.now();
-    const diff = now - timestamp;
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-
-    if (days > 0) return `${days}d`;
-    if (hours > 0) return `${hours}h`;
-    return 'just now';
-  };
+  // Load real data from APIs
+  useEffect(() => {
+    if (sessionId || messageCount > 0) {
+      loadSessionData();
+    } else {
+      // Clear data when no session
+      setSessionDetails(null);
+      setComplianceScore(null);
+      setRelatedDocuments([]);
+    }
+  }, [sessionId, workspaceId, messageCount, loadSessionData]);
 
   const getScoreColor = (score: number) => {
     if (score >= 90) return 'text-green-600';

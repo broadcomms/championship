@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,21 +13,29 @@ import {
   SEVERITY_COLORS,
   STATUS_COLORS,
   STATUS_LABELS,
-  PRIORITY_COLORS,
-  PRIORITY_LABELS,
-  PriorityLevel 
+  PRIORITY_COLORS
 } from '@/types/compliance';
 
-const statusColors = {
-  open: 'bg-red-100 text-red-800',
-  in_progress: 'bg-blue-100 text-blue-800',
-  review: 'bg-yellow-100 text-yellow-800',
-  resolved: 'bg-green-100 text-green-800',
-  dismissed: 'bg-gray-100 text-gray-800',
+interface IssueCommentsResponse {
+  comments: IssueComment[];
+}
+
+const normalizeApiResponse = <T,>(response: T | { data: T }): T => {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as { data: T }).data;
+  }
+  return response as T;
+};
+
+const getApiErrorMessage = (err: unknown): string => {
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message?: string }).message || 'Something went wrong');
+  }
+  return 'Something went wrong';
 };
 
 export default function IssueDetailsPage() {
-  const params = useParams();
+  const params = useParams<{ id: string; wsId: string; issueId: string }>();
   const router = useRouter();
   const { id: orgId, wsId: workspaceId, issueId } = params;
   const { user } = useAuth();
@@ -42,46 +50,49 @@ export default function IssueDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
 
-  useEffect(() => {
-    fetchIssueDetails();
-    fetchComments();
-  }, [issueId]);
-
-  const fetchIssueDetails = async () => {
+  const fetchIssueDetails = useCallback(async () => {
+    setLoading(true);
     try {
-      const response = await api.get(`/api/workspaces/${workspaceId}/issues/${issueId}`);
-      console.log('📥 Issue Details Response:', response);
-      const issueData = response.data || response;
+      const response = await api.get<ComplianceIssue>(
+        `/api/workspaces/${workspaceId}/issues/${issueId}`
+      );
+      const issueData = normalizeApiResponse(response);
       setIssue(issueData);
-    } catch (error) {
-      console.error('Failed to fetch issue details:', error);
+      setError(null);
+    } catch (fetchError) {
+      console.error('Failed to fetch issue details:', fetchError);
       setError('Failed to load issue details');
     } finally {
       setLoading(false);
     }
-  };
+  }, [issueId, workspaceId]);
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     setLoadingComments(true);
     try {
-      const response = await api.get(
+      const response = await api.get<IssueCommentsResponse>(
         `/api/workspaces/${workspaceId}/issues/${issueId}/comments?limit=100&offset=0`
       );
-      const data = response.data || response;
+      const data = normalizeApiResponse(response);
       setComments(data.comments || []);
-    } catch (error) {
-      console.error('Failed to fetch comments:', error);
+    } catch (fetchError) {
+      console.error('Failed to fetch comments:', fetchError);
     } finally {
       setLoadingComments(false);
     }
-  };
+  }, [issueId, workspaceId]);
+
+  useEffect(() => {
+    fetchIssueDetails();
+    fetchComments();
+  }, [fetchComments, fetchIssueDetails]);
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
 
     setSubmittingComment(true);
     try {
-      const response = await api.post(
+      await api.post(
         `/api/workspaces/${workspaceId}/issues/${issueId}/comments`,
         {
           commentText: newComment,
@@ -92,7 +103,7 @@ export default function IssueDetailsPage() {
       fetchComments(); // Refresh comments
     } catch (error) {
       console.error('Failed to add comment:', error);
-      alert('Failed to add comment. Please try again.');
+      alert(getApiErrorMessage(error));
     } finally {
       setSubmittingComment(false);
     }
@@ -109,7 +120,7 @@ export default function IssueDetailsPage() {
       fetchComments(); // Refresh to show status change comment
     } catch (error) {
       console.error('Failed to update issue status:', error);
-      alert('Failed to update status. Please try again.');
+      alert(getApiErrorMessage(error));
     }
   };
 
@@ -125,8 +136,8 @@ export default function IssueDetailsPage() {
     });
   };
 
-  const formatRelativeTime = (dateString: string): string => {
-    const date = new Date(dateString);
+  const formatRelativeTime = (dateInput: string | number): string => {
+    const date = new Date(dateInput);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / (1000 * 60));
@@ -137,10 +148,10 @@ export default function IssueDetailsPage() {
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    return formatDate(dateString);
+    return formatDate(dateInput);
   };
 
-  const getCommentIcon = (type: string): string => {
+  const getCommentIcon = (type: IssueComment['commentType']): string => {
     switch (type) {
       case 'status_change': return '🔄';
       case 'assignment': return '👤';
@@ -188,7 +199,7 @@ export default function IssueDetailsPage() {
                     {issue.severity}
                   </span>
                   <span className={`px-3 py-1 rounded text-sm font-medium ${
-                    statusColors[issue.status]
+                    STATUS_COLORS[issue.status]
                   }`}>
                     {STATUS_LABELS[issue.status]}
                   </span>
@@ -350,7 +361,7 @@ export default function IssueDetailsPage() {
                       </h2>
                       <div className="bg-white border border-yellow-300 rounded-md p-4">
                         <p className="text-gray-800 italic leading-relaxed font-mono text-sm">
-                          "{issue.llmResponse.original_text}"
+                          &ldquo;{issue.llmResponse.original_text}&rdquo;
                         </p>
                       </div>
                     </div>

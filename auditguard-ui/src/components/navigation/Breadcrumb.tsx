@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
@@ -18,7 +18,6 @@ interface BreadcrumbProps {
 }
 
 export function Breadcrumb({ accountId, orgId, workspaceId, customItems }: BreadcrumbProps) {
-  const params = useParams();
   const pathname = usePathname();
 
   const [orgName, setOrgName] = useState<string>('');
@@ -28,12 +27,12 @@ export function Breadcrumb({ accountId, orgId, workspaceId, customItems }: Bread
     const fetchNames = async () => {
       try {
         if (orgId) {
-          const orgResponse = await api.get(`/api/organizations/${orgId}`);
-          setOrgName(orgResponse.name);
+          const orgResponse = await api.get<{ name?: string }>(`/api/organizations/${orgId}`);
+          setOrgName(orgResponse.name ?? 'Organization');
         }
         if (workspaceId) {
-          const wsResponse = await api.get(`/api/workspaces/${workspaceId}`);
-          setWorkspaceName(wsResponse.name);
+          const wsResponse = await api.get<{ name?: string }>(`/api/workspaces/${workspaceId}`);
+          setWorkspaceName(wsResponse.name ?? 'Workspace');
         }
       } catch (error) {
         console.error('Failed to fetch breadcrumb names:', error);

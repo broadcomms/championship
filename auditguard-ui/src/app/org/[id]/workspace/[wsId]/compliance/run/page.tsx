@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,6 +27,17 @@ interface CheckConfig {
   severity_threshold: 'all' | 'medium' | 'high' | 'critical';
 }
 
+interface ComplianceCheckItem {
+  checkId: string;
+  documentId: string;
+  documentName: string;
+  status: string;
+  overallScore: number | null;
+  issuesFound: number;
+  createdAt: number;
+  completedAt: number | null;
+}
+
 interface ComplianceCheckResult {
   batchId: string;
   status: string;
@@ -34,16 +45,7 @@ interface ComplianceCheckResult {
   completed: number;
   processing: number;
   failed: number;
-  checks: Array<{
-    checkId: string;
-    documentId: string;
-    documentName: string;
-    status: string;
-    overallScore: number | null;
-    issuesFound: number;
-    createdAt: number;
-    completedAt: number | null;
-  }>;
+  checks: ComplianceCheckItem[];
 }
 
 interface UsageLimits {
@@ -52,11 +54,51 @@ interface UsageLimits {
   subscription_tier: string;
 }
 
+interface UsageForecastResponse {
+  plan_limits?: {
+    max_checks?: number;
+    tier?: string;
+  };
+  current_usage?: {
+    checks?: number;
+  };
+}
+
+interface WorkspaceDocumentsResponse {
+  documents: Document[];
+}
+
+interface UsageSummary {
+  used: number;
+  limit: number;
+  remaining: number;
+  willExceed: boolean;
+  percentage: number;
+}
+
+const normalizeApiResponse = <T,>(response: T | { data: T }): T => {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as { data: T }).data;
+  }
+  return response as T;
+};
+
+const getApiErrorMessage = (err: unknown, fallback: string): string => {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const responseErr = err as { response?: { data?: { message?: string } } };
+    return responseErr.response?.data?.message || fallback;
+  }
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message?: string }).message || fallback);
+  }
+  return fallback;
+};
+
 export default function RunComplianceCheckPage() {
-  const params = useParams();
+  const params = useParams<{ id: string; wsId: string }>();
   const router = useRouter();
-  const orgId = params.id as string;
-  const wsId = params.wsId as string;
+  const orgId = params.id;
+  const wsId = params.wsId;
   const { user } = useAuth();
   const accountId = user?.userId;
 
@@ -72,35 +114,42 @@ export default function RunComplianceCheckPage() {
   const [checkResult, setCheckResult] = useState<ComplianceCheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [usageLimits, setUsageLimits] = useState<UsageLimits | null>(null);
-  const [loadingLimits, setLoadingLimits] = useState(true);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
 
   // Fetch usage limits on mount
-  useEffect(() => {
-    const fetchUsageLimits = async () => {
-      try {
-        const data = await api.get(`/api/organizations/${orgId}/usage/forecast`);
-        if (data && data.plan_limits && data.current_usage) {
-          setUsageLimits({
-            checks_used: data.current_usage.checks || 0,
-            checks_limit: data.plan_limits.max_checks || 5,
-            subscription_tier: data.plan_limits.tier || 'Free',
-          });
-        }
-      } catch (error) {
-        console.error('Failed to fetch usage limits:', error);
-        // Set defaults if fetch fails
-        setUsageLimits({
-          checks_used: 0,
-          checks_limit: 5,
-          subscription_tier: 'Free',
-        });
-      } finally {
-        setLoadingLimits(false);
-      }
-    };
-
-    fetchUsageLimits();
+  const fetchUsageLimits = useCallback(async () => {
+    if (!orgId) return;
+    try {
+      const response = await api.get<UsageForecastResponse>(
+        `/api/organizations/${orgId}/usage/forecast`
+      );
+      const data = normalizeApiResponse(response);
+      setUsageLimits({
+        checks_used: data.current_usage?.checks ?? 0,
+        checks_limit: data.plan_limits?.max_checks ?? 5,
+        subscription_tier: data.plan_limits?.tier ?? 'Free',
+      });
+    } catch (fetchError) {
+      console.error('Failed to fetch usage limits:', fetchError);
+      setUsageLimits({
+        checks_used: 0,
+        checks_limit: 5,
+        subscription_tier: 'Free',
+      });
+    }
   }, [orgId]);
+
+  useEffect(() => {
+    fetchUsageLimits();
+    return stopPolling;
+  }, [fetchUsageLimits]);
 
   const frameworks = [
     {
@@ -147,23 +196,28 @@ export default function RunComplianceCheckPage() {
     },
   ];
 
+  const fetchDocuments = useCallback(async () => {
+    if (!wsId) return;
+    try {
+      const response = await api.get<WorkspaceDocumentsResponse>(
+        `/api/workspaces/${wsId}/documents`
+      );
+      const data = normalizeApiResponse(response);
+      const completedDocs = (data.documents || []).filter(
+        (doc) => doc.processingStatus === 'completed'
+      );
+      setDocuments(completedDocs);
+    } catch (fetchError) {
+      console.error('Failed to fetch documents:', fetchError);
+      setError('Failed to load documents. Please try again.');
+    }
+  }, [wsId]);
+
   useEffect(() => {
     if (currentStep === 'select_documents') {
       fetchDocuments();
     }
-  }, [currentStep, wsId]);
-
-  const fetchDocuments = async () => {
-    try {
-      const response = await api.get(`/api/workspaces/${wsId}/documents`);
-      // Filter to only show completed documents
-      const completedDocs = response.documents.filter((doc: Document) => doc.processingStatus === 'completed');
-      setDocuments(completedDocs);
-    } catch (error) {
-      console.error('Failed to fetch documents:', error);
-      setError('Failed to load documents. Please try again.');
-    }
-  };
+  }, [currentStep, fetchDocuments]);
 
   const handleFrameworkSelect = (frameworkId: string) => {
     setConfig((prev) => ({ ...prev, framework: frameworkId }));
@@ -179,10 +233,11 @@ export default function RunComplianceCheckPage() {
   };
 
   // Calculate usage after this check
-  const calculateUsageAfterCheck = () => {
-    if (!usageLimits) return { used: 0, limit: 5, remaining: 5, willExceed: false, percentage: 0 };
+  const calculateUsageAfterCheck = useCallback((): UsageSummary => {
+    if (!usageLimits || usageLimits.checks_limit === 0) {
+      return { used: 0, limit: usageLimits?.checks_limit || 0, remaining: 0, willExceed: false, percentage: 0 };
+    }
 
-    // Each compliance check run counts as 1 check credit
     const futureUsed = usageLimits.checks_used + 1;
     const remaining = Math.max(0, usageLimits.checks_limit - futureUsed);
     const willExceed = futureUsed > usageLimits.checks_limit;
@@ -195,7 +250,7 @@ export default function RunComplianceCheckPage() {
       willExceed,
       percentage,
     };
-  };
+  }, [usageLimits]);
 
   // Render billing warning banner
   const renderBillingWarning = () => {
@@ -237,7 +292,7 @@ export default function RunComplianceCheckPage() {
             <div className="flex-1">
               <h3 className="font-semibold text-yellow-900 mb-1">Approaching Check Limit</h3>
               <p className="text-sm text-yellow-800 mb-2">
-                After this check, you'll have used {usage.used} of {usage.limit} monthly checks ({Math.round(usage.percentage)}%).
+                After this check, you&rsquo;ll have used {usage.used} of {usage.limit} monthly checks ({Math.round(usage.percentage)}%).
                 Only {usage.remaining} check(s) remaining.
               </p>
               <p className="text-xs text-yellow-700">
@@ -275,36 +330,42 @@ export default function RunComplianceCheckPage() {
     setError(null);
 
     try {
-      // Call the batch compliance check endpoint
-      const response = await api.post(`/api/workspaces/${wsId}/compliance/batch`, {
-        framework: config.framework,
-        documentIds: config.document_ids, // Backend expects camelCase
-      });
+      const response = await api.post<ComplianceCheckResult>(
+        `/api/workspaces/${wsId}/compliance/batch`,
+        {
+          framework: config.framework,
+          documentIds: config.document_ids,
+        }
+      );
 
-      setCheckResult(response);
+      const batchData = normalizeApiResponse(response);
+      setCheckResult(batchData);
 
-      // Poll for completion using batch status endpoint
-      const batchId = response.batchId;
-      const pollInterval = setInterval(async () => {
+      const batchId = batchData.batchId;
+      stopPolling();
+      pollIntervalRef.current = setInterval(async () => {
         try {
-          const statusResponse = await api.get(`/api/workspaces/${wsId}/compliance/batch/${batchId}`);
+          const statusResponse = await api.get<ComplianceCheckResult>(
+            `/api/workspaces/${wsId}/compliance/batch/${batchId}`
+          );
+          const statusData = normalizeApiResponse(statusResponse);
 
-          // Check if all checks in the batch are completed
-          if (statusResponse.completed + statusResponse.failed >= statusResponse.total) {
-            clearInterval(pollInterval);
-            setCheckResult(statusResponse);
+          if (statusData.completed + statusData.failed >= statusData.total) {
+            stopPolling();
+            setCheckResult(statusData);
             setCurrentStep('complete');
+          } else {
+            setCheckResult(statusData);
           }
-        } catch (error) {
-          console.error('Failed to poll check status:', error);
+        } catch (pollError) {
+          console.error('Failed to poll check status:', pollError);
         }
       }, 3000);
 
-      // Stop polling after 5 minutes
-      setTimeout(() => clearInterval(pollInterval), 300000);
-    } catch (error: any) {
-      console.error('Failed to run compliance check:', error);
-      setError(error.response?.data?.message || 'Failed to run compliance check. Please try again.');
+      setTimeout(stopPolling, 300000);
+    } catch (runError) {
+      console.error('Failed to run compliance check:', runError);
+      setError(getApiErrorMessage(runError, 'Failed to run compliance check. Please try again.'));
       setCurrentStep('configure');
     }
   };
@@ -561,7 +622,7 @@ export default function RunComplianceCheckPage() {
               onChange={(e) =>
                 setConfig((prev) => ({
                   ...prev,
-                  severity_threshold: e.target.value as any,
+                  severity_threshold: e.target.value as CheckConfig['severity_threshold'],
                 }))
               }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -653,10 +714,18 @@ export default function RunComplianceCheckPage() {
 
   const renderCompleteStep = () => {
     // Calculate aggregate stats from batch results
-    const completedChecks = checkResult?.checks?.filter((c: any) => c.status === 'completed') || [];
-    const totalIssues = completedChecks.reduce((sum: number, check: any) => sum + (check.issuesFound || 0), 0);
-    const avgScore = completedChecks.length > 0
-      ? Math.round(completedChecks.reduce((sum: number, check: any) => sum + (check.overallScore || 0), 0) / completedChecks.length)
+    const completedChecks = (checkResult?.checks || []).filter(
+      (check) => check.status === 'completed'
+    );
+    const totalIssues = completedChecks.reduce(
+      (sum, check) => sum + (check.issuesFound || 0),
+      0
+    );
+    const avgScore = completedChecks.length
+      ? Math.round(
+          completedChecks.reduce((sum, check) => sum + (check.overallScore || 0), 0) /
+            completedChecks.length
+        )
       : 0;
 
     return (
@@ -708,7 +777,7 @@ export default function RunComplianceCheckPage() {
         )}
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-          <h3 className="font-semibold text-blue-900 mb-2">What's Next?</h3>
+          <h3 className="font-semibold text-blue-900 mb-2">What&rsquo;s Next?</h3>
           <ul className="text-sm text-blue-800 space-y-2 text-left">
             <li>• Review the detailed compliance reports for each document</li>
             <li>• Address any critical or high-severity issues</li>
@@ -727,7 +796,7 @@ export default function RunComplianceCheckPage() {
           <Button
             onClick={() => {
               // Navigate to the first completed check's results page
-              const firstCheck = checkResult?.checks?.find((c: any) => c.status === 'completed');
+              const firstCheck = checkResult?.checks?.find((c) => c.status === 'completed');
               if (firstCheck) {
                 router.push(`/org/${orgId}/workspace/${wsId}/compliance/${firstCheck.checkId}`);
               } else {

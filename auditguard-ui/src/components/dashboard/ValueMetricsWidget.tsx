@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { TrendingUp, Clock, DollarSign, Zap, Sparkles } from 'lucide-react';
 
 interface ValueMetrics {
@@ -24,11 +24,7 @@ export function ValueMetricsWidget({ workspaceId }: ValueMetricsWidgetProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchMetrics();
-  }, [workspaceId]);
-
-  const fetchMetrics = async () => {
+  const fetchMetrics = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/workspaces/${workspaceId}/value-metrics?days=30`);
@@ -45,7 +41,11 @@ export function ValueMetricsWidget({ workspaceId }: ValueMetricsWidgetProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [workspaceId]);
+
+  useEffect(() => {
+    fetchMetrics();
+  }, [fetchMetrics]);
 
   if (loading) {
     return (
@@ -208,7 +208,7 @@ export function ValueMetricsWidget({ workspaceId }: ValueMetricsWidgetProps) {
             <div>
               <div className="font-semibold mb-1">🎉 Amazing ROI!</div>
               <div className="text-sm opacity-90">
-                You're getting incredible value. Upgrade for even more features!
+                You&rsquo;re getting incredible value. Upgrade for even more features!
               </div>
             </div>
             <button

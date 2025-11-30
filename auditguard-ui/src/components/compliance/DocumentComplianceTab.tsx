@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   DocumentComplianceSummary,
   ComplianceCheck,
@@ -61,12 +61,7 @@ export function DocumentComplianceTab({
   const [selectedFramework, setSelectedFramework] = useState<ComplianceFramework>('GDPR');
   const [showFrameworkDropdown, setShowFrameworkDropdown] = useState(false);
 
-  useEffect(() => {
-    fetchSummary();
-    fetchChecks();
-  }, [workspaceId, documentId]);
-
-  const fetchSummary = async () => {
+  const fetchSummary = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -93,9 +88,9 @@ export function DocumentComplianceTab({
     } finally {
       setLoading(false);
     }
-  };
+  }, [documentId, workspaceId]);
 
-  const fetchChecks = async () => {
+  const fetchChecks = useCallback(async () => {
     try {
       const response = await fetch(
         `/api/workspaces/${workspaceId}/documents/${documentId}/compliance/checks`,
@@ -111,7 +106,12 @@ export function DocumentComplianceTab({
     } catch (err) {
       console.error('Failed to fetch checks:', err);
     }
-  };
+  }, [documentId, workspaceId]);
+
+  useEffect(() => {
+    fetchSummary();
+    fetchChecks();
+  }, [fetchChecks, fetchSummary]);
 
   const runComplianceCheck = async () => {
     setRunningCheck(true);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useToast } from './ToastProvider';
 import {
   ProactiveAlert,
@@ -21,49 +21,10 @@ export default function ProactiveAlerts({
   checkInterval = 60000,
 }: ProactiveAlertsProps) {
   const { showToast } = useToast();
-  const [lastChecked, setLastChecked] = useState<number>(0);
-  const [shownAlerts, setShownAlerts] = useState<Set<string>>(new Set());
+  const lastCheckedRef = useRef<number>(0);
+  const shownAlertsRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (!enabled) return;
-
-    // Check for alerts immediately on mount
-    checkForAlerts();
-
-    // Set up interval for periodic checks
-    const interval = setInterval(checkForAlerts, checkInterval);
-
-    return () => clearInterval(interval);
-  }, [enabled, workspaceId, checkInterval]);
-
-  const checkForAlerts = async () => {
-    try {
-      const response = await fetch(`/api/assistant/alerts?workspaceId=${workspaceId}&since=${lastChecked}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        const alerts: ProactiveAlert[] = data.alerts || [];
-
-        // Process each alert
-        alerts.forEach((alert) => {
-          // Skip if already shown
-          if (shownAlerts.has(alert.id)) return;
-
-          // Show toast based on alert type
-          showAlertToast(alert);
-
-          // Mark as shown
-          setShownAlerts((prev) => new Set(prev).add(alert.id));
-        });
-
-        setLastChecked(Date.now());
-      }
-    } catch (error) {
-      console.error('Failed to check for proactive alerts:', error);
-    }
-  };
-
-  const showAlertToast = (alert: ProactiveAlert) => {
+  const showAlertToast = useCallback((alert: ProactiveAlert) => {
     const actions = alert.actions.map((action) => ({
       id: action.id,
       label: action.label,
@@ -146,7 +107,46 @@ export default function ProactiveAlerts({
         });
         break;
     }
-  };
+  }, [showToast]);
+
+  const checkForAlerts = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/assistant/alerts?workspaceId=${workspaceId}&since=${lastCheckedRef.current}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const alerts: ProactiveAlert[] = data.alerts || [];
+
+        // Process each alert
+        alerts.forEach((alert) => {
+          // Skip if already shown
+          if (shownAlertsRef.current.has(alert.id)) return;
+
+          // Show toast based on alert type
+          showAlertToast(alert);
+
+          // Mark as shown
+          shownAlertsRef.current.add(alert.id);
+        });
+
+        lastCheckedRef.current = Date.now();
+      }
+    } catch (error) {
+      console.error('Failed to check for proactive alerts:', error);
+    }
+  }, [showAlertToast, workspaceId]);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    // Check for alerts immediately on mount
+    checkForAlerts();
+
+    // Set up interval for periodic checks
+    const interval = setInterval(checkForAlerts, checkInterval);
+
+    return () => clearInterval(interval);
+  }, [checkForAlerts, checkInterval, enabled]);
 
   // This component doesn't render anything visible
   return null;
@@ -188,7 +188,7 @@ export function createComplianceAlert(
         variant: 'secondary',
       },
     ],
-    metadata: data,
+    metadata: { ...data, workspaceId },
   };
 }
 
@@ -219,7 +219,7 @@ export function createWeeklyReportAlert(
         variant: 'secondary',
       },
     ],
-    metadata: data,
+    metadata: { ...data, workspaceId },
   };
 }
 
@@ -250,6 +250,6 @@ export function createAIInsightAlert(
         variant: 'secondary',
       },
     ],
-    metadata: data,
+    metadata: { ...data, workspaceId },
   };
 }

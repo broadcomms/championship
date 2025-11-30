@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,11 +18,29 @@ interface Workspace {
   document_count?: number;
 }
 
+const normalizeApiResponse = <T,>(response: T | { data: T }): T => {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as { data: T }).data;
+  }
+  return response as T;
+};
+
+const getApiErrorMessage = (err: unknown, fallback: string): string => {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const responseErr = err as { response?: { data?: { message?: string } } };
+    return responseErr.response?.data?.message || fallback;
+  }
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message?: string }).message || fallback);
+  }
+  return fallback;
+};
+
 export default function WorkspaceSettingsPage() {
-  const params = useParams();
+  const params = useParams<{ id: string; wsId: string }>();
   const router = useRouter();
-  const orgId = params.id as string;
-  const wsId = params.wsId as string;
+  const orgId = params.id;
+  const wsId = params.wsId;
   const { user } = useAuth();
   const accountId = user?.userId;
 
@@ -33,23 +51,32 @@ export default function WorkspaceSettingsPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchWorkspace();
-  }, [wsId]);
-
-  const fetchWorkspace = async () => {
+  const fetchWorkspace = useCallback(async (withLoader = false) => {
+    if (!wsId) return;
+    if (withLoader) {
+      setLoading(true);
+    }
     try {
-      const response = await api.get(`/api/workspaces/${wsId}`);
-      setWorkspace(response);
-      setName(response.name || '');
-      setDescription(response.description || '');
-    } catch (error) {
-      console.error('Failed to fetch settings:', error);
+      const response = await api.get<Workspace>(`/api/workspaces/${wsId}`);
+      const data = normalizeApiResponse(response);
+      setWorkspace(data);
+      setName(data.name || '');
+      setDescription(data.description || '');
+      setError(null);
+    } catch (fetchError) {
+      console.error('Failed to fetch settings:', fetchError);
+      setError(getApiErrorMessage(fetchError, 'Failed to load workspace settings'));
+      setWorkspace(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [wsId]);
+
+  useEffect(() => {
+    fetchWorkspace(true);
+  }, [fetchWorkspace]);
 
   const handleSave = async () => {
     if (!workspace) return;
@@ -63,9 +90,9 @@ export default function WorkspaceSettingsPage() {
       await api.put(`/api/workspaces/${wsId}`, updates);
       alert('Settings saved successfully');
       await fetchWorkspace(); // Refresh data
-    } catch (error: any) {
-      console.error('Failed to save settings:', error);
-      alert(error.response?.data?.message || 'Failed to save settings');
+    } catch (saveError) {
+      console.error('Failed to save settings:', saveError);
+      alert(getApiErrorMessage(saveError, 'Failed to save settings'));
     } finally {
       setSaving(false);
     }
@@ -80,9 +107,9 @@ export default function WorkspaceSettingsPage() {
     try {
       await api.delete(`/api/workspaces/${wsId}`);
       router.push(`/org/${orgId}`);
-    } catch (error: any) {
-      console.error('Failed to delete workspace:', error);
-      alert(error.response?.data?.message || 'Failed to delete workspace');
+    } catch (deleteError) {
+      console.error('Failed to delete workspace:', deleteError);
+      alert(getApiErrorMessage(deleteError, 'Failed to delete workspace'));
     }
   };
 
@@ -100,7 +127,7 @@ export default function WorkspaceSettingsPage() {
     return (
       <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
         <div className="flex items-center justify-center p-8">
-          <div className="text-red-500">Failed to load settings</div>
+          <div className="text-red-500">{error || 'Failed to load settings'}</div>
         </div>
       </OrganizationLayout>
     );

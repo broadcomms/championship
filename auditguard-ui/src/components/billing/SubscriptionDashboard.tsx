@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Subscription, WorkspaceLimits } from '@/types';
 import { UsageMetrics } from './UsageMetrics';
@@ -17,27 +17,29 @@ export function SubscriptionDashboard({ workspaceId }: SubscriptionDashboardProp
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, [workspaceId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [subData, limitsData] = await Promise.all([
-        api.get(`/api/workspaces/${workspaceId}/subscription`),
-        api.get(`/api/workspaces/${workspaceId}/limits`),
+        api.get<{ subscription: Subscription | null }>(
+          `/api/workspaces/${workspaceId}/subscription`
+        ),
+        api.get<WorkspaceLimits>(`/api/workspaces/${workspaceId}/limits`),
       ]);
       setSubscription(subData.subscription);
       setLimits(limitsData);
       setError(null);
-    } catch (err) {
+    } catch (err: unknown) {
       setError('Failed to load subscription data');
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [workspaceId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleSyncStatus = async () => {
     try {
@@ -49,8 +51,12 @@ export function SubscriptionDashboard({ workspaceId }: SubscriptionDashboardProp
 
       // Reload subscription data
       await loadData();
-    } catch (err: any) {
-      const errorMessage = err?.error || err?.message || 'Failed to sync subscription status';
+    } catch (err: unknown) {
+      const apiError =
+        typeof err === 'object' && err && 'error' in err && typeof (err as { error?: string }).error === 'string'
+          ? (err as { error?: string }).error
+          : undefined;
+      const errorMessage = apiError ?? (err instanceof Error ? err.message : 'Failed to sync subscription status');
       
       // Check if it's a database constraint error (migration not applied yet)
       if (errorMessage.includes('NOT NULL constraint') || errorMessage.includes('current_period')) {
@@ -186,7 +192,7 @@ export function SubscriptionDashboard({ workspaceId }: SubscriptionDashboardProp
             </div>
           ) : (
             <div className="space-y-4">
-              <p className="text-gray-600">You're currently on the Free plan.</p>
+              <p className="text-gray-600">You&rsquo;re currently on the Free plan.</p>
               <Link
                 href={`/workspaces/${workspaceId}/billing/upgrade`}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

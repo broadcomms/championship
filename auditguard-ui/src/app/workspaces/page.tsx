@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/common/Button';
@@ -16,22 +16,32 @@ export default function WorkspacesPage() {
   const [error, setError] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
-  const fetchWorkspaces = async () => {
+  const getErrorMessage = useCallback((err: unknown, fallback: string): string => {
+    if (err instanceof Error) {
+      return err.message || fallback;
+    }
+    if (err && typeof err === 'object' && 'error' in err) {
+      return String((err as { error?: string }).error || fallback);
+    }
+    return fallback;
+  }, []);
+
+  const fetchWorkspaces = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
       const response = await api.get<{ workspaces: WorkspaceWithRole[] }>('/api/workspaces');
       setWorkspaces(response.workspaces || []);
-    } catch (err: any) {
-      setError(err.error || 'Failed to load workspaces');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load workspaces'));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [getErrorMessage]);
 
   useEffect(() => {
     fetchWorkspaces();
-  }, []);
+  }, [fetchWorkspaces]);
 
   const handleCreateSuccess = () => {
     fetchWorkspaces();

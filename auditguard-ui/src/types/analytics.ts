@@ -163,7 +163,7 @@ export interface AnalyticsEvent {
   workspaceId: string;
   userId?: string;
   conversationId?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Constants

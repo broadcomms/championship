@@ -16,7 +16,7 @@ export interface NotificationAction {
   action: string;
   variant?: 'primary' | 'secondary' | 'danger';
   url?: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 }
 
 // Core Notification Interface
@@ -33,7 +33,7 @@ export interface Notification {
   userId?: string;
   conversationId?: string;
   actions?: NotificationAction[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   expiresAt?: number;
   dismissible?: boolean;
   autoHide?: boolean;
@@ -130,7 +130,7 @@ export interface ProactiveAlert {
   detectedAt: number;
   resolveBy?: number;
   actions: NotificationAction[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Compliance Alert Data

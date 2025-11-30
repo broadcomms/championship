@@ -13,6 +13,19 @@ interface CheckoutFormProps {
   onCancel?: () => void;
 }
 
+interface WorkspaceSubscriptionResponse {
+  subscription: {
+    id?: string;
+    status?: string;
+  } | null;
+}
+
+interface SubscriptionMutationResponse {
+  status: string;
+  clientSecret?: string;
+  subscriptionId: string;
+}
+
 const CARD_ELEMENT_OPTIONS = {
   style: {
     base: {
@@ -49,7 +62,7 @@ export function CheckoutForm({
   useEffect(() => {
     const checkSubscription = async () => {
       try {
-        const result = await api.get(`/api/workspaces/${workspaceId}/subscription`);
+        const result = await api.get<WorkspaceSubscriptionResponse>(`/api/workspaces/${workspaceId}/subscription`);
         setHasExistingSubscription(result.subscription !== null);
       } catch (err) {
         console.error('Failed to check subscription:', err);
@@ -72,14 +85,14 @@ export function CheckoutForm({
 
     try {
       // Check if subscription already exists
-      const existingSubscription = await api.get(`/api/workspaces/${workspaceId}/subscription`);
+      const existingSubscription = await api.get<WorkspaceSubscriptionResponse>(`/api/workspaces/${workspaceId}/subscription`);
       const hasSubscription = existingSubscription.subscription !== null;
 
-      let response;
+      let response: SubscriptionMutationResponse;
 
       if (hasSubscription) {
         // Update existing subscription (upgrade/downgrade)
-        response = await api.put(`/api/workspaces/${workspaceId}/subscription`, {
+        response = await api.put<SubscriptionMutationResponse>(`/api/workspaces/${workspaceId}/subscription`, {
           planId,
         });
 
@@ -121,7 +134,7 @@ export function CheckoutForm({
       }
 
       // Create subscription with payment method
-      response = await api.post(`/api/workspaces/${workspaceId}/subscription`, {
+      response = await api.post<SubscriptionMutationResponse>(`/api/workspaces/${workspaceId}/subscription`, {
         planId,
         paymentMethodId: paymentMethod!.id,
       });
@@ -164,7 +177,7 @@ export function CheckoutForm({
         await api.post(`/api/workspaces/${workspaceId}/subscription/sync`, {});
 
         // Fetch the updated subscription
-        const result = await api.get(`/api/workspaces/${workspaceId}/subscription`);
+        const result = await api.get<WorkspaceSubscriptionResponse>(`/api/workspaces/${workspaceId}/subscription`);
 
         if (result.subscription?.status === 'active') {
           // Subscription is now active!
@@ -232,7 +245,7 @@ export function CheckoutForm({
       {hasExistingSubscription && (
         <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
           <p className="text-sm text-blue-800">
-            You will be upgraded to the {planName} plan. Your existing payment method will be used, and you'll be charged the prorated amount immediately.
+            You will be upgraded to the {planName} plan. Your existing payment method will be used, and you&rsquo;ll be charged the prorated amount immediately.
           </p>
         </div>
       )}

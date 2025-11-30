@@ -30,8 +30,8 @@ export function MultiLevelSidebar({ currentOrgId, currentWorkspaceId }: SidebarP
       }
 
       try {
-        const response = await api.get(`/api/organizations/${currentOrgId}/workspaces`);
-        setWorkspaces(response?.data || response || []);
+        const response = await api.get<Workspace[]>(`/api/organizations/${currentOrgId}/workspaces`);
+        setWorkspaces(response || []);
       } catch (error) {
         console.error('Failed to fetch workspaces:', error);
         setWorkspaces([]);

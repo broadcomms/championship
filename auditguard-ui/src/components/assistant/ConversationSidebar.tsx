@@ -18,7 +18,6 @@ import {
   Share2,
   CheckSquare,
   Square,
-  Calendar,
 } from 'lucide-react';
 import type { Conversation, FilterOptions } from '@/types/assistant';
 import { formatDistanceToNow } from 'date-fns';
@@ -66,53 +65,7 @@ export function ConversationSidebar({
   const [batchMode, setBatchMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Load conversations
-  useEffect(() => {
-    loadConversations();
-  }, [workspaceId, filters, page]);
-
-  // Refresh when refreshTrigger changes (e.g., after new session created)
-  useEffect(() => {
-    if (refreshTrigger > 0) {
-      setPage(1);
-      loadConversations();
-    }
-  }, [refreshTrigger]);
-
-  const loadConversations = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/assistant/conversations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          workspaceId,
-          filters,
-          page,
-          limit: 20,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (page === 1) {
-          setConversations(data.conversations);
-        } else {
-          setConversations((prev) => [...prev, ...data.conversations]);
-        }
-        setHasMore(data.hasMore);
-        groupConversations(data.conversations);
-      }
-    } catch (error) {
-      console.error('Failed to load conversations:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Group conversations by date
-  const groupConversations = (convos: Conversation[]) => {
+  const groupConversations = useCallback((convos: Conversation[]) => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const yesterday = new Date(today);
@@ -151,7 +104,52 @@ export function ConversationSidebar({
     });
 
     setGroups(grouped.filter((g) => g.conversations.length > 0));
-  };
+  }, []);
+
+  const loadConversations = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/assistant/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          workspaceId,
+          filters,
+          page,
+          limit: 20,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (page === 1) {
+          setConversations(data.conversations);
+        } else {
+          setConversations((prev) => [...prev, ...data.conversations]);
+        }
+        setHasMore(data.hasMore);
+        groupConversations(data.conversations);
+      }
+    } catch (error) {
+      console.error('Failed to load conversations:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filters, groupConversations, page, workspaceId]);
+
+  // Load conversations
+  useEffect(() => {
+    loadConversations();
+  }, [loadConversations]);
+
+  // Refresh when refreshTrigger changes (e.g., after new session created)
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      setPage(1);
+      loadConversations();
+    }
+  }, [refreshTrigger, loadConversations]);
 
   // Toggle group expansion
   const toggleGroup = (label: string) => {

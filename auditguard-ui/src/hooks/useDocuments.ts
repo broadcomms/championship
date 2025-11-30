@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { DocumentListItem } from '@/types';
 
@@ -21,7 +21,7 @@ export function useDocuments(workspaceId: string): UseDocumentsReturn {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollingStartTimeRef = useRef<number>(0);
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     setError('');
     try {
       const response = await api.get<{ documents: DocumentListItem[] }>(
@@ -35,23 +35,30 @@ export function useDocuments(workspaceId: string): UseDocumentsReturn {
       );
 
       return hasProcessingDocs;
-    } catch (err: any) {
-      setError(err.error || 'Failed to load documents');
+    } catch (err: unknown) {
+      const rawMessage =
+        (typeof err === 'object' && err && 'error' in err && typeof (err as { error?: string }).error === 'string'
+          ? (err as { error?: string }).error
+          : err instanceof Error
+            ? err.message
+            : 'Failed to load documents');
+      const safeMessage = rawMessage && rawMessage.trim().length > 0 ? rawMessage : 'Failed to load documents';
+      setError(safeMessage);
       return false;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [workspaceId]);
 
-  const stopPolling = () => {
+  const stopPolling = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
     setIsPolling(false);
-  };
+  }, []);
 
-  const startPolling = async () => {
+  const startPolling = useCallback(async () => {
     if (intervalRef.current) return; // Already polling
 
     setIsPolling(true);
@@ -74,7 +81,7 @@ export function useDocuments(workspaceId: string): UseDocumentsReturn {
         stopPolling();
       }
     }, POLL_INTERVAL);
-  };
+  }, [fetchDocuments, stopPolling]);
 
   // Initial fetch and auto-start polling
   useEffect(() => {
@@ -85,7 +92,7 @@ export function useDocuments(workspaceId: string): UseDocumentsReturn {
     return () => {
       stopPolling();
     };
-  }, [workspaceId]);
+  }, [startPolling, stopPolling, workspaceId]);
 
   return {
     documents,

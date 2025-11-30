@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40" viewBox="0 0 160 40" role="img" aria-label="ElevenLabs Health logo">
+  <rect width="160" height="40" rx="8" fill="#FDF2F8" />
+  <rect x="16" y="10" width="32" height="20" rx="4" fill="#DB2777" />
+  <path d="M22 16h20" stroke="#FCE7F3" stroke-width="2" />
+  <path d="M22 22h12" stroke="#FCE7F3" stroke-width="2" />
+  <text x="56" y="25" font-family="Inter, Arial, sans-serif" font-size="16" fill="#831843" font-weight="600">ElevenLabs</text>
+</svg>
