@@ -214,6 +214,26 @@ export const featureHighlights = [
       'Encryption in transit and at rest',
     ],
   },
+  {
+    title: 'AI Document Correction',
+    description:
+      'Surface every compliance issue for a document, preview suggested fixes, and regenerate policy-ready drafts with AI.',
+    bullets: [
+      'Show character counts, frameworks, and metadata instantly',
+      'Review extracted text, evidence, and multi-framework issues side-by-side',
+      'Generate corrected versions with PDF export for auditors',
+    ],
+  },
+  {
+    title: 'Private Cloud Deployment',
+    description:
+      'Run AuditGuardX inside a dedicated, single-tenant environment that meets strict residency or isolation mandates.',
+    bullets: [
+      'Provisioned on Vultr, AWS, or on-prem with WorkOS SSO + Stripe billing support',
+      'Managed updates plus hardened network peering and secret rotation',
+      'Meets data residency, air-gap, and regulated industry controls out of the box',
+    ],
+  },
 ];
 
 export const testimonialContent = [
