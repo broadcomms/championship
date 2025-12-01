@@ -184,10 +184,7 @@ application "auditguard-v2" {
     visibility = "private"
   }
 
-  // Private SSO service for enterprise authentication
-  service "sso-service" {
-    visibility = "private"
-  }
+
 
   // Public webhook handler for Stripe events
   service "stripe-webhook-service" {
