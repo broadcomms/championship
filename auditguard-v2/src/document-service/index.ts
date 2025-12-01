@@ -25,7 +25,9 @@ interface UploadDocumentInput {
 
 interface UpdateMetadataInput {
   filename?: string;
+  title?: string;
   category?: 'policy' | 'procedure' | 'evidence' | 'other';
+  frameworkId?: number | null;
 }
 
 export default class extends Service<Env> {
@@ -529,6 +531,7 @@ export default class extends Service<Env> {
   ): Promise<{
     id: string;
     filename: string;
+    title?: string;
     category: string | null;
     updatedAt: number;
   }> {
@@ -580,6 +583,10 @@ export default class extends Service<Env> {
       throw new Error('Filename must be between 1 and 255 characters');
     }
 
+    if (updates.title !== undefined && updates.title.length > 500) {
+      throw new Error('Title must be 500 characters or less');
+    }
+
     if (updates.category !== undefined && !['policy', 'procedure', 'evidence', 'other', null].includes(updates.category)) {
       throw new Error('Invalid category. Must be policy, procedure, evidence, or other');
     }
@@ -589,7 +596,9 @@ export default class extends Service<Env> {
     // Update metadata
     const updateData: any = { updated_at: now };
     if (updates.filename !== undefined) updateData.filename = updates.filename;
+    if (updates.title !== undefined) updateData.title = updates.title;
     if (updates.category !== undefined) updateData.category = updates.category;
+    if (updates.frameworkId !== undefined) updateData.compliance_framework_id = updates.frameworkId;
 
     await db
       .updateTable('documents')
@@ -601,7 +610,7 @@ export default class extends Service<Env> {
     // Get updated document
     const updated = await db
       .selectFrom('documents')
-      .select(['id', 'filename', 'category', 'updated_at'])
+      .select(['id', 'filename', 'title', 'category', 'updated_at'])
       .where('id', '=', documentId)
       .executeTakeFirst();
 
@@ -612,6 +621,7 @@ export default class extends Service<Env> {
     return {
       id: updated.id,
       filename: updated.filename,
+      title: updated.title || undefined,
       category: updated.category,
       updatedAt: updated.updated_at,
     };

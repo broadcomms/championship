@@ -55,15 +55,18 @@ export default function DocumentDetailsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('preview');
 
   // Form state for editing
-  const [editFilename, setEditFilename] = useState('');
+  const [editTitle, setEditTitle] = useState('');
   const [editCategory, setEditCategory] = useState<DocumentCategory>('other');
+  const [editFrameworkId, setEditFrameworkId] = useState<number | null>(null);
+  const [frameworks, setFrameworks] = useState<Array<{ id: number; name: string; displayName: string }>>([]);
 
   // Update document state from polling
   useEffect(() => {
     if (polledDocument) {
       setDocument(polledDocument);
-      setEditFilename(polledDocument.filename);
+      setEditTitle(polledDocument.title || polledDocument.filename);
       setEditCategory(polledDocument.category || 'other');
+      setEditFrameworkId(polledDocument.complianceFrameworkId || null);
       setIsLoading(false);
     }
   }, [polledDocument]);
@@ -81,6 +84,23 @@ export default function DocumentDetailsPage() {
     startPolling();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId, workspaceId]); // Only restart when documentId or workspaceId changes
+
+  // Fetch available compliance frameworks
+  useEffect(() => {
+    const fetchFrameworks = async () => {
+      try {
+        const data = await api.get<Array<{ id: number; name: string; displayName: string }>>(
+          `/api/workspaces/${workspaceId}/frameworks`
+        );
+        setFrameworks(data);
+      } catch (err) {
+        console.error('Failed to fetch frameworks:', err);
+      }
+    };
+    if (workspaceId) {
+      fetchFrameworks();
+    }
+  }, [workspaceId]);
 
   const handleDownload = async () => {
     try {
@@ -115,8 +135,9 @@ export default function DocumentDetailsPage() {
       const updated = await api.put<Document>(
         `/api/workspaces/${workspaceId}/documents/${documentId}`,
         {
-          filename: editFilename,
+          title: editTitle,
           category: editCategory,
+          frameworkId: editFrameworkId,
         }
       );
       setDocument(updated);
@@ -236,19 +257,11 @@ export default function DocumentDetailsPage() {
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push(`/org/${orgId}/workspace/${workspaceId}/documents`)}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ←
-            </button>
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900">{document.title || document.filename}</h1>
-              {document.description && (
-                <p className="mt-2 text-lg text-gray-600">{document.description}</p>
-              )}
-            </div>
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold text-gray-900">{document.title || document.filename}</h1>
+            {document.description && (
+              <p className="mt-2 text-lg text-gray-600">{document.description}</p>
+            )}
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-3">
@@ -261,7 +274,7 @@ export default function DocumentDetailsPage() {
               </Button>
               {!isEditing && (
                 <Button variant="outline" onClick={() => setIsEditing(true)}>
-                  ✎ Edit
+                  ⚙ Settings
                 </Button>
               )}
 
@@ -290,6 +303,14 @@ export default function DocumentDetailsPage() {
                    '⚙ Process Document'}
                 </Button>
               )}
+
+              {/* Close Button */}
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/org/${orgId}/workspace/${workspaceId}/documents`)}
+              >
+                ✕ Close
+              </Button>
             </div>
           </div>
         </div>
@@ -318,10 +339,10 @@ export default function DocumentDetailsPage() {
           </div>
         )}
 
-        {/* Edit Form - Only shown when editing */}
+        {/* Settings Section - Only shown when editing */}
         {isEditing && (
-          <div className="mb-8 rounded-lg bg-white p-6 shadow">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">Edit Document</h2>
+          <div className="mb-8 rounded-lg bg-white p-6 shadow space-y-6">
+            <h2 className="text-lg font-semibold text-gray-900">Document Settings</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -329,9 +350,10 @@ export default function DocumentDetailsPage() {
                 </label>
                 <input
                   type="text"
-                  value={editFilename}
-                  onChange={(e) => setEditFilename(e.target.value)}
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Enter document title"
                 />
               </div>
               <div>
@@ -347,6 +369,21 @@ export default function DocumentDetailsPage() {
                   <option value="other">Other</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Compliance Framework</label>
+                <select
+                  value={editFrameworkId || ''}
+                  onChange={(e) => setEditFrameworkId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">None</option>
+                  {frameworks.map((framework) => (
+                    <option key={framework.id} value={framework.id}>
+                      {framework.displayName}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={() => setIsEditing(false)}>
                   Cancel
@@ -355,6 +392,37 @@ export default function DocumentDetailsPage() {
                   Save Changes
                 </Button>
               </div>
+            </div>
+
+            {/* Danger Zone - Inside Settings */}
+            <div className="rounded-lg border-2 border-red-200 bg-red-50 p-6">
+              <h3 className="mb-2 text-lg font-semibold text-red-900">Danger Zone</h3>
+              <p className="mb-4 text-sm text-red-700">
+                Deleting this document is permanent and cannot be undone. All associated data will be lost.
+              </p>
+              {!showDeleteConfirm ? (
+                <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
+                  Delete Document
+                </Button>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-red-900">
+                    Are you sure? This action cannot be undone.
+                  </p>
+                  <div className="flex gap-3">
+                    <Button variant="danger" loading={isDeleting} onClick={handleDelete}>
+                      Yes, Delete Forever
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      disabled={isDeleting}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -509,37 +577,6 @@ export default function DocumentDetailsPage() {
                 }}
               />
             </ComponentErrorBoundary>
-          )}
-        </div>
-
-        {/* Delete Section */}
-        <div className="rounded-lg border-2 border-red-200 bg-red-50 p-6">
-          <h2 className="mb-2 text-lg font-semibold text-red-900">Danger Zone</h2>
-          <p className="mb-4 text-sm text-red-700">
-            Deleting this document is permanent and cannot be undone. All associated data will be lost.
-          </p>
-          {!showDeleteConfirm ? (
-            <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
-              Delete Document
-            </Button>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm font-medium text-red-900">
-                Are you sure? This action cannot be undone.
-              </p>
-              <div className="flex gap-3">
-                <Button variant="danger" loading={isDeleting} onClick={handleDelete}>
-                  Yes, Delete Forever
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowDeleteConfirm(false)}
-                  disabled={isDeleting}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
           )}
         </div>
       </div>
