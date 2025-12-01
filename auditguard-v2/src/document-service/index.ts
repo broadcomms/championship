@@ -342,7 +342,11 @@ export default class extends Service<Env> {
     embeddingsGenerated?: number;
     vectorIndexingStatus?: string;
     complianceFrameworkId?: number;
-    fullyCompleted?: boolean; // CRITICAL FIX: Include fully_completed flag for UI polling
+    fullyCompleted?: boolean;
+    corrected_text?: string | null;
+    corrected_at?: number | null;
+    corrected_by?: string | null;
+    corrections_count?: number | null;
   }> {
     const db = this.getDb();
 
@@ -387,7 +391,11 @@ export default class extends Service<Env> {
         'documents.embeddings_generated' as any,
         'documents.vector_indexing_status' as any,
         'documents.compliance_framework_id' as any,
-        'documents.fully_completed' as any, // CRITICAL FIX: Get fully_completed flag
+        'documents.fully_completed' as any,
+        'documents.corrected_text' as any,
+        'documents.corrected_at' as any,
+        'documents.corrected_by' as any,
+        'documents.corrections_count' as any,
       ])
       .where('documents.id', '=', documentId)
       .where('documents.workspace_id', '=', workspaceId)
@@ -426,6 +434,10 @@ export default class extends Service<Env> {
       vectorIndexingStatus: document.vector_indexing_status,
       complianceFrameworkId: document.compliance_framework_id,
       fullyCompleted: document.fully_completed === 1, // CRITICAL FIX: Convert to boolean
+      corrected_text: document.corrected_text,
+      corrected_at: document.corrected_at,
+      corrected_by: document.corrected_by,
+      corrections_count: document.corrections_count,
     };
   }
 

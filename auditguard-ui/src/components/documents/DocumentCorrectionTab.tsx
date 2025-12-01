@@ -43,24 +43,62 @@ export function DocumentCorrectionTab({
   const [issuesLoading, setIssuesLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'preview' | 'markdown'>('preview');
   const [generationProgress, setGenerationProgress] = useState(0);
+  const [loadingExisting, setLoadingExisting] = useState(true);
 
-  // Fetch compliance issues on mount
+  // Fetch compliance issues AND existing correction on mount
   useEffect(() => {
     fetchIssues();
+    fetchExistingCorrection();
   }, [workspaceId, documentId]);
 
   const fetchIssues = async () => {
     setIssuesLoading(true);
     try {
-      const data = await api.get<ComplianceIssue[]>(
+      const data = await api.get<any>(
         `/api/workspaces/${workspaceId}/documents/${documentId}/issues`
       );
-      setIssues(data);
+      // Handle different API response formats
+      if (Array.isArray(data)) {
+        setIssues(data);
+      } else if (data && Array.isArray(data.issues)) {
+        setIssues(data.issues);
+      } else {
+        console.warn('Unexpected API response format:', data);
+        setIssues([]);
+      }
     } catch (err) {
       console.error('Failed to fetch issues:', err);
       setIssues([]);
     } finally {
       setIssuesLoading(false);
+    }
+  };
+
+  const fetchExistingCorrection = async () => {
+    setLoadingExisting(true);
+    try {
+      const data = await api.get<any>(
+        `/api/workspaces/${workspaceId}/documents/${documentId}`
+      );
+      
+      // Check if document has a saved correction
+      if (data.corrected_text && data.corrected_at) {
+        console.log('✅ Loaded existing correction from database');
+        
+        // Reconstruct correction result from database fields
+        setCorrectionResult({
+          success: true,
+          correctedText: data.corrected_text,
+          correctionsApplied: [], // We don't store this in DB, will regenerate if needed
+          generatedAt: data.corrected_at,
+          modelUsed: 'llama-3.3-70b',
+          issuesAddressed: data.corrections_count || 0,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch existing correction:', err);
+    } finally {
+      setLoadingExisting(false);
     }
   };
 
@@ -194,10 +232,14 @@ export function DocumentCorrectionTab({
     window.URL.revokeObjectURL(url);
   };
 
-  const issueCountsBySeverity = issues.reduce((acc, issue) => {
-    acc[issue.severity.toLowerCase()] = (acc[issue.severity.toLowerCase()] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  // Safely compute issue counts by severity
+  const issueCountsBySeverity = Array.isArray(issues) 
+    ? issues.reduce((acc, issue) => {
+        const severity = issue.severity?.toLowerCase() || 'unknown';
+        acc[severity] = (acc[severity] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    : {};
 
   return (
     <div className="space-y-6">
@@ -210,8 +252,16 @@ export function DocumentCorrectionTab({
         </p>
       </div>
 
+      {/* Loading State */}
+      {loadingExisting && (
+        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+          <p className="mt-3 text-sm text-gray-600">Loading existing correction...</p>
+        </div>
+      )}
+
       {/* Error Display */}
-      {error && (
+      {!loadingExisting && error && (
         <div className="rounded-md bg-red-50 border border-red-200 p-4">
           <div className="flex items-start gap-3">
             <svg
@@ -233,7 +283,7 @@ export function DocumentCorrectionTab({
       )}
 
       {/* Correction Summary */}
-      {!correctionResult && (
+      {!loadingExisting && !correctionResult && (
         <div className="rounded-lg border border-gray-200 bg-white p-6">
           <h3 className="mb-4 text-base font-semibold text-gray-900">Correction Summary</h3>
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -288,7 +338,7 @@ export function DocumentCorrectionTab({
       )}
 
       {/* Generate Button or Progress */}
-      {!correctionResult && !isGenerating && (
+      {!loadingExisting && !correctionResult && !isGenerating && (
         <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-6">
           <Button
             variant="primary"
@@ -316,7 +366,7 @@ export function DocumentCorrectionTab({
       )}
 
       {/* Generation Progress */}
-      {isGenerating && (
+      {!loadingExisting && isGenerating && (
         <div className="rounded-lg border border-gray-200 bg-white p-6">
           <h3 className="mb-4 text-base font-semibold text-gray-900">
             Generating Corrected Document...
@@ -350,7 +400,7 @@ export function DocumentCorrectionTab({
       )}
 
       {/* Corrected Document Display */}
-      {correctionResult && (
+      {!loadingExisting && correctionResult && (
         <div className="space-y-4">
           {/* Header with Actions */}
           <div className="flex items-center justify-between">

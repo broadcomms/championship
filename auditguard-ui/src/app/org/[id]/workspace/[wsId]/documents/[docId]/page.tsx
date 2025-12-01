@@ -79,7 +79,8 @@ export default function DocumentDetailsPage() {
   // Start polling when component mounts
   useEffect(() => {
     startPolling();
-  }, [documentId, startPolling, workspaceId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId, workspaceId]); // Only restart when documentId or workspaceId changes
 
   const handleDownload = async () => {
     try {

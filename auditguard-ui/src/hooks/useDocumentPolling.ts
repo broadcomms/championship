@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { ProcessingStatus, Document } from '@/types';
 
@@ -38,11 +38,19 @@ export function useDocumentPolling(
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollingStartTime = useRef<number>(0);
 
+  const stopPolling = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setIsPolling(false);
+  }, []);
+
   /**
    * Fetch current document status
    * Returns true if should continue polling
    */
-  const fetchStatus = async (): Promise<boolean> => {
+  const fetchStatus = useCallback(async (): Promise<boolean> => {
     try {
       const doc = await api.get<Document>(
         `/api/workspaces/${workspaceId}/documents/${documentId}`
@@ -81,9 +89,9 @@ export function useDocumentPolling(
       stopPolling();
       return false;
     }
-  };
+  }, [workspaceId, documentId, stopPolling]);
 
-  const startPolling = () => {
+  const startPolling = useCallback(() => {
     // CRITICAL FIX: Stop existing polling first to allow restart
     // This ensures polling can be restarted after document reprocessing
     if (intervalRef.current) {
@@ -101,15 +109,7 @@ export function useDocumentPolling(
     intervalRef.current = setInterval(async () => {
       await fetchStatus();
     }, POLL_INTERVAL);
-  };
-
-  const stopPolling = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    setIsPolling(false);
-  };
+  }, [fetchStatus, stopPolling]);
 
   // Cleanup on unmount
   useEffect(() => {
