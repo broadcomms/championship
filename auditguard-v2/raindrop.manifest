@@ -1,0 +1,276 @@
+application "auditguard-v2" {
+
+  // SQL database for users, sessions, workspaces, and document metadata
+  sql_database "auditguard-db" {}
+
+  // Queue for async document processing
+  queue "document-processing-queue" {}
+
+  // Queue for async email notifications
+  queue "email-notifications-queue" {}
+
+  // SmartMemory for conversational context persistence
+  smartmemory "assistant-memory" {}
+
+  // Vector index for document embeddings and semantic search
+  // Using all-MiniLM-L6-v2 model (384 dimensions, fast local processing)
+  vector_index "document-embeddings" {
+    dimensions = 384
+    metric = "cosine"
+  }
+
+  // Vector index for knowledge base semantic search
+  // Enables intelligent retrieval of compliance framework articles and best practices
+  vector_index "knowledge-embeddings" {
+    dimensions = 384
+    metric = "cosine"
+  }
+
+  // Regular bucket for document storage (replaces SmartBucket)
+  // Documents are stored here, then indexed into vector_index for search
+  bucket "documents-bucket" {}
+
+  // ============================================
+  // Environment Variables (must be declared before services)
+  // ============================================
+  
+  // Session secret for token generation
+  env "SESSION_SECRET" {
+    default = "dev-secret-key-change-in-production"
+  }
+
+  // Stripe API key for payment processing (TEST MODE)
+  env "STRIPE_SECRET_KEY" {
+    default = "sk_test_51ISqyeHSX3RgJL1cYATfAtUz2mTheWpXfHE6CarZVJlLAsthLPSkMywCU4R4igxVYYtP2YDNCMq15ACNNewhnudb005xDmDDxm"
+  }
+
+  // Stripe webhook secret for event verification (TEST MODE)
+  env "STRIPE_WEBHOOK_SECRET" {
+    default = "whsec_ec6166a03ec5f61b17017039dd78e8e94951d56a5fde2ea6964dae284e240689"
+  }
+
+  // Vultr Object Storage Configuration (for original document storage)
+  env "VULTR_STORAGE_ENDPOINT" {
+    default = "https://ewr1.vultrobjects.com"
+  }
+
+  env "VULTR_STORAGE_ACCESS_KEY" {
+    default = "HQZJV7220AKN36MMF0HF"
+  }
+
+  env "VULTR_STORAGE_SECRET_KEY" {
+    default = "sznURCtNuON23CCnjikIkusGBggBrk3qUih91i6K"
+  }
+
+  env "VULTR_STORAGE_BUCKET" {
+    default = "auditguardx-storage"
+  }
+
+  env "VULTR_STORAGE_REGION" {
+    default = "ewr"
+  }
+
+  env "VULTR_STORAGE_USE_SSL" {
+    default = "True"
+  }
+
+  // Resend API key for email notifications
+  env "RESEND_API_KEY" {
+    default = "re_dYKJNWc8_Bz5NdFHPZMA85FS1xNMh8rjp"
+  }
+
+  // Email sender address (must be verified in Resend)
+  env "EMAIL_FROM" {
+    default = "AuditGuardX <noreply@auditguardx.com>"
+  }
+
+  // WorkOS SSO Configuration
+  env "WORKOS_API_KEY" {
+    default = "sk_test_a2V5XzAxSzhTM05BREVTQkFYWkJBVEM4TUs4M0RDLDJ2UHpvQThqSkJQNjJxVFVuYXBVNXRoRUc"
+  }
+
+  env "WORKOS_CLIENT_ID" {
+    default = "client_01K8S3NB16DTXS5BVQDMDQPD4B"
+  }
+
+  env "WORKOS_REDIRECT_URI" {
+    default = "http://localhost:3000/api/auth/sso/callback"
+  }
+  env "ELEVEN_LABS_API_KEY" {
+    default = "sk_106f4519c527e91a206f4707b7eb9530c1eb70679deb88c8"
+  }
+  env "CEREBRAS_API_KEY" {
+    default = "csk-mj4cdwxh3e3r5jxyj655n3nenffwc469c3t6dkntfejvmtr5"
+  }
+  env "USE_CEREBRAS" {
+    default = "true"  // Enable Cerebras for fast inference
+  }
+  env "CEREBRAS_DECISION_MODEL" {
+    default = "llama3.1-8b"
+  }
+  env "CEREBRAS_RESPONSE_MODEL" {
+    default = "llama-3.3-70b"
+  }
+  env "FRONTEND_URL" {
+    default = "https://localhost:3000"
+  }
+
+  // ============================================
+  // Services
+  // ============================================
+
+  // Public API gateway - single entry point for all client requests
+  service "api-gateway" {
+    visibility = "public"
+  }
+
+  // Private authentication service
+  service "auth-service" {
+    visibility = "private"
+  }
+
+  // Private organization management service
+  service "organization-service" {
+    visibility = "private"
+  }
+
+  // Private workspace management service
+  service "workspace-service" {
+    visibility = "private"
+  }
+
+  // Private document management service
+  service "document-service" {
+    visibility = "private"
+  }
+
+  // WORKAROUND: HTTP service for direct document processing (queue observer broken)
+  service "document-processor-svc" {
+    visibility = "private"
+  }
+
+  // Private compliance analysis service
+  service "compliance-service" {
+    visibility = "private"
+  }
+
+  // Private analytics and risk assessment service
+  service "analytics-service" {
+    visibility = "private"
+  }
+
+  // PHASE 1.3: Private reporting service for executive summaries and data export
+  service "reporting-service" {
+    visibility = "private"
+  }
+
+  // Private AI assistant service with SmartMemory
+  service "assistant-service" {
+    visibility = "private"
+  }
+
+  // Private billing service for subscription management
+  service "billing-service" {
+    visibility = "private"
+  }
+
+  // Private email notification service
+  service "email-service" {
+    visibility = "private"
+  }
+
+  // Private notification service for in-app, email, and real-time notifications
+  service "notification-service" {
+    visibility = "private"
+  }
+
+  // Private SSO service for enterprise authentication
+  service "sso-service" {
+    visibility = "private"
+  }
+
+  // Public webhook handler for Stripe events
+  service "stripe-webhook-service" {
+    visibility = "public"
+  }
+
+  // Private admin service for platform management
+  service "admin-service" {
+    visibility = "private"
+  }
+
+  // Private usage tracking service
+  service "usage-service" {
+    visibility = "private"
+  }
+
+  // PHASE 2: Private issue management service for compliance issues
+  service "issue-management-service" {
+    visibility = "private"
+  }
+
+  // PHASE 2: Private issue assignment service for tracking issue ownership
+  service "issue-assignment-service" {
+    visibility = "private"
+  }
+
+  // PHASE 4.2.1: Real-time notification service with WebSocket connections
+  // Provides live updates for compliance checks, dashboards, and issues
+  // Uses Durable Objects internally for connection management
+  service "realtime-service" {
+    visibility = "private"
+  }
+
+  // PHASE 3: Trial expiry service - checks for expired trials and downgrades to free plan
+  // Runs on cron schedule (every hour)
+  service "trial-expiry-service" {
+    visibility = "private"
+  }
+
+  // PHASE 4: Feature gate service - validates plan-based feature access
+  service "feature-gate-service" {
+    visibility = "private"
+  }
+
+  // PHASE 4.3: Value metrics service - calculates ROI and time savings
+  service "value-metrics-service" {
+    visibility = "private"
+  }
+
+  // PHASE 4: Issue comment service - manages comments and activity on compliance issues
+  service "issue-comment-service" {
+    visibility = "private"
+  }
+
+  // Document Correction Service - AI-powered document correction using Cerebras
+  service "document-correction-service" {
+    visibility = "private"
+  }
+
+  // PDF Export Service - Convert markdown to professional PDFs
+  service "pdf-export-service" {
+    visibility = "private"
+  }
+
+  // SmartSQL for advanced analytics with natural language queries
+  smartsql "analytics-smartsql" {}
+
+  // Observer for manual document reprocessing via queue
+  // Used when "Process Document" button is clicked
+  observer "document-processor" {
+    source {
+      queue = "document-processing-queue"
+    }
+  }
+
+  // Observer for async email sending via queue
+  // Processes email notifications without blocking the main request
+  observer "email-sender" {
+    source {
+      queue = "email-notifications-queue"
+    }
+  }
+
+  // MCP Service for AI-powered compliance analysis
+  mcp_service "compliance-agent" {}
+}
