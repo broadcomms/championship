@@ -84,15 +84,6 @@ interface ChatMessage {
   name?: string;
 }
 
-interface Tool {
-  type: 'function';
-  function: {
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  };
-}
-
 interface ChatRequest {
   message: string;
   sessionId?: string;
@@ -125,7 +116,7 @@ export default class extends Service<Env> {
   }
 
   /**
-   * Universal AI call handler - Cerebras with automatic Raindrop AI fallback
+   * Cerebras AI call handler - fast inference only, no fallbacks
    * Non-streaming only for maximum compatibility
    */
   private async callAI(config: {
@@ -134,79 +125,53 @@ export default class extends Service<Env> {
     temperature: number;
     maxTokens: number;
     responseFormat?: { type: 'json_object' };
+    timeout?: number;
   }): Promise<any> {
-    // 🔍 FORENSIC DEBUG: Log the actual value and type
-    console.log('🔍 CEREBRAS DEBUG:', {
-      USE_CEREBRAS_RAW: this.env.USE_CEREBRAS,
-      USE_CEREBRAS_TYPE: typeof this.env.USE_CEREBRAS,
-      USE_CEREBRAS_STRICT_EQUAL: this.env.USE_CEREBRAS === 'true',
-      USE_CEREBRAS_LOOSE_EQUAL: this.env.USE_CEREBRAS == 'true',
-      CEREBRAS_API_KEY_EXISTS: !!this.env.CEREBRAS_API_KEY,
-      CEREBRAS_API_KEY_LENGTH: this.env.CEREBRAS_API_KEY?.length || 0
-    });
-    
-    const useCerebras = this.env.USE_CEREBRAS === 'true';
-    const modelName = config.model === 'decision' 
-      ? this.env.CEREBRAS_DECISION_MODEL 
+    const modelName = config.model === 'decision'
+      ? this.env.CEREBRAS_DECISION_MODEL
       : this.env.CEREBRAS_RESPONSE_MODEL;
 
-    if (useCerebras) {
-      try {
-        const startTime = Date.now();
-        this.env.logger.info('🚀 Using Cerebras API', {
-          model: modelName,
-          messageCount: config.messages.length
-        });
-
-        const cerebras = new CerebrasClient(this.env.CEREBRAS_API_KEY);
-        const response = await cerebras.chatCompletion({
-          model: modelName,
-          messages: config.messages,
-          temperature: config.temperature,
-          max_tokens: config.maxTokens,
-          response_format: config.responseFormat,
-        });
-
-        const duration = Date.now() - startTime;
-        this.env.logger.info('✅ Cerebras call completed', {
-          model: modelName,
-          tokensUsed: response.usage?.total_tokens,
-          latency: duration,
-          tokensPerSecond: response.usage?.completion_tokens 
-            ? Math.round(response.usage.completion_tokens / (duration / 1000)) 
-            : 0
-        });
-
-        return { choices: response.choices };
-      } catch (cerebrasError) {
-        this.env.logger.error('❌ Cerebras failed, falling back to Raindrop AI', {
-          error: cerebrasError instanceof Error ? cerebrasError.message : String(cerebrasError),
-          model: modelName
-        });
-        // Fall through to Raindrop AI fallback
-      }
-    } else {
-      this.env.logger.info('ℹ️ Using Raindrop AI (Cerebras disabled)', {
-        reason: 'Feature flag USE_CEREBRAS=false'
-      });
-    }
-
-    // Fallback to Raindrop AI
     const startTime = Date.now();
-    const response = await this.env.AI.run('llama-3.1-70b-instruct', {
-      model: 'llama-3.1-70b-instruct',
-      messages: config.messages,
-      temperature: config.temperature,
-      max_tokens: config.maxTokens,
-      response_format: config.responseFormat,
+    this.env.logger.info('🚀 Using Cerebras API (no fallbacks)', {
+      model: modelName,
+      messageCount: config.messages.length
     });
-    
-    const duration = Date.now() - startTime;
-    this.env.logger.info('✅ Raindrop AI call completed', {
-      latency: duration
-    });
-    
-    return response;
+
+    const cerebras = new CerebrasClient(this.env.CEREBRAS_API_KEY);
+
+    try {
+      const response = await cerebras.chatCompletion({
+        model: modelName,
+        messages: config.messages,
+        temperature: config.temperature,
+        max_tokens: config.maxTokens,
+        response_format: config.responseFormat,
+        timeout: config.timeout || 120000, // 120s default timeout
+      });
+
+      const duration = Date.now() - startTime;
+      this.env.logger.info('✅ Cerebras call completed', {
+        model: modelName,
+        tokensUsed: response.usage?.total_tokens,
+        latency: duration,
+        tokensPerSecond: response.usage?.completion_tokens
+          ? Math.round(response.usage.completion_tokens / (duration / 1000))
+          : 0
+      });
+
+      return { choices: response.choices };
+    } catch (cerebrasError) {
+      const duration = Date.now() - startTime;
+      this.env.logger.error('❌ Cerebras API call failed', {
+        error: cerebrasError instanceof Error ? cerebrasError.message : String(cerebrasError),
+        model: modelName,
+        duration,
+        isTimeout: cerebrasError instanceof Error && cerebrasError.message.includes('timeout')
+      });
+
+      // No fallback - throw the error
+      throw new Error(`Cerebras API failed: ${cerebrasError instanceof Error ? cerebrasError.message : String(cerebrasError)}`);
+    }
   }
 
   async fetch(_request: Request): Promise<Response> {
@@ -982,358 +947,6 @@ User: "thank you"
   }
 
   /**
-   * Streaming chat endpoint using Server-Sent Events
-   * Returns a ReadableStream that emits chunks as they're generated
-   */
-  async streamChat(workspaceId: string, userId: string, request: ChatRequest): Promise<ReadableStream> {
-    this.env.logger.info('🚨 streamChat METHOD CALLED', {
-      workspaceId,
-      userId,
-      message: request.message.substring(0, 100),
-      hasSessionId: !!request.sessionId
-    });
-    
-    const db = this.getDb();
-
-    // Verify workspace access
-    const membership = await db
-      .selectFrom('workspace_members')
-      .select('role')
-      .where('workspace_id', '=', workspaceId)
-      .where('user_id', '=', userId)
-      .executeTakeFirst();
-
-    if (!membership) {
-      throw new Error('Access denied: You are not a member of this workspace');
-    }
-
-    // Get or create session (reuse logic from chat method)
-    let session;
-    let memorySessionId: string;
-
-    if (request.sessionId) {
-      session = await db
-        .selectFrom('conversation_sessions')
-        .selectAll()
-        .where('id', '=', request.sessionId)
-        .where('workspace_id', '=', workspaceId)
-        .where('user_id', '=', userId)
-        .executeTakeFirst();
-
-      if (!session) {
-        throw new Error('Session not found');
-      }
-
-      memorySessionId = session.memory_session_id;
-    } else {
-      const sessionId = `conv_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      const now = Date.now();
-
-      const { sessionId: smartMemorySessionId } = await this.env.ASSISTANT_MEMORY.startWorkingMemorySession();
-      memorySessionId = smartMemorySessionId;
-
-      await db
-        .insertInto('conversation_sessions')
-        .values({
-          id: sessionId,
-          workspace_id: workspaceId,
-          user_id: userId,
-          memory_session_id: memorySessionId,
-          started_at: now,
-          last_activity_at: now,
-          message_count: 0,
-        })
-        .execute();
-
-      session = {
-        id: sessionId,
-        workspace_id: workspaceId,
-        user_id: userId,
-        memory_session_id: memorySessionId,
-        started_at: now,
-        last_activity_at: now,
-        message_count: 0,
-      };
-    }
-
-    // Store user message
-    const userMsgId = `msg_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    await db
-      .insertInto('conversation_messages')
-      .values({
-        id: userMsgId,
-        session_id: session.id,
-        role: 'user',
-        content: request.message,
-        created_at: Date.now(),
-      })
-      .execute();
-
-    // Get workspace context
-    const workspaceContext = await this.getWorkspaceContext(workspaceId);
-
-    // Build messages
-    const workingMemory = await this.env.ASSISTANT_MEMORY.getWorkingMemorySession(memorySessionId);
-    const conversationHistory = await workingMemory.getMemory({
-      timeline: 'conversation',
-      nMostRecent: 10,
-    });
-
-    const messages: ChatMessage[] = [
-      { role: 'system', content: 'You are a helpful AI compliance assistant for AuditGuardX.' },
-      { role: 'system', content: `Context:\n${workspaceContext}` },
-    ];
-
-    if (conversationHistory) {
-      for (const entry of conversationHistory) {
-        messages.push({
-          role: entry.agent === 'user' ? 'user' : 'assistant',
-          content: entry.content,
-        });
-      }
-    }
-
-    messages.push({ role: 'user', content: request.message });
-
-    const self = this;
-
-    // Create a ReadableStream for Server-Sent Events
-    // Variables to capture for post-processing
-    let capturedUserMessage = request.message;
-    let capturedToolsUsed: string[] = [];
-    let capturedToolResults: any[] = [];
-    let capturedWorkspaceContext = workspaceContext;
-
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          // Send session ID first
-          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'session', sessionId: session.id })}\n\n`));
-
-          // 🚀 TWO-STAGE PIPELINE: First decide on tools, then execute + generate response
-          
-          // STAGE 1: Decision Phase - What tools should we use?
-          self.env.logger.info('🎯 STAGE 1: Analyzing user request for tool needs');
-          
-          const decisionPrompt = {
-            role: 'system',
-            content: `You are an AI decision maker for a compliance assistant. Analyze the user's request and respond ONLY with a JSON object indicating what tools to use WITH their arguments.
-
-Available tools:
-- get_compliance_status: For questions about scores, status, overall compliance (no args needed)
-- search_documents: For finding specific documents or searching by topic
-  Args: { "query": "search terms" }
-- get_compliance_issues: For questions about problems, gaps, or specific issues (no args needed)
-- search_knowledge: **USE THIS FOR ANY QUESTION ABOUT:**
-  * Compliance regulations (GDPR, SOC2, HIPAA, ISO27001, NIST CSF, PCI DSS)
-  * Legal requirements, notification timelines, breach procedures
-  * Best practices, checklists, implementation guides
-  * "What are the requirements for...", "How do I...", "What does GDPR say about..."
-  Args: { "query": "user's exact question", "framework": "gdpr|soc2|hipaa|iso27001|nist_csf|pci_dss|all" }
-  
-IMPORTANT: Questions about compliance frameworks MUST use search_knowledge, NOT your training data!
-
-Respond with this exact JSON structure:
-{
-  "needsTools": true/false,
-  "toolCalls": [{ "name": "tool_name", "arguments": { "arg": "value" } }],
-  "reasoning": "Why these tools are needed",
-  "userFacingMessage": "Brief message to show user while processing"
-}`
-          };
-          
-          let decision: any = { needsTools: false, toolCalls: [], reasoning: '', userFacingMessage: '' };
-          
-          try {
-            const decisionResponse = await self.callAI({
-              model: 'decision',
-              messages: [
-                decisionPrompt,
-                ...messages // FIXED: Use full conversation history from SmartMemory
-              ] as any,
-              responseFormat: { type: 'json_object' },
-              temperature: 0.3,
-              maxTokens: 500,
-            });
-            
-            decision = JSON.parse(decisionResponse.choices[0].message.content);
-            
-            self.env.logger.info('🎯 STAGE 1 DECISION:', {
-              needsTools: decision.needsTools,
-              toolCalls: decision.toolCalls?.map((tc: any) => tc.name),
-              reasoning: decision.reasoning
-            });
-          } catch (decisionError: any) {
-            self.env.logger.error('Stage 1 decision failed, continuing without tools', {
-              error: decisionError?.message || String(decisionError)
-            });
-          }
-
-          // STAGE 2: Execute tools if needed
-          let toolResultMessages: any[] = [];
-          if (decision.needsTools && decision.toolCalls && decision.toolCalls.length > 0) {
-            self.env.logger.info('🛠️ STAGE 2: Executing tools', {
-              toolCount: decision.toolCalls.length,
-              tools: decision.toolCalls.map((tc: any) => tc.name)
-            });
-            
-            // Send user-facing message while tools are running
-            if (decision.userFacingMessage) {
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'chunk', content: decision.userFacingMessage + '\n\n' })}\n\n`));
-            }
-            
-            // Convert decision tool calls to execution format
-            const toolCalls = decision.toolCalls.map((tc: any, index: number) => ({
-              id: `call_${Date.now()}_${index}`,
-              type: 'function',
-              function: {
-                name: tc.name,
-                arguments: JSON.stringify(tc.arguments || {})
-              }
-            }));
-            
-            // Execute the tools
-            const toolResults = await self.executeTools(toolCalls, workspaceId, userId);
-            toolResultMessages = toolResults.messages;
-            capturedToolsUsed = decision.toolCalls.map((tc: any) => tc.name);
-            capturedToolResults = toolResults.rawData;
-            
-            self.env.logger.info('🛠️ Tools executed', {
-              toolCount: toolCalls.length,
-              resultsCount: toolResults.rawData.length
-            });
-          }
-
-          // STAGE 3: Generate final AI response with streaming
-          self.env.logger.info('🤖 STAGE 3: Generating final response with streaming');
-          
-          // Build final messages array with tool results
-          const finalMessages = decision.needsTools && toolResultMessages.length > 0
-            ? [...messages, ...toolResultMessages, { // FIXED: Use full conversation history
-                role: 'user', 
-                content: 'Based on the tool results above, provide a comprehensive, helpful answer to my original question.' 
-              }]
-            : messages; // FIXED: Use full conversation history
-
-          // Use Raindrop AI streaming (Cerebras doesn't support streaming in simplified mode)
-          try {
-            const response = await self.env.AI.run('llama-3.1-70b-instruct', {
-              model: 'llama-3.1-70b-instruct',
-              messages: finalMessages as any,
-              temperature: 0.7,
-              max_tokens: 2000,
-              stream: true,
-            });
-
-            let fullMessage = '';
-
-            // Stream chunks from Raindrop AI
-            for await (const chunk of response as any) {
-              if (chunk.response) {
-                fullMessage += chunk.response;
-                controller.enqueue(
-                  new TextEncoder().encode(
-                    `data: ${JSON.stringify({ type: 'chunk', content: chunk.response })}\n\n`
-                  )
-                );
-              }
-            }
-
-            self.env.logger.info('🤖 Streaming response completed (Raindrop AI)', {
-              model: 'llama-3.1-70b-instruct',
-              totalLength: fullMessage.length,
-              toolsUsed: capturedToolsUsed.length
-            });
-
-            // Store complete message
-            const assistantMsgId = `msg_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-            await db
-              .insertInto('conversation_messages')
-              .values({
-                id: assistantMsgId,
-                session_id: session.id,
-                role: 'assistant',
-                content: fullMessage,
-                created_at: Date.now(),
-              })
-              .execute();
-
-            // Track usage for assistant message (streaming)
-            try {
-              await self.env.USAGE_SERVICE.trackUsage({
-                workspaceId,
-                resourceType: 'assistant_message',
-                resourceId: assistantMsgId,
-                userId,
-                metaInfo: {
-                  sessionId: session.id,
-                  messageLength: fullMessage.length,
-                  streaming: true,
-                  toolsUsed: capturedToolsUsed.length > 0,
-                },
-              });
-              self.env.logger.info('✅ Streaming assistant message usage tracked', { 
-                workspaceId, 
-                messageId: assistantMsgId 
-              });
-            } catch (error) {
-              self.env.logger.error(`Failed to track streaming assistant message usage: ${error instanceof Error ? error.message : 'Unknown'}`);
-            }
-
-            // Store in SmartMemory
-            await workingMemory.putMemory({
-              content: fullMessage,
-              timeline: 'conversation',
-              key: 'assistant',
-              agent: 'assistant',
-            });
-
-            // Update session
-            await db
-              .updateTable('conversation_sessions')
-              .set({
-                last_activity_at: Date.now(),
-                message_count: session.message_count + 2,
-              })
-              .where('id', '=', session.id)
-              .execute();
-
-            // Post-process: Generate suggestions and actions using AI
-            const postProcessing = await self.postProcessResponse({
-              userMessage: request.message,
-              assistantResponse: fullMessage,
-              toolsUsed: capturedToolsUsed,
-              toolResults: capturedToolResults,
-              workspaceId: workspaceId,
-              workspaceContext: capturedWorkspaceContext
-            });
-
-            // Send completion event with post-processed suggestions and actions
-            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ 
-              type: 'done', 
-              suggestions: postProcessing.suggestions,
-              actions: postProcessing.actions
-            })}\n\n`));
-
-          } catch (error) {
-            self.env.logger.error(`Streaming AI error: ${error instanceof Error ? error.message : 'Unknown'}`);
-            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ 
-              type: 'error', 
-              message: 'AI generation failed' 
-            })}\n\n`));
-          }
-
-          controller.close();
-        } catch (error) {
-          controller.error(error);
-        }
-      },
-    });
-
-    return stream;
-  }
-
-  /**
    * Generate a conversation title from the first user message
    * Extracts the main topic/question and truncates to a reasonable length
    */
@@ -1390,29 +1003,11 @@ Respond with this exact JSON structure:
       .where('id', '=', workspaceId)
       .executeTakeFirst();
 
-    // Get latest compliance score
-    const latestScore = await db
-      .selectFrom('workspace_scores')
-      .selectAll()
-      .where('workspace_id', '=', workspaceId)
-      .orderBy('calculated_at', 'desc')
-      .limit(1)
-      .executeTakeFirst();
-
     // Get document count
     const docCount = await db
       .selectFrom('documents')
       .select(({ fn }) => fn.count<number>('id').as('count'))
       .where('workspace_id', '=', workspaceId)
-      .executeTakeFirst();
-
-    // Get open issues count
-    const openIssuesCount = await db
-      .selectFrom('compliance_issues')
-      .innerJoin('compliance_checks', 'compliance_issues.check_id', 'compliance_checks.id')
-      .select(({ fn }) => fn.count<number>('compliance_issues.id').as('count'))
-      .where('compliance_checks.workspace_id', '=', workspaceId)
-      .where('compliance_issues.status', '=', 'open')
       .executeTakeFirst();
 
     let context = `Workspace: ${workspace?.name || 'Unknown'}\n`;
@@ -1430,643 +1025,10 @@ Respond with this exact JSON structure:
     return context;
   }
 
-  private async generateSuggestions(
-    userMessage: string, 
-    assistantResponse: string,
-    workspaceContext: string
-  ): Promise<string[]> {
-    // Generate AI-powered suggestions based on the conversation context
-    // This ensures NO heuristics or fallbacks - genuine AI reasoning only
-    
-    try {
-      const suggestionPrompt = {
-        role: 'system',
-        content: `You are a helpful compliance assistant. Based on the conversation context, suggest 2-3 relevant follow-up questions the user might want to ask.
-
-Rules:
-1. Suggestions must be natural, conversational questions
-2. Base suggestions on the actual conversation and workspace data
-3. Make suggestions actionable and specific
-4. Return ONLY a JSON array of strings, nothing else
-
-Example output:
-["Show me detailed breakdown of my compliance issues", "How can I improve my compliance score?"]
-
-Current conversation:
-User: ${userMessage}
-Assistant: ${assistantResponse}
-
-Workspace context: ${workspaceContext}`
-      };
-
-      const response = await this.env.AI.run('llama-3.1-70b-instruct', {
-        model: 'llama-3.1-70b-instruct',
-        messages: [suggestionPrompt] as any,
-        response_format: { type: 'json_object' },
-        temperature: 0.5,
-        max_tokens: 200,
-      });
-
-      const result = response.choices[0].message.content;
-      const parsed = JSON.parse(result);
-      
-      // Handle both array format and object with array property
-      const suggestions = Array.isArray(parsed) ? parsed : (parsed.suggestions || []);
-      
-      return suggestions.slice(0, 3); // Limit to 3 suggestions
-    } catch (error) {
-      this.env.logger.error('Failed to generate AI suggestions', {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      
-      // Return empty array instead of fallback suggestions
-      // This ensures we NEVER use heuristics
-      return [];
-    }
-  }
-
   // ============================================================================
   // AI Tool Definitions and Execution
   // ============================================================================
 
-  private getTools(): Tool[] {
-    return [
-      {
-        type: 'function',
-        function: {
-          name: 'get_compliance_status',
-          description: 'Get current compliance status for the workspace including scores, issues, and framework coverage',
-          parameters: {
-            type: 'object',
-            properties: {
-              framework: {
-                type: 'string',
-                description: 'Optional: specific framework to check (gdpr, soc2, hipaa, iso27001)',
-              },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_workspace_compliance_overview',
-          description: 'Get comprehensive workspace compliance overview with scores, issues breakdown, optional framework details and trends',
-          parameters: {
-            type: 'object',
-            properties: {
-              includeFrameworkBreakdown: {
-                type: 'boolean',
-                description: 'Include per-framework score breakdown',
-              },
-              includeTrends: {
-                type: 'boolean',
-                description: 'Include 30-day compliance trend data',
-              },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_framework_compliance_details',
-          description: 'Get detailed compliance information for a specific framework including documents and issues',
-          parameters: {
-            type: 'object',
-            properties: {
-              framework: {
-                type: 'string',
-                enum: ['gdpr', 'soc2', 'hipaa', 'iso27001', 'nist_csf', 'pci_dss'],
-                description: 'The compliance framework to analyze',
-              },
-              includeDocuments: {
-                type: 'boolean',
-                description: 'Include document scores for this framework',
-              },
-              includeIssues: {
-                type: 'boolean',
-                description: 'Include issues related to this framework',
-              },
-            },
-            required: ['framework'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_compliance_trends',
-          description: 'Get historical compliance score trends with analysis',
-          parameters: {
-            type: 'object',
-            properties: {
-              framework: {
-                type: 'string',
-                description: 'Optional framework filter (gdpr, soc2, hipaa, etc.)',
-              },
-              startDate: {
-                type: 'number',
-                description: 'Start timestamp (ms)',
-              },
-              endDate: {
-                type: 'number',
-                description: 'End timestamp (ms)',
-              },
-              granularity: {
-                type: 'string',
-                enum: ['daily', 'weekly', 'monthly'],
-                description: 'Data point granularity',
-              },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_issues_with_advanced_filters',
-          description: 'Search and filter compliance issues with multiple criteria including framework, severity, status, priority, assignments, and dates',
-          parameters: {
-            type: 'object',
-            properties: {
-              framework: {
-                type: 'string',
-                description: 'Filter by framework (gdpr, soc2, hipaa, etc.)',
-              },
-              severity: {
-                type: 'array',
-                items: { type: 'string', enum: ['critical', 'high', 'medium', 'low', 'info'] },
-                description: 'Filter by severity levels',
-              },
-              status: {
-                type: 'array',
-                items: { type: 'string', enum: ['open', 'in_progress', 'resolved', 'dismissed'] },
-                description: 'Filter by status',
-              },
-              priorityLevel: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Filter by priority (P1, P2, P3, P4)',
-              },
-              assignedTo: {
-                type: 'string',
-                description: 'Filter by assigned user ID',
-              },
-              unassignedOnly: {
-                type: 'boolean',
-                description: 'Show only unassigned issues',
-              },
-              search: {
-                type: 'string',
-                description: 'Search in title, description, category',
-              },
-              limit: {
-                type: 'number',
-                description: 'Results per page (default 20)',
-              },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_issue_full_details',
-          description: 'Get complete issue information including history, comments, and LLM analysis',
-          parameters: {
-            type: 'object',
-            properties: {
-              issueId: {
-                type: 'string',
-                description: 'The issue ID',
-              },
-              includeHistory: {
-                type: 'boolean',
-                description: 'Include status change history',
-              },
-              includeComments: {
-                type: 'boolean',
-                description: 'Include all comments',
-              },
-              includeLLMAnalysis: {
-                type: 'boolean',
-                description: 'Include LLM-generated analysis',
-              },
-            },
-            required: ['issueId'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_issue_assignments',
-          description: 'Get issue assignment information and team workload statistics',
-          parameters: {
-            type: 'object',
-            properties: {
-              userId: {
-                type: 'string',
-                description: 'Optional: filter by assigned user ID',
-              },
-              includeWorkloadStats: {
-                type: 'boolean',
-                description: 'Include team workload statistics',
-              },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'search_documents',
-          description: 'Search for documents using semantic search in the workspace',
-          parameters: {
-            type: 'object',
-            properties: {
-              query: {
-                type: 'string',
-                description: 'The search query to find relevant documents',
-              },
-              limit: {
-                type: 'number',
-                description: 'Maximum number of results to return (default 10)',
-              },
-            },
-            required: ['query'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_compliance_issues',
-          description: 'Get list of compliance issues, optionally filtered by severity or framework',
-          parameters: {
-            type: 'object',
-            properties: {
-              severity: {
-                type: 'string',
-                description: 'Filter by severity: critical, high, medium, or low',
-              },
-              framework: {
-                type: 'string',
-                description: 'Filter by framework: gdpr, soc2, hipaa, iso27001',
-              },
-              limit: {
-                type: 'number',
-                description: 'Maximum number of issues to return (default 20)',
-              },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_document_info',
-          description: 'Get detailed information about a specific document',
-          parameters: {
-            type: 'object',
-            properties: {
-              documentId: {
-                type: 'string',
-                description: 'The document ID to retrieve information for',
-              },
-            },
-            required: ['documentId'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'search_knowledge',
-          description: 'Search the compliance knowledge base for regulations, requirements, and best practices. Use this for questions about specific frameworks (GDPR, SOC2, HIPAA, ISO27001, etc.)',
-          parameters: {
-            type: 'object',
-            properties: {
-              query: {
-                type: 'string',
-                description: 'Search query (e.g., "GDPR data retention requirements", "SOC2 access control best practices")',
-              },
-              framework: {
-                type: 'string',
-                enum: ['gdpr', 'soc2', 'hipaa', 'iso27001', 'nist_csf', 'pci_dss', 'all'],
-                description: 'Specific framework to search, or "all" for all frameworks',
-              },
-            },
-            required: ['query'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'search_documents_semantic',
-          description: 'AI-powered semantic document search using vector embeddings for intelligent document discovery. Use this for natural language queries like "find privacy policies" or "documents about data retention", OR when you need to find a document by filename to get its ID for other tools. Returns document IDs, filenames, and metadata.',
-          parameters: {
-            type: 'object',
-            properties: {
-              query: {
-                type: 'string',
-                description: 'Natural language search query or document filename (e.g., "Social_Media_Policy.pdf")',
-              },
-              framework: {
-                type: 'string',
-                description: 'Optional framework filter (gdpr, soc2, etc.)',
-              },
-              documentTypes: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Optional document types to filter (pdf, docx, etc.)',
-              },
-              topK: {
-                type: 'number',
-                description: 'Number of results to return (default 10)',
-              },
-            },
-            required: ['query'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_document_compliance_analysis',
-          description: 'ANALYZE A DOCUMENT by name or ID. Use this when user says "analyze document X" or "analyze X.pdf" or asks about compliance analysis of a file. Pass the filename or ID exactly as user provides it.',
-          parameters: {
-            type: 'object',
-            properties: {
-              documentId: {
-                type: 'string',
-                description: 'Document ID or filename - pass EXACTLY what user said (e.g. "Social_Media_Policy.pdf" or "doc_123"). Tool handles both.',
-              },
-              frameworks: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Optional frameworks to include (gdpr, soc2, etc.)',
-              },
-            },
-            required: ['documentId'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_document_processing_status',
-          description: 'Get document processing pipeline status including progress, chunking, embeddings, and estimated completion time. IMPORTANT: This tool requires a document ID. If the user provides a document name, you MUST first use search_documents_semantic to find the document and get its ID.',
-          parameters: {
-            type: 'object',
-            properties: {
-              documentId: {
-                type: 'string',
-                description: 'The document ID (NOT filename). Use search_documents_semantic first if you only have a filename.',
-              },
-            },
-            required: ['documentId'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'query_document_content',
-          description: 'Ask questions about document content using RAG (Retrieval-Augmented Generation). Use this for specific questions like "What does this document say about cookies?" or "Summarize the data retention policy". IMPORTANT: This tool requires a document ID. If the user provides a document name, you MUST first use search_documents_semantic to find the document and get its ID.',
-          parameters: {
-            type: 'object',
-            properties: {
-              documentId: {
-                type: 'string',
-                description: 'The document ID (NOT filename). Use search_documents_semantic first if you only have a filename.',
-              },
-              question: {
-                type: 'string',
-                description: 'The specific question to ask about the document',
-              },
-              includeContext: {
-                type: 'boolean',
-                description: 'Include full context chunks in response (default false)',
-              },
-            },
-            required: ['documentId', 'question'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_workspace_members_detailed',
-          description: 'Get detailed information about workspace members including roles, join dates, and optional activity statistics',
-          parameters: {
-            type: 'object',
-            properties: {
-              includeActivity: {
-                type: 'boolean',
-                description: 'Include activity stats (issues assigned, documents uploaded) for each member',
-              },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_workspace_activity_feed',
-          description: 'Get recent workspace activity feed with events like document uploads, issue creation/resolution, member additions',
-          parameters: {
-            type: 'object',
-            properties: {
-              activityTypes: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Filter by activity types: document_uploaded, issue_created, issue_resolved, member_added',
-              },
-              filterUserId: {
-                type: 'string',
-                description: 'Optional: filter activities by specific user ID',
-              },
-              limit: {
-                type: 'number',
-                description: 'Maximum number of activities to return (default 50)',
-              },
-              since: {
-                type: 'number',
-                description: 'Optional: return activities since this Unix timestamp',
-              },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_workspace_usage_stats',
-          description: 'Get current workspace usage statistics compared to plan limits (documents, compliance checks, assistant messages, storage)',
-          parameters: {
-            type: 'object',
-            properties: {
-              includeSubscriptionInfo: {
-                type: 'boolean',
-                description: 'Include subscription plan details and billing information',
-              },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'generate_compliance_report',
-          description: 'Generate comprehensive compliance report with framework scores, issue analysis, executive summary, and action items',
-          parameters: {
-            type: 'object',
-            properties: {
-              frameworks: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Optional: specific frameworks to include (gdpr, soc2, etc.)',
-              },
-              dateRange: {
-                type: 'object',
-                properties: {
-                  start: { type: 'number', description: 'Start timestamp' },
-                  end: { type: 'number', description: 'End timestamp' },
-                },
-                description: 'Optional: date range for report data',
-              },
-              includeRecommendations: {
-                type: 'boolean',
-                description: 'Include AI-generated recommendations (default true)',
-              },
-              format: {
-                type: 'string',
-                enum: ['summary', 'detailed'],
-                description: 'Report detail level (default: detailed)',
-              },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_saved_reports',
-          description: 'Get list of previously generated or saved compliance reports',
-          parameters: {
-            type: 'object',
-            properties: {
-              limit: {
-                type: 'number',
-                description: 'Maximum number of reports to return (default 20)',
-              },
-              offset: {
-                type: 'number',
-                description: 'Pagination offset (default 0)',
-              },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_analytics_dashboard_data',
-          description: 'Get analytics dashboard data for various metrics (compliance trends, issue velocity, team performance, document stats)',
-          parameters: {
-            type: 'object',
-            properties: {
-              metrics: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Metrics to include: compliance_trends, issue_velocity, team_performance, document_stats',
-              },
-              dateRange: {
-                type: 'object',
-                properties: {
-                  start: { type: 'number', description: 'Start timestamp' },
-                  end: { type: 'number', description: 'End timestamp' },
-                },
-                description: 'Optional: date range for analytics data',
-              },
-            },
-            required: ['metrics'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_proactive_notifications',
-          description: 'Get proactive intelligence notifications (upcoming deadlines, compliance drift, new regulations)',
-          parameters: {
-            type: 'object',
-            properties: {
-              types: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Filter by types: upcoming_deadline, compliance_drift, new_regulation, recommendation',
-              },
-              severity: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Filter by severity: critical, high, medium, low',
-              },
-              unreadOnly: {
-                type: 'boolean',
-                description: 'Only return unread notifications (default false)',
-              },
-              limit: {
-                type: 'number',
-                description: 'Maximum notifications to return (default 50)',
-              },
-            },
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'analyze_compliance_gaps',
-          description: 'Analyze compliance gaps for a specific framework by comparing current state against requirements',
-          parameters: {
-            type: 'object',
-            properties: {
-              framework: {
-                type: 'string',
-                description: 'Framework to analyze (gdpr, soc2, hipaa, iso27001, etc.)',
-              },
-              comparisonLevel: {
-                type: 'string',
-                enum: ['basic', 'comprehensive'],
-                description: 'Analysis depth level (default: basic)',
-              },
-            },
-            required: ['framework'],
-          },
-        },
-      },
-      {
-        type: 'function',
-        function: {
-          name: 'get_risk_assessment',
-          description: 'Get comprehensive risk assessment with overall risk score, top risks, and optional 30-day trend forecasting',
-          parameters: {
-            type: 'object',
-            properties: {
-              includeForecasting: {
-                type: 'boolean',
-                description: 'Include 30-day risk trend forecasting (default false)',
-              },
-            },
-          },
-        },
-      },
-    ];
-  }
 
   private async executeTools(
     toolCalls: any[],
@@ -3322,42 +2284,6 @@ RULES:
     }
   }
 
-  /**
-   * Fallback text search when semantic search fails
-   */
-  private async fallbackTextSearch(
-    args: { query: string; framework?: string }
-  ): Promise<any> {
-    const db = this.getDb();
-    
-    let query = db
-      .selectFrom('knowledge_base')
-      .select(['id', 'title', 'content', 'category', 'framework', 'tags'])
-      .where('is_active', '=', 1);
-    
-    if (args.framework && args.framework !== 'all') {
-      query = query.where('framework', '=', args.framework as any);
-    }
-    
-    const allResults = await query.execute();
-    
-    const queryLower = args.query.toLowerCase();
-    const matchedResults = allResults.filter(r => {
-      const searchableText = `${r.title} ${r.content} ${r.tags || ''}`.toLowerCase();
-      return searchableText.includes(queryLower);
-    }).slice(0, 3);
-    
-    return {
-      source: 'knowledge_base_text_fallback',
-      count: matchedResults.length,
-      results: matchedResults.map(r => ({
-        title: r.title,
-        content: r.content,
-        framework: r.framework,
-        category: r.category
-      }))
-    };
-  }
 
   private async toolSearchKnowledge(
     args: { query: string; framework?: string }
@@ -3376,8 +2302,10 @@ RULES:
           dimensions: queryEmbedding.length 
         });
       } catch (embeddingError) {
-        this.env.logger.warn('⚠️ Embedding generation failed, falling back to text search');
-        return await this.fallbackTextSearch(args);
+        this.env.logger.error('❌ Embedding generation failed', {
+          error: embeddingError instanceof Error ? embeddingError.message : String(embeddingError)
+        });
+        throw new Error('Embedding generation failed - semantic search unavailable');
       }
       
       // Step 2: Search vector index for similar knowledge articles
@@ -3425,8 +2353,13 @@ RULES:
         });
         
         if (filteredMatches.length === 0) {
-          this.env.logger.warn('⚠️ No semantic matches found, trying text fallback');
-          return await this.fallbackTextSearch(args);
+          this.env.logger.warn('⚠️ No semantic matches found');
+          return {
+            source: 'knowledge_base_semantic',
+            count: 0,
+            results: [],
+            message: 'No relevant knowledge articles found for this query'
+          };
         }
         
         // Step 3: Retrieve full articles from database
@@ -3468,10 +2401,10 @@ RULES:
         };
         
       } catch (vectorError) {
-        this.env.logger.warn('⚠️ Vector search failed, falling back to text search', {
+        this.env.logger.error('❌ Vector search failed', {
           error: vectorError instanceof Error ? vectorError.message : String(vectorError)
         });
-        return await this.fallbackTextSearch(args);
+        throw new Error(`Vector search failed: ${vectorError instanceof Error ? vectorError.message : String(vectorError)}`);
       }
       
     } catch (error) {

@@ -3984,23 +3984,19 @@ export default class extends Service<Env> {
             });
           }
 
-          // Get ReadableStream from assistant service
-          const stream = await this.env.ASSISTANT_SERVICE.streamChat(workspaceId, user.userId, parseResult.data);
+          // Call assistant service (non-streaming, fast Cerebras)
+          const result = await this.env.ASSISTANT_SERVICE.chat(workspaceId, user.userId, parseResult.data);
 
-          // Track performance (fire and forget - streaming is long-running)
-          this.trackPerformance(operation, startTime, true, undefined, {
+          // Track performance
+          await this.trackPerformance(operation, startTime, true, undefined, {
             workspaceId,
-            sessionId: parseResult.data.sessionId || 'new',
-          }).catch(err => {
-            this.env.logger.error('Failed to track streaming performance', { error: err });
+            sessionId: result.sessionId,
           });
 
-          // Return SSE stream with proper headers
-          return new Response(stream, {
+          // Return JSON response
+          return new Response(JSON.stringify(result), {
             headers: {
-              'Content-Type': 'text/event-stream',
-              'Cache-Control': 'no-cache',
-              'Connection': 'keep-alive',
+              'Content-Type': 'application/json',
               ...corsHeaders,
             },
           });
