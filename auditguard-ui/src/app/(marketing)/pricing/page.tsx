@@ -2,6 +2,8 @@ import { PricingPreview } from '@/components/marketing/sections/PricingPreview';
 import { ComparisonTable } from '@/components/marketing/sections/ComparisonTable';
 import { ROICalculator } from '@/components/marketing/sections/ROICalculator';
 import { FAQAccordion } from '@/components/marketing/sections/FAQAccordion';
+import { SecondaryHero } from '@/components/marketing/heroes/SecondaryHero';
+import { innerPageHeroes } from '@/config/marketing';
 import { buildMarketingMetadata } from '@/lib/seo';
 
 export const metadata = buildMarketingMetadata({
@@ -11,18 +13,11 @@ export const metadata = buildMarketingMetadata({
 });
 
 export default function PricingPage() {
+  const hero = innerPageHeroes.pricing;
+
   return (
-    <div className="space-y-16 pt-28">
-      <section className="bg-white">
-        <div className="mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 lg:px-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Pricing</p>
-          <h1 className="mt-4 text-4xl font-bold text-gray-900 sm:text-5xl">Simple, transparent pricing</h1>
-          <p className="mt-4 text-base text-gray-600">
-            Choose the plan that matches your compliance runway. Upgrade, downgrade, or cancel anytime. Every plan includes a
-            14-day Professional trial.
-          </p>
-        </div>
-      </section>
+    <div className="space-y-16">
+      <SecondaryHero {...hero} />
 
       <PricingPreview />
 

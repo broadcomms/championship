@@ -8,6 +8,107 @@ export const heroContent = {
   trustBadge: '14-day Professional trial • No credit card required',
 };
 
+export const innerPageHeroes = {
+  features: {
+    eyebrow: 'Features',
+    title: 'One platform. Twelve flagship capabilities.',
+    description:
+      'Every control, workflow, and report draws from the same AI automation core—configure once, enforce everywhere across frameworks, teams, and auditors.',
+    note:
+      'Powered by Raindrop Smart Components, WorkOS SSO, Stripe billing, ElevenLabs voice, and Cerebras ultra-low latency inference.',
+    supporting: [
+      {
+        label: 'Unified control engine',
+        description: 'Map policies, evidence, and remediation steps across 20+ frameworks without duplicating work.',
+      },
+      {
+        label: 'Voice-first copilots',
+        description: 'ElevenLabs + Cerebras deliver sub-second answers for security, legal, and audit teams.',
+      },
+      {
+        label: 'Automation orchestration',
+        description: 'Raindrop Smart Components power approvals, alerts, and dashboards the moment you connect data.',
+      },
+      {
+        label: 'Enterprise trust',
+        description: 'WorkOS SSO, Stripe billing, audit trails, and Vultr infrastructure keep data hardened end-to-end.',
+      },
+    ],
+    metrics: [
+      { label: 'Frameworks automated', value: '20+', detail: 'Security, privacy, finance, resilience' },
+      { label: 'AI checks / minute', value: '450', detail: 'Document intelligence throughput' },
+      { label: 'Coverage accuracy', value: '98%', detail: 'Evidence + control mapping confidence' },
+      { label: 'Voice skills', value: '22', detail: 'Pre-trained compliance assistants' },
+    ],
+    callout: {
+      label: 'Live preview',
+      title: 'Watch flagship automations orchestrate controls in real time.',
+      description: 'See document analysis, remediation workflows, and voice guidance inside a single workspace.',
+      action: { label: 'Launch interactive demo', href: '/demo' },
+    },
+  },
+  pricing: {
+    eyebrow: 'Pricing',
+    title: 'Simple, transparent pricing.',
+    description:
+      'Choose the plan that matches your compliance runway. Upgrade, downgrade, or cancel anytime—every plan includes a 14-day Professional trial.',
+    note: 'Flat rates. No onboarding fees. Usage resets every billing cycle.',
+    supporting: [
+      {
+        label: 'Predictable runway',
+        description: 'Flat monthly plans sized for startups through global enterprises.',
+      },
+      {
+        label: 'Switch anytime',
+        description: 'Changes prorate instantly. Keep historical evidence even when downgrading.',
+      },
+      {
+        label: 'Enterprise-ready billing',
+        description: 'Stripe invoicing, procurement documents, and SOC 2 Type II reports on tap.',
+      },
+      {
+        label: 'Partner-friendly',
+        description: 'Channel discounts and audit firm enablement available on Business tiers.',
+      },
+    ],
+    metrics: [
+      { label: 'Starter', value: '$49', detail: 'Solo compliance leads' },
+      { label: 'Professional', value: '$149', detail: 'Scaling security teams' },
+      { label: 'Business', value: '$399', detail: 'Enterprises & partners' },
+      { label: 'Onboarding fees', value: '$0', detail: 'Guided migration included' },
+    ],
+    callout: {
+      label: 'Need custom volume?',
+      title: 'Request tailored pricing with dedicated Slack support.',
+      description: 'We design usage tiers for regulated industries, multi-entity rollouts, and partner programs.',
+      action: { label: 'Contact sales', href: '/company/contact' },
+    },
+  },
+  company: {
+    eyebrow: 'Company',
+    title: 'Designed with security leaders, auditors, and founders.',
+    description:
+      'We are a distributed team across North America and Europe focused on compressing compliance work from quarters to days without sacrificing trust.',
+    note: 'Headquartered in Austin • Remote-friendly • Backed by Raindrop Platform',
+    supporting: [
+      {
+        label: 'Leadership experience',
+        description: 'Ex-Big 4 auditors, WorkOS alumni, and AI researchers from Cerebras and ElevenLabs.',
+      },
+      {
+        label: 'Customer council',
+        description: 'Security, legal, and finance leaders meet monthly to steer the roadmap.',
+      },
+    ],
+    metrics: [
+      { label: 'Customers served', value: '3,000+', detail: 'Startups, scaleups, and enterprises' },
+      { label: 'Frameworks shipped', value: '20+', detail: 'Security, privacy, resilience' },
+      { label: 'Team members', value: '48', detail: 'Across 7 time zones' },
+      { label: 'Availability', value: '99.95%', detail: 'Global Vultr footprint' },
+    ],
+  },
+};
+
 export const customerLogos = [
   { name: 'Raindrop Platform', logo: '/images/logos/liquidmetal.avif', tagline: '' },
   { name: 'Cerebras Labs', logo: '/images/logos/cerebras.png', tagline: '' },
