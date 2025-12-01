@@ -553,7 +553,12 @@ CRITICAL INSTRUCTIONS:
    - "I'll search for those documents..." (while calling search_documents)
    - "Let me look that up in our knowledge base..." (while calling search_knowledge)
 
-3. ALWAYS call tools for data-driven questions. Don't make up answers.
+3. ALWAYS call tools for data-driven questions. NEVER make up answers or use your training knowledge for compliance data.
+
+4. STRICTLY use ONLY the data returned by tools:
+   - If a tool says "No checks found", tell the user exactly that
+   - DO NOT infer, estimate, or fabricate compliance scores or issues
+   - DO NOT provide framework-specific guidance unless you have actual data from the tool
 
 Context: ${workspaceContext}`
       };
@@ -571,19 +576,33 @@ Context: ${workspaceContext}`
         content: `You are an AI decision maker for a compliance assistant. Analyze the user's request and respond ONLY with a JSON object indicating what tools to use WITH their arguments.
 
 Available tools:
-- get_compliance_status: For questions about scores, status, overall compliance (no args needed)
-- search_documents: For finding specific documents or searching by topic
-  Args: { "query": "search terms" }
-- get_compliance_issues: For questions about problems, gaps, or specific issues (no args needed)
-- get_document_info: For details about a specific document (requires document ID)
-  Args: { "documentId": "doc_xxxxx" }
+- get_compliance_status: For questions about scores, status, overall compliance
+  Args: {} (no args needed)
+
+- search_documents: For finding/listing documents or searching by keyword
+  Args: { "query": "search terms" } or {} for all documents
+
+- get_document_info: For basic metadata about a specific document
+  Args: { "documentId": "doc_xxxxx or filename" }
+
+- get_document_compliance_analysis: **USE THIS when user asks to:**
+  * "Analyze this document"
+  * "Show me compliance results for [document name]"
+  * "What issues were found in [document]"
+  * "Check [document] for compliance"
+  Args: { "documentId": "doc_xxxxx or filename" }
+  IMPORTANT: This tool accepts BOTH document IDs and filenames!
+
+- get_compliance_issues: For listing all compliance issues/problems across workspace
+  Args: {} (no args needed)
+
 - search_knowledge: **USE THIS FOR ANY QUESTION ABOUT:**
   * Compliance regulations (GDPR, SOC2, HIPAA, ISO27001, NIST CSF, PCI DSS)
   * Legal requirements, notification timelines, breach procedures
   * Best practices, checklists, implementation guides
   * "What are the requirements for...", "How do I...", "What does GDPR say about..."
   Args: { "query": "user's exact question", "framework": "gdpr|soc2|hipaa|iso27001|nist_csf|pci_dss|all" }
-  
+
 IMPORTANT: Questions about compliance frameworks MUST use search_knowledge, NOT your training data!
 
 Respond with this exact JSON structure:
@@ -624,6 +643,19 @@ User: "Find documents about GDPR"
   ],
   "reasoning": "User wants to search for specific documents",
   "userFacingMessage": "Searching for GDPR-related documents..."
+}
+
+User: "Can you analyze the first document" OR "Analyze DataProtectionPolicy.pdf"
+{
+  "needsTools": true,
+  "toolCalls": [
+    {
+      "name": "get_document_compliance_analysis",
+      "arguments": { "documentId": "DataProtectionPolicy.pdf" }
+    }
+  ],
+  "reasoning": "User wants full compliance analysis results for a document",
+  "userFacingMessage": "Analyzing compliance results for that document..."
 }
 
 User: "What are GDPR data breach notification requirements?"
@@ -794,7 +826,16 @@ User: "thank you"
             ...toolResults.messages,
             {
               role: 'user',
-              content: 'Based on the tool results above, provide a comprehensive, helpful answer to my original question.'
+              content: `CRITICAL INSTRUCTION: Answer ONLY using the ACTUAL data from the tool results above.
+
+STRICT RULES:
+1. If a tool says "No [X] compliance checks have been run", tell the user EXACTLY that - do NOT make up compliance data
+2. DO NOT use your training knowledge to infer, estimate, or fabricate compliance scores or issues
+3. DO NOT provide general compliance guidance unless the tool returned actual data
+4. If the tool returned an error or no data, acknowledge that clearly
+5. Only discuss compliance scores, issues, and details that are EXPLICITLY in the tool results
+
+Provide a clear, accurate response based STRICTLY on the tool data provided above. Do not hallucinate or infer information.`
             }
           ] as any,
           temperature: 0.7,
@@ -1135,6 +1176,15 @@ User: "thank you"
             result = { error: `Unknown tool: ${toolCall.function.name}` };
         }
 
+        // Log tool result for debugging
+        this.env.logger.info('✅ Tool execution complete', {
+          toolName: toolCall.function.name,
+          toolId: toolCall.id,
+          resultSummary: JSON.stringify(result).substring(0, 500),
+          hasError: !!result.error,
+          hasMessage: !!result.message
+        });
+
         // Store raw data for post-processing
         rawData.push({
           tool: toolCall.function.name,
@@ -1440,15 +1490,45 @@ RULES:
   ): Promise<any> {
     try {
       const db = this.getDb();
-      
-      // For now, do a simple SQL search until we verify SmartBucket API
-      const documents = await db
-        .selectFrom('documents')
-        .select(['id', 'filename', 'title', 'description', 'category'])
-        .where('workspace_id', '=', workspaceId)
-        .where('processing_status', '=', 'completed')
-        .limit(args.limit || 10)
-        .execute();
+
+      this.env.logger.info('🔍 Document search tool called', {
+        workspaceId,
+        query: args.query,
+        limit: args.limit
+      });
+
+      let documents;
+
+      if (args.query && args.query.trim() !== '') {
+        // Search by query in filename, title, or description
+        const searchPattern = `%${args.query}%`;
+        documents = await db
+          .selectFrom('documents')
+          .select(['id', 'filename', 'title', 'description', 'category', 'processing_status'])
+          .where('workspace_id', '=', workspaceId)
+          .where((eb) =>
+            eb.or([
+              eb('filename', 'like', searchPattern),
+              eb('title', 'like', searchPattern),
+              eb('description', 'like', searchPattern)
+            ])
+          )
+          .limit(args.limit || 10)
+          .execute();
+      } else {
+        // No query - return all documents
+        documents = await db
+          .selectFrom('documents')
+          .select(['id', 'filename', 'title', 'description', 'category', 'processing_status'])
+          .where('workspace_id', '=', workspaceId)
+          .limit(args.limit || 10)
+          .execute();
+      }
+
+      this.env.logger.info('✅ Document search results', {
+        query: args.query,
+        resultsFound: documents.length
+      });
 
       return {
         results: documents.map((doc) => ({
@@ -1457,11 +1537,15 @@ RULES:
           title: doc.title,
           description: doc.description,
           category: doc.category,
+          status: doc.processing_status
         })),
         total: documents.length,
       };
     } catch (error) {
-      this.env.logger.error(`Document search failed: ${error instanceof Error ? error.message : 'Unknown'}`);
+      this.env.logger.error('❌ Document search failed', {
+        error: error instanceof Error ? error.message : String(error),
+        query: args.query
+      });
       return {
         error: 'Failed to search documents',
         results: [],
@@ -1759,80 +1843,167 @@ RULES:
     }
   ): Promise<any> {
     try {
+      const db = this.getDb();
       let documentId = args.documentId;
-      
-      // Check if documentId looks like a filename (contains file extension)
+
+      this.env.logger.info('📄 Get document compliance analysis tool called', {
+        workspaceId,
+        documentId,
+        frameworks: args.frameworks
+      });
+
+      // Check if documentId looks like a filename (contains file extension or no doc_ prefix)
       const fileExtensions = ['.pdf', '.docx', '.doc', '.txt', '.xlsx', '.xls', '.pptx', '.ppt', '.csv'];
-      const isFilename = fileExtensions.some(ext => documentId.toLowerCase().includes(ext));
-      
+      const isFilename = fileExtensions.some(ext => documentId.toLowerCase().includes(ext)) || !documentId.startsWith('doc_');
+
       if (isFilename) {
-        this.env.logger.info('Filename detected, performing automatic search', {
+        this.env.logger.info('🔍 Filename detected, searching database', {
           filename: documentId,
           workspaceId
         });
-        
+
         // Extract clean filename for search (remove path if present, KEEP extension)
         const cleanFilename = documentId.split('/').pop() || documentId;
-        
-        // Perform semantic search to find the document using FULL filename including extension
-        const searchResult = await this.env.DOCUMENT_SERVICE.searchDocumentsSemantic({
-          workspaceId,
-          userId,
-          query: cleanFilename, // Use full filename WITH extension
-          topK: 10 // Get more results to increase chances of finding exact match
-        });
-        
-        this.env.logger.info('Search completed', {
+        const searchPattern = `%${cleanFilename}%`;
+
+        // Search for document in database
+        const foundDocs = await db
+          .selectFrom('documents')
+          .select(['id', 'filename', 'title'])
+          .where('workspace_id', '=', workspaceId)
+          .where((eb) =>
+            eb.or([
+              eb('filename', 'like', searchPattern),
+              eb('title', 'like', searchPattern)
+            ])
+          )
+          .limit(5)
+          .execute();
+
+        this.env.logger.info('📊 Document search completed', {
           filename: cleanFilename,
-          resultsFound: searchResult?.documents?.length ?? 0
+          resultsFound: foundDocs.length,
+          foundDocs: foundDocs.map(d => ({ id: d.id, filename: d.filename, title: d.title }))
         });
-        
-        if (!searchResult.documents || searchResult.documents.length === 0) {
-          return { 
-            error: 'Document not found', 
-            details: `No documents found matching filename: ${cleanFilename}`,
-            suggestion: 'Try using a broader search term or check if the document has been uploaded'
+
+        if (foundDocs.length === 0) {
+          return {
+            error: 'Document not found',
+            details: `No documents found matching: ${cleanFilename}`,
+            suggestion: 'Check if the document has been uploaded and processed successfully'
           };
         }
-        
-        // Find exact or best filename match
-        let bestMatch = searchResult.documents[0];
-        for (const doc of searchResult.documents) {
+
+        // Find exact match or use first result
+        let bestMatch = foundDocs[0];
+        for (const doc of foundDocs) {
           if (doc.filename && doc.filename.toLowerCase() === cleanFilename.toLowerCase()) {
             bestMatch = doc;
-            this.env.logger.info('Exact filename match found!', { 
-              filename: cleanFilename,
-              documentId: doc.documentId
-            });
             break;
           }
         }
-        
-        documentId = bestMatch.documentId;
-        
-        this.env.logger.info('Document found via automatic search', {
+
+        documentId = bestMatch.id;
+
+        this.env.logger.info('✅ Document found', {
           originalInput: args.documentId,
           foundDocumentId: documentId,
-          filename: bestMatch.filename,
-          score: bestMatch.score
+          filename: bestMatch.filename
         });
       }
-      
-      // Proceed with analysis using resolved document ID
-      const result = await this.env.DOCUMENT_SERVICE.getDocumentComplianceAnalysis({
-        workspaceId,
-        userId,
+
+      // Get document info
+      const document = await db
+        .selectFrom('documents')
+        .selectAll()
+        .where('id', '=', documentId)
+        .where('workspace_id', '=', workspaceId)
+        .executeTakeFirst();
+
+      if (!document) {
+        return {
+          error: 'Document not found',
+          details: `Document ID ${documentId} not found in workspace`
+        };
+      }
+
+      // Get compliance checks for this document
+      let checksQuery = db
+        .selectFrom('compliance_checks')
+        .selectAll()
+        .where('document_id', '=', documentId)
+        .where('workspace_id', '=', workspaceId);
+
+      if (args.frameworks && args.frameworks.length > 0) {
+        checksQuery = checksQuery.where('framework', 'in', args.frameworks);
+      }
+
+      const checks = await checksQuery.execute();
+
+      this.env.logger.info('📋 Compliance checks found', {
         documentId,
-        frameworks: args.frameworks,
+        checksCount: checks.length,
+        frameworks: checks.map(c => c.framework)
       });
-      
-      return result;
+
+      // Get compliance issues for these checks
+      const checkIds = checks.map(c => c.id);
+      let issues: any[] = [];
+
+      if (checkIds.length > 0) {
+        issues = await db
+          .selectFrom('compliance_issues')
+          .selectAll()
+          .where('check_id', 'in', checkIds)
+          .execute();
+      }
+
+      this.env.logger.info('⚠️  Compliance issues found', {
+        documentId,
+        issuesCount: issues.length
+      });
+
+      return {
+        document: {
+          id: document.id,
+          filename: document.filename,
+          title: document.title,
+          description: document.description,
+          status: document.processing_status
+        },
+        compliance_checks: checks.map((check) => ({
+          id: check.id,
+          framework: check.framework,
+          status: check.status,
+          overall_score: check.overall_score,
+          issues_found: check.issues_found,
+          completed_at: check.completed_at
+        })),
+        compliance_issues: issues.map((issue) => ({
+          id: issue.id,
+          severity: issue.severity,
+          category: issue.category,
+          title: issue.title,
+          description: issue.description,
+          recommendation: issue.recommendation,
+          status: issue.status,
+          page_number: issue.page_number,
+          framework: checks.find(c => c.id === issue.check_id)?.framework
+        })),
+        total_checks: checks.length,
+        total_issues: issues.length
+      };
     } catch (error) {
-      this.env.logger.error('Tool execution failed', {
+      this.env.logger.error('❌ Get document compliance analysis failed', {
         tool: 'get_document_compliance_analysis',
-        error: error instanceof Error ? error.message : String(error)
+        documentId: args.documentId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
       });
-      return { error: 'Failed to get compliance analysis' };
+      return {
+        error: 'Failed to get compliance analysis',
+        details: error instanceof Error ? error.message : String(error)
+      };
     }
   }
 
