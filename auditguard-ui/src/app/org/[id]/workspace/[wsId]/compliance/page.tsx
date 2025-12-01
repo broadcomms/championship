@@ -176,6 +176,43 @@ export default function WorkspaceCompliancePage() {
     [orgId, router, wsId]
   );
 
+  const handleRetryCheck = useCallback(
+    async (check: ComplianceCheckListItem) => {
+      if (!wsId) {
+        return;
+      }
+
+      try {
+        // Start a new compliance check with the same parameters
+        const response = await api.post(
+          `/api/workspaces/${wsId}/documents/${check.documentId}/compliance`,
+          {
+            framework: check.framework,
+          }
+        );
+
+        if (response) {
+          // Refresh the checks list
+          await fetchChecks(true);
+          alert('Compliance check restarted successfully!');
+        }
+      } catch (retryError) {
+        console.error('Failed to retry compliance check:', retryError);
+        alert('Failed to restart compliance check. Please try again.');
+      }
+    },
+    [wsId, fetchChecks]
+  );
+
+  // Helper to check if a processing check is stale (stuck)
+  const isStaleCheck = useCallback((check: ComplianceCheckListItem): boolean => {
+    if (check.status !== 'processing' && check.status !== 'running') {
+      return false;
+    }
+    const tenMinutesAgo = Date.now() - 10 * 60 * 1000; // 10 minutes
+    return check.createdAt < tenMinutesAgo;
+  }, []);
+
   if (loading) {
     return (
       <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
@@ -371,10 +408,28 @@ export default function WorkspaceCompliancePage() {
                     </Button>
                   )}
 
-                  {check.status === 'processing' && (
-                    <div className="flex items-center gap-2 text-blue-600">
-                      <div className="animate-spin">⚙️</div>
-                      <span className="text-sm font-medium">Processing...</span>
+                  {check.status === 'failed' && (
+                    <Button variant="outline" onClick={() => handleRetryCheck(check)}>
+                      🔄 Retry Check
+                    </Button>
+                  )}
+
+                  {(check.status === 'processing' || check.status === 'running') && (
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 text-blue-600">
+                        <div className="animate-spin">⚙️</div>
+                        <span className="text-sm font-medium">Processing...</span>
+                      </div>
+                      {isStaleCheck(check) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRetryCheck(check)}
+                          className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                        >
+                          🔄 Retry (Stuck)
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>

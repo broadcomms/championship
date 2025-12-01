@@ -47,27 +47,48 @@ export class CerebrasClient {
     temperature?: number;
     max_tokens?: number;
     response_format?: { type: 'json_object' };
+    timeout?: number; // Timeout in milliseconds (default: 60000ms = 60s)
   }): Promise<CerebrasResponse> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: config.messages,
-        temperature: config.temperature ?? 0.7,
-        max_tokens: config.max_tokens ?? 1000,
-        ...(config.response_format && { response_format: config.response_format })
-      })
-    });
+    const timeoutMs = config.timeout ?? 60000; // Default 60 second timeout
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Cerebras API error: ${response.status} - ${error}`);
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: config.messages,
+          temperature: config.temperature ?? 0.7,
+          max_tokens: config.max_tokens ?? 1000,
+          ...(config.response_format && { response_format: config.response_format })
+        }),
+        signal: controller.signal // Add abort signal for timeout
+      });
+
+      clearTimeout(timeoutId); // Clear timeout if request completes
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Cerebras API error: ${response.status} - ${error}`);
+      }
+
+      return response.json() as Promise<CerebrasResponse>;
+    } catch (error) {
+      clearTimeout(timeoutId); // Always clear timeout
+
+      // Check if error is due to abort (timeout)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Cerebras API timeout after ${timeoutMs}ms`);
+      }
+
+      throw error; // Re-throw other errors
     }
-
-    return response.json() as Promise<CerebrasResponse>;
   }
 }

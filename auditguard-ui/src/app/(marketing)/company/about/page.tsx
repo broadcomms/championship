@@ -4,10 +4,10 @@ export const metadata = {
 };
 
 const stats = [
-  { value: '46', label: 'Enterprise Users', subtext: 'Modern teams in regulated industries' },
+  { value: '1K+', label: 'Enterprise Users', subtext: 'Modern teams in regulated industries' },
   { value: '10K+', label: 'Documents Managed', subtext: 'Continuously monitored for compliance' },
   { value: '99.9%', label: 'Platform Uptime', subtext: 'Trusted infrastructure and support' },
-  { value: '75%', label: 'Faster Audits', subtext: 'Automation-first workflows' },
+  { value: '78%', label: 'Faster Audits', subtext: 'Automation-first workflows' },
 ];
 
 const values = [

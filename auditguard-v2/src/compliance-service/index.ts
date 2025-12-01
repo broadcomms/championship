@@ -4,6 +4,7 @@ import { Kysely } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
 import { broadcastComplianceCheckUpdate, broadcastDashboardUpdate } from '../common/realtime-events';
+import { CerebrasClient } from '../common/cerebras-client';
 
 type ComplianceFramework =
   | 'GDPR'
@@ -38,8 +39,113 @@ interface ComplianceIssue {
 }
 
 export default class extends Service<Env> {
-  // PHASE 1.1.2: Framework rule cache to avoid repeated lookups
-  private frameworkRuleCache: Map<string, string[]> = new Map();
+
+  /**
+   * Universal AI call handler - Cerebras with automatic Raindrop AI fallback
+   * Ensures compliance checks are fast and reliable
+   * 
+   * @param config - AI call configuration
+   * @returns AI response with choices array
+   */
+  private async callAI(config: {
+    messages: Array<{
+      role: 'system' | 'user' | 'assistant';
+      content: string;
+    }>;
+    temperature: number;
+    maxTokens: number;
+    responseFormat?: { type: 'json_object' };
+    framework: string; // For logging context
+  }): Promise<any> {
+    // Check if Cerebras is enabled
+    const useCerebras = this.env.USE_CEREBRAS === 'true';
+    const modelName = 'llama-3.3-70b'; // Always use 70B for compliance (quality critical)
+
+    this.env.logger.info('🤖 AI call initiated', {
+      provider: useCerebras ? 'cerebras' : 'raindrop',
+      model: useCerebras ? modelName : 'llama-3.3-70b',
+      framework: config.framework,
+      messageCount: config.messages.length,
+      maxTokens: config.maxTokens,
+    });
+
+    if (useCerebras) {
+      try {
+        const startTime = Date.now();
+        this.env.logger.info('🚀 Calling Cerebras API', {
+          model: modelName,
+          framework: config.framework,
+        });
+
+        const cerebras = new CerebrasClient(this.env.CEREBRAS_API_KEY);
+
+        const response = await cerebras.chatCompletion({
+          model: modelName,
+          messages: config.messages,
+          temperature: config.temperature,
+          max_tokens: config.maxTokens,
+          response_format: config.responseFormat,
+          timeout: 120000, // 120 second timeout for compliance checks (important work)
+        });
+
+        const duration = Date.now() - startTime;
+        const tokensPerSecond = response.usage?.completion_tokens 
+          ? Math.round(response.usage.completion_tokens / (duration / 1000)) 
+          : 0;
+
+        this.env.logger.info('✅ Cerebras call completed', {
+          model: modelName,
+          framework: config.framework,
+          latency: duration,
+          promptTokens: response.usage?.prompt_tokens,
+          completionTokens: response.usage?.completion_tokens,
+          totalTokens: response.usage?.total_tokens,
+          tokensPerSecond,
+          cost: response.usage?.total_tokens 
+            ? (response.usage.total_tokens * 0.60 / 1000000).toFixed(6)
+            : 'unknown',
+        });
+
+        // Return in Raindrop AI compatible format
+        return { 
+          choices: response.choices,
+          usage: response.usage 
+        };
+        
+      } catch (cerebrasError) {
+        this.env.logger.error('❌ Cerebras API failed, falling back to Raindrop AI', {
+          error: cerebrasError instanceof Error ? cerebrasError.message : String(cerebrasError),
+          framework: config.framework,
+          model: modelName,
+        });
+        // Fall through to Raindrop AI fallback
+      }
+    } else {
+      this.env.logger.info('ℹ️ Using Raindrop AI (Cerebras disabled via feature flag)', {
+        framework: config.framework,
+      });
+    }
+
+    // Fallback to Raindrop AI
+    const startTime = Date.now();
+    this.env.logger.info('🔄 Using Raindrop AI fallback', {
+      framework: config.framework,
+    });
+
+    const response = await this.env.AI.run('llama-3.3-70b-instruct-fp8', {
+      messages: config.messages,
+      max_tokens: config.maxTokens,
+      temperature: config.temperature,
+    });
+    
+    const duration = Date.now() - startTime;
+    this.env.logger.info('✅ Raindrop AI call completed', {
+      framework: config.framework,
+      latency: duration,
+    });
+    
+    return response;
+  }
 
   private getDb(): Kysely<DB> {
     return new Kysely<DB>({
@@ -102,28 +208,30 @@ export default class extends Service<Env> {
       })
       .execute();
 
-    // Broadcast that check has started (PHASE 4.2.1)
+    // Broadcast that check has started
     await broadcastComplianceCheckUpdate(this.env, input.workspaceId, {
       checkId,
       status: 'running',
       progress: 0,
     });
 
-    this.env.logger.info('🚀 Running compliance analysis SYNCHRONOUSLY for demo', {
+    this.env.logger.info('🚀 Starting compliance analysis SYNCHRONOUSLY', {
       checkId,
       documentId: input.documentId,
       framework: input.framework,
     });
-    
-    // TEMPORARY: Run synchronously for championship demo
-    // TODO: Move to queue-based async processing for production
+
+    // Run synchronously - AWAIT for completion (predictable and debuggable)
     try {
       await this.analyzeCompliance(checkId, input.documentId, input.workspaceId, input.framework, document.storage_key);
+      this.env.logger.info('✅ Compliance analysis completed successfully', { checkId });
     } catch (error) {
-      this.env.logger.error('❌ Compliance analysis failed', {
+      this.env.logger.error('❌ Compliance analysis failed during execution', {
         checkId,
         error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       });
+      // Status already updated to failed in analyzeCompliance error handler
     }
 
     return {
@@ -227,15 +335,17 @@ export default class extends Service<Env> {
     framework: string,
     storageKey: string
   ): Promise<void> {
+    const startTime = Date.now();
     this.env.logger.info('📊 Starting analyzeCompliance', {
       checkId,
       documentId,
       framework,
       storageKey,
     });
-    
+
+    let db = this.getDb();
+
     try {
-      const db = this.getDb();
 
       // Get document content 
       this.env.logger.info('📂 Fetching document ', { storageKey });
@@ -561,46 +671,61 @@ export default class extends Service<Env> {
       
     } catch (error) {
       // Mark check as failed
+      const duration = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
       this.env.logger.error('❌❌❌ Compliance check failed', {
         checkId,
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
+        documentId,
+        framework,
+        duration,
+        error: errorMessage,
+        stack: errorStack,
+        isTimeoutError: errorMessage.includes('timeout'),
+        isCerebrasError: errorMessage.includes('Cerebras'),
       });
-      
-      const db = this.getDb();
-      await db
-        .updateTable('compliance_checks')
-        .set({
+
+      // Always update database status to failed, even if other operations fail
+      try {
+        db = this.getDb(); // Get fresh DB instance in case of connection issues
+        await db
+          .updateTable('compliance_checks')
+          .set({
+            status: 'failed',
+            completed_at: Date.now(),
+          })
+          .where('id', '=', checkId)
+          .execute();
+
+        this.env.logger.info('✅ Database status updated to failed', { checkId });
+      } catch (dbError) {
+        this.env.logger.error('❌ Failed to update database status to failed', {
+          checkId,
+          dbError: dbError instanceof Error ? dbError.message : String(dbError),
+        });
+        // Continue anyway - we've logged the issue
+      }
+
+      // Try to broadcast failure (PHASE 4.2.1) - but don't let this fail the whole operation
+      try {
+        await broadcastComplianceCheckUpdate(this.env, workspaceId, {
+          checkId,
           status: 'failed',
-          completed_at: Date.now(),
-        })
-        .where('id', '=', checkId)
-        .execute();
+        });
+        this.env.logger.info('✅ Failure broadcast sent', { checkId });
+      } catch (broadcastError) {
+        this.env.logger.error('❌ Failed to broadcast failure', {
+          checkId,
+          broadcastError: broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+        });
+        // Continue anyway
+      }
 
-      // Broadcast failure (PHASE 4.2.1)
-      await broadcastComplianceCheckUpdate(this.env, workspaceId, {
-        checkId,
-        status: 'failed',
-      });
-
-      this.env.logger.error(`Compliance check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.env.logger.error(`Compliance check completed with failure after ${duration}ms: ${errorMessage}`);
     }
   }
 
-  /**
-   * PHASE 1.1.2: Get Framework Rules with Caching
-   */
-  private getFrameworkRulesWithCache(framework: string): string[] {
-    // Check cache first
-    if (this.frameworkRuleCache.has(framework)) {
-      return this.frameworkRuleCache.get(framework)!;
-    }
-
-    // Get rules and cache them
-    const rules = this.getFrameworkRules(framework);
-    this.frameworkRuleCache.set(framework, rules);
-    return rules;
-  }
 
   private async performAIComplianceAnalysis(documentText: string, framework: string, checkId: string): Promise<ComplianceIssue[]> {
     this.env.logger.info('🎯 === STARTING AI COMPLIANCE ANALYSIS ===', { framework });
@@ -665,17 +790,18 @@ Return JSON with all the found issues array. If fully compliant, return empty ar
         promptPreview: prompt.substring(0, 300) + '...'
       });
 
-      const model = 'llama-3.3-70b-instruct-fp8';
-      this.env.logger.info('🤖 Calling AI model', { model, framework });
+      this.env.logger.info('🤖 Starting AI compliance analysis', { framework });
 
-      // AI CALL
-      const aiResponse = await this.env.AI.run(model, {
+      // AI CALL - Using unified handler with Cerebras/Raindrop AI fallback
+      const aiResponse = await this.callAI({
         messages: [
           { role: 'system', content: `You are a ${framework} compliance auditor. Return JSON only.` },
           { role: 'user', content: prompt }
         ],
-        max_tokens: 4000,
+        maxTokens: 4000,
         temperature: 0.0,
+        responseFormat: { type: 'json_object' }, // Enforce JSON response
+        framework: framework, // For logging context
       });
       
 
@@ -706,10 +832,13 @@ Return JSON with all the found issues array. If fully compliant, return empty ar
         });
         return [];
       }
-
+      console.log('Console Log📄 FULL LLM OUTPUT:', { 
+        framework,
+        fullContent: content,
+        contentLength: content.length
+      });
       this.env.logger.info('📄 FULL LLM OUTPUT:', { 
         framework,
-        model,
         fullContent: content,
         contentLength: content.length
       });
@@ -849,11 +978,6 @@ Return JSON with all the found issues array. If fully compliant, return empty ar
     return rules[framework] || ['General compliance requirements'];
   }
 
-  private getFallbackIssues(framework: string): ComplianceIssue[] {
-    // CRITICAL FIX: No more fallback issues - genuine AI analysis only
-    this.env.logger.warn('getFallbackIssues called - should not happen with new implementation', { framework });
-    return [];
-  }
 
   async listComplianceChecks(workspaceId: string, userId: string): Promise<{
     checks: Array<{
@@ -1164,48 +1288,40 @@ Return JSON with all the found issues array. If fully compliant, return empty ar
         })
         .execute();
 
-      checks.push({
-        checkId,
-        documentId: document.id,
-        status: 'processing',
-      });
-
-      // CHAMPIONSHIP FIX: Process synchronously to ensure completion
-      // Run analysis and wait for it to complete before moving to next document
-      this.env.logger.info('🚀 Starting synchronous compliance analysis', {
+      // Run compliance check synchronously for each document in batch
+      this.env.logger.info('🚀 Starting compliance analysis for batch document', {
         checkId,
         documentId: document.id,
         framework: input.framework,
       });
 
       try {
-        // Process this document completely before moving to next
         await this.analyzeCompliance(checkId, document.id, input.workspaceId, input.framework, document.storage_key);
+        this.env.logger.info('✅ Batch document analysis completed', { checkId });
 
-        this.env.logger.info('✅ Compliance analysis completed', {
+        checks.push({
           checkId,
           documentId: document.id,
+          status: 'completed',
         });
       } catch (error) {
-        this.env.logger.error('❌ Compliance analysis failed', {
+        this.env.logger.error('❌ Batch document analysis failed', {
           checkId,
           documentId: document.id,
           error: error instanceof Error ? error.message : String(error),
         });
 
-        // Mark check as failed
-        await db
-          .updateTable('compliance_checks')
-          .set({
-            status: 'failed',
-            completed_at: Date.now(),
-          })
-          .where('id', '=', checkId)
-          .execute();
+        checks.push({
+          checkId,
+          documentId: document.id,
+          status: 'failed',
+        });
       }
 
-      // Small delay to avoid timestamp collision
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      // Small delay between documents to avoid rate limits
+      if (document !== documents[documents.length - 1]) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
     }
 
     this.env.logger.info(`Batch compliance check started`, {
