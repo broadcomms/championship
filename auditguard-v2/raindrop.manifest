@@ -242,15 +242,8 @@ application "auditguard-v2" {
     visibility = "private"
   }
 
-  // Document Correction Service - AI-powered document correction using Cerebras
-  service "document-correction-service" {
-    visibility = "private"
-  }
 
-  // PDF Export Service - Convert markdown to professional PDFs
-  service "pdf-export-service" {
-    visibility = "private"
-  }
+
 
   // SmartSQL for advanced analytics with natural language queries
   smartsql "analytics-smartsql" {}
