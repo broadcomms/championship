@@ -68,8 +68,11 @@ export default function WorkspaceMembersPage() {
       setLoading(true);
     }
     try {
-      const response = await api.get<WorkspaceMember[]>(`/workspaces/${wsId}/members`);
-      setMembers(normalizeApiResponse(response));
+      const response = await api.get<{ members: WorkspaceMember[] }>(`/api/workspaces/${wsId}/members`);
+      const normalized = normalizeApiResponse(response);
+      // Backend returns { members: [...] }, extract the members array
+      const membersArray = Array.isArray(normalized) ? normalized : (normalized?.members || []);
+      setMembers(membersArray);
       setLoadError(null);
     } catch (error) {
       console.error('Failed to fetch members:', error);
@@ -82,12 +85,18 @@ export default function WorkspaceMembersPage() {
   const fetchInvitations = useCallback(async () => {
     if (!wsId) return;
     try {
-      const response = await api.get<Invitation[]>(`/workspaces/${wsId}/invitations`);
+      const response = await api.get<Invitation[]>(`/api/workspaces/${wsId}/invitations`);
       setInvitations(normalizeApiResponse(response));
     } catch (error) {
       console.error('Failed to fetch invitations:', error);
     }
   }, [wsId]);
+
+  const pendingInvitations = useMemo(() => {
+    return Array.isArray(invitations) 
+      ? invitations.filter((i) => i.status === 'pending')
+      : [];
+  }, [invitations]);
 
   useEffect(() => {
     fetchMembers(true);
@@ -102,7 +111,7 @@ export default function WorkspaceMembersPage() {
 
     setSaving(true);
     try {
-      await api.post(`/workspaces/${wsId}/invitations`, {
+      await api.post(`/api/workspaces/${wsId}/invitations`, {
         email: inviteEmail.trim(),
         role: inviteRole,
       });
@@ -121,7 +130,7 @@ export default function WorkspaceMembersPage() {
 
   const handleUpdateRole = async (memberId: string, newRole: WorkspaceRole) => {
     try {
-      await api.patch(`/workspaces/${wsId}/members/${memberId}`, {
+      await api.patch(`/api/workspaces/${wsId}/members/${memberId}`, {
         role: newRole,
       });
       await fetchMembers();
@@ -137,7 +146,7 @@ export default function WorkspaceMembersPage() {
     }
 
     try {
-      await api.delete(`/workspaces/${wsId}/members/${memberId}`);
+      await api.delete(`/api/workspaces/${wsId}/members/${memberId}`);
       await fetchMembers();
     } catch (error) {
       console.error('Failed to remove member:', error);
@@ -147,7 +156,7 @@ export default function WorkspaceMembersPage() {
 
   const handleCancelInvitation = async (invitationId: string) => {
     try {
-      await api.delete(`/invitations/${invitationId}`);
+      await api.delete(`/api/invitations/${invitationId}`);
       await fetchInvitations();
     } catch (error) {
       console.error('Failed to cancel invitation:', error);
@@ -178,11 +187,6 @@ export default function WorkspaceMembersPage() {
     if (days < 7) return `${days} days ago`;
     return new Date(timestamp).toLocaleDateString();
   };
-
-  const pendingInvitations = useMemo(
-    () => invitations.filter((invitation) => invitation.status === 'pending'),
-    [invitations]
-  );
 
   if (loading) {
     return (
@@ -241,7 +245,7 @@ export default function WorkspaceMembersPage() {
                 <span className="text-2xl">👑</span>
               </div>
               <div className="text-3xl font-bold text-purple-600">
-                {members.filter((m) => m.role === 'admin').length}
+                {Array.isArray(members) ? members.filter((m) => m.role === 'admin').length : 0}
               </div>
             </div>
 
@@ -251,7 +255,7 @@ export default function WorkspaceMembersPage() {
                 <span className="text-2xl">📧</span>
               </div>
               <div className="text-3xl font-bold text-yellow-600">
-                {invitations.filter((i) => i.status === 'pending').length}
+                {pendingInvitations.length}
               </div>
             </div>
           </div>
@@ -263,7 +267,7 @@ export default function WorkspaceMembersPage() {
             </div>
 
             <div className="divide-y divide-gray-200">
-              {members.map((member) => (
+              {Array.isArray(members) && members.map((member) => (
                 <div key={member.id} className="px-6 py-4 hover:bg-gray-50 transition">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4 flex-1">

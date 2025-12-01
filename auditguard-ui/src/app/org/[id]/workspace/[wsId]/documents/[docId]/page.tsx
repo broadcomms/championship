@@ -142,6 +142,9 @@ export default function DocumentDetailsPage() {
       );
       setDocument(updated);
       setIsEditing(false);
+      
+      // Force a refresh from the backend to ensure we have the latest data
+      startPolling();
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to update document'));
     }
