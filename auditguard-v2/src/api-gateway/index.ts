@@ -545,96 +545,26 @@ export default class extends Service<Env> {
       }
 
       // ====== SSO ENDPOINTS ======
-      // Initiate SSO login flow
+      // SSO TEMPORARILY DISABLED - TODO: Re-enable after document correction is working
       if (path === '/api/auth/sso/authorize' && request.method === 'GET') {
-        const url = new URL(request.url);
-        const organizationId = url.searchParams.get('organizationId');
-        const provider = url.searchParams.get('provider') as 'google' | 'okta' | 'azure' | 'saml' | 'generic-saml' | null;
-
-        if (!organizationId) {
-          return new Response(JSON.stringify({ error: 'organizationId is required' }), {
-            status: 400,
+        return new Response(
+          JSON.stringify({ error: 'SSO service temporarily disabled', code: 'SSO_DISABLED' }),
+          {
+            status: 503,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          });
-        }
-
-        try {
-          const result = await this.env.SSO_SERVICE.getAuthorizationUrl({
-            organizationId,
-            provider: provider || undefined,
-          });
-
-          return new Response(JSON.stringify(result), {
-            headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          });
-        } catch (error) {
-          this.env.logger.error('SSO authorization URL generation failed', {
-            organizationId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return new Response(
-            JSON.stringify({ error: error instanceof Error ? error.message : 'SSO authorization failed' }),
-            {
-              status: 500,
-              headers: { 'Content-Type': 'application/json', ...corsHeaders },
-            }
-          );
-        }
+          }
+        );
       }
 
-      // Handle SSO callback
+      // SSO TEMPORARILY DISABLED - TODO: Re-enable after document correction is working
       if (path === '/api/auth/sso/callback' && request.method === 'POST') {
-        const parseResult = await this.safeParseJSON<{ code: string }>(request, ['code']);
-        if (!parseResult.success) {
-          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
-            status: (parseResult as any).status,
+        return new Response(
+          JSON.stringify({ error: 'SSO service temporarily disabled', code: 'SSO_DISABLED' }),
+          {
+            status: 503,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          });
-        }
-        const body = parseResult.data;
-
-        try {
-          // Handle SSO callback and get user info
-          const ssoResult = await this.env.SSO_SERVICE.handleSSOCallback({
-            code: body.code,
-          });
-
-          // Create session for the authenticated user
-          const sessionResult = await this.env.AUTH_SERVICE.createSession(ssoResult.userId);
-
-          const response = new Response(
-            JSON.stringify({
-              user: {
-                userId: ssoResult.userId,
-                email: ssoResult.email,
-                organizationId: ssoResult.organizationId,
-                firstName: ssoResult.firstName,
-                lastName: ssoResult.lastName,
-                isNewUser: ssoResult.isNewUser,
-              },
-              sessionId: sessionResult.sessionId,
-            }),
-            {
-              status: 200,
-              headers: { 'Content-Type': 'application/json', ...corsHeaders },
-            }
-          );
-
-          // Set session cookie
-          response.headers.set('Set-Cookie', `session=${sessionResult.sessionId}; Path=/; HttpOnly; Max-Age=604800`);
-          return response;
-        } catch (error) {
-          this.env.logger.error('SSO callback failed', {
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return new Response(
-            JSON.stringify({ error: error instanceof Error ? error.message : 'SSO authentication failed' }),
-            {
-              status: 500,
-              headers: { 'Content-Type': 'application/json', ...corsHeaders },
-            }
-          );
-        }
+          }
+        );
       }
 
       // ====== ORGANIZATION ENDPOINTS ======
@@ -1169,126 +1099,16 @@ export default class extends Service<Env> {
         });
       }
 
-      // Match /api/organizations/:id/sso/config - SSO configuration endpoints
+      // SSO TEMPORARILY DISABLED - TODO: Re-enable after document correction is working
       const ssoConfigMatch = path.match(/^\/api\/organizations\/([^\/]+)\/sso\/config$/);
       if (ssoConfigMatch && ssoConfigMatch[1]) {
-        const organizationId = ssoConfigMatch[1];
-        const user = await this.validateSession(request);
-
-        // Get SSO configuration
-        if (request.method === 'GET') {
-          try {
-            const result = await this.env.SSO_SERVICE.getSSOConnection(organizationId);
-            if (!result) {
-              return new Response(JSON.stringify({ error: 'SSO not configured' }), {
-                status: 404,
-                headers: { 'Content-Type': 'application/json', ...corsHeaders },
-              });
-            }
-            return new Response(JSON.stringify(result), {
-              headers: { 'Content-Type': 'application/json', ...corsHeaders },
-            });
-          } catch (error) {
-            this.env.logger.error('Failed to get SSO config', {
-              organizationId,
-              error: error instanceof Error ? error.message : String(error),
-            });
-            return new Response(
-              JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to get SSO configuration' }),
-              {
-                status: 500,
-                headers: { 'Content-Type': 'application/json', ...corsHeaders },
-              }
-            );
+        return new Response(
+          JSON.stringify({ error: 'SSO service temporarily disabled', code: 'SSO_DISABLED' }),
+          {
+            status: 503,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
           }
-        }
-
-        // Update SSO configuration (enable/disable)
-        if (request.method === 'POST' || request.method === 'PATCH') {
-          const parseResult = await this.safeParseJSON<{
-            enabled?: boolean;
-            provider?: 'google' | 'okta' | 'azure' | 'saml' | 'generic-saml';
-            workosOrganizationId?: string;
-            workosConnectionId?: string;
-          }>(request);
-
-          if (!parseResult.success) {
-            return new Response(JSON.stringify({ error: (parseResult as any).error }), {
-              status: (parseResult as any).status,
-              headers: { 'Content-Type': 'application/json', ...corsHeaders },
-            });
-          }
-          const body = parseResult.data;
-
-          try {
-            // If creating a new connection
-            if (body.provider && body.workosOrganizationId) {
-              const result = await this.env.SSO_SERVICE.createSSOConnection({
-                organizationId,
-                provider: body.provider,
-                workosOrganizationId: body.workosOrganizationId,
-                workosConnectionId: body.workosConnectionId,
-              });
-              return new Response(JSON.stringify(result), {
-                status: 201,
-                headers: { 'Content-Type': 'application/json', ...corsHeaders },
-              });
-            }
-
-            // If updating enabled status
-            if (body.enabled !== undefined) {
-              const result = await this.env.SSO_SERVICE.updateSSOConnection({
-                organizationId,
-                enabled: body.enabled,
-              });
-              return new Response(JSON.stringify(result), {
-                headers: { 'Content-Type': 'application/json', ...corsHeaders },
-              });
-            }
-
-            return new Response(
-              JSON.stringify({ error: 'Invalid request. Provide either provider & workosOrganizationId or enabled flag' }),
-              {
-                status: 400,
-                headers: { 'Content-Type': 'application/json', ...corsHeaders },
-              }
-            );
-          } catch (error) {
-            this.env.logger.error('Failed to update SSO config', {
-              organizationId,
-              error: error instanceof Error ? error.message : String(error),
-            });
-            return new Response(
-              JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to update SSO configuration' }),
-              {
-                status: 500,
-                headers: { 'Content-Type': 'application/json', ...corsHeaders },
-              }
-            );
-          }
-        }
-
-        // Delete SSO configuration
-        if (request.method === 'DELETE') {
-          try {
-            const result = await this.env.SSO_SERVICE.deleteSSOConnection(organizationId);
-            return new Response(JSON.stringify(result), {
-              headers: { 'Content-Type': 'application/json', ...corsHeaders },
-            });
-          } catch (error) {
-            this.env.logger.error('Failed to delete SSO config', {
-              organizationId,
-              error: error instanceof Error ? error.message : String(error),
-            });
-            return new Response(
-              JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to delete SSO configuration' }),
-              {
-                status: 500,
-                headers: { 'Content-Type': 'application/json', ...corsHeaders },
-              }
-            );
-          }
-        }
+        );
       }
 
       // ====== PUBLIC PRICING ENDPOINTS (No Auth Required) ======
@@ -2192,6 +2012,80 @@ export default class extends Service<Env> {
               success: false,
               error: 'Failed to save extracted text',
               details: error instanceof Error ? error.message : String(error),
+            }),
+            {
+              status: 500,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
+      }
+
+      // Document Correction: Generate corrected document (markdown only)
+      // POST /api/workspaces/:id/documents/:documentId/correct
+      const documentCorrectMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/documents\/([^\/]+)\/correct$/);
+      if (documentCorrectMatch && documentCorrectMatch[1] && documentCorrectMatch[2] && request.method === 'POST') {
+        const workspaceId = documentCorrectMatch[1];
+        const documentId = documentCorrectMatch[2];
+        const user = await this.validateSession(request);
+
+        try {
+          this.env.logger.info('📝 Document correction requested', {
+            documentId,
+            workspaceId,
+            userId: user.userId,
+            userEmail: user.email,
+          });
+
+          // WORKAROUND: Inline document correction (service deployment issue)
+          // See DOCUMENT_CORRECTION_DEPLOYMENT_ISSUE.md for details
+          const result = await this.generateDocumentCorrection({
+            documentId,
+            workspaceId,
+            userId: user.userId,
+          });
+
+          if (!result.success) {
+            this.env.logger.warn('⚠️  Document correction failed', {
+              documentId,
+              error: result.error,
+            });
+
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: result.error,
+                code: this.getErrorCode(result.error),
+              }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+
+          this.env.logger.info('✅ Document correction successful', {
+            documentId,
+            issuesAddressed: result.issuesAddressed,
+            correctedLength: result.correctedText.length,
+          });
+
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        } catch (error) {
+          this.env.logger.error('❌ Document correction endpoint error', {
+            documentId,
+            workspaceId,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'Internal server error',
+              code: 'SERVER_ERROR',
             }),
             {
               status: 500,
@@ -5748,5 +5642,305 @@ export default class extends Service<Env> {
     }
 
     return user;
+  }
+
+  private getErrorCode(errorMessage?: string): string {
+    if (!errorMessage) return 'UNKNOWN_ERROR';
+    if (errorMessage.includes('not found')) return 'DOCUMENT_NOT_FOUND';
+    if (errorMessage.includes('no extracted text')) return 'NO_EXTRACTED_TEXT';
+    if (errorMessage.includes('No compliance')) return 'NO_ISSUES_FOUND';
+    if (errorMessage.includes('Cerebras')) return 'LLM_ERROR';
+    return 'CORRECTION_FAILED';
+  }
+
+  /**
+   * INLINE DOCUMENT CORRECTION (Workaround for service deployment issue)
+   * See DOCUMENT_CORRECTION_DEPLOYMENT_ISSUE.md for details
+   * TODO: Move back to separate service once platform issue is resolved
+   */
+  private async generateDocumentCorrection(request: {
+    documentId: string;
+    workspaceId: string;
+    userId: string;
+  }): Promise<{
+    success: boolean;
+    correctedText: string;
+    correctionsApplied: string[];
+    generatedAt: number;
+    modelUsed: string;
+    issuesAddressed: number;
+    error?: string;
+  }> {
+    const { documentId, workspaceId, userId } = request;
+
+    this.env.logger.info('🔄 Starting document correction generation (inline)', {
+      documentId,
+      workspaceId,
+      userId,
+      timestamp: Date.now(),
+    });
+
+    try {
+      // Step 1: Fetch document from database
+      const db = this.getDb();
+      const document = await db
+        .selectFrom('documents')
+        .selectAll()
+        .where('id', '=', documentId)
+        .where('workspace_id', '=', workspaceId)
+        .executeTakeFirst();
+
+      if (!document) {
+        this.env.logger.error('❌ Document not found', { documentId, workspaceId });
+        return {
+          success: false,
+          correctedText: '',
+          correctionsApplied: [],
+          generatedAt: Date.now(),
+          modelUsed: '',
+          issuesAddressed: 0,
+          error: 'Document not found',
+        };
+      }
+
+      if (!document.extracted_text) {
+        this.env.logger.error('❌ Document has no extracted text', { documentId });
+        return {
+          success: false,
+          correctedText: '',
+          correctionsApplied: [],
+          generatedAt: Date.now(),
+          modelUsed: '',
+          issuesAddressed: 0,
+          error: 'Document has no extracted text',
+        };
+      }
+
+      this.env.logger.info('✅ Document fetched successfully', {
+        documentId,
+        filename: document.filename,
+        textLength: document.extracted_text.length,
+      });
+
+      // Step 2: Fetch compliance checks and issues
+      const checks = await db
+        .selectFrom('compliance_checks')
+        .select(['id', 'framework'])
+        .where('document_id', '=', documentId)
+        .where('workspace_id', '=', workspaceId)
+        .where('status', '=', 'completed')
+        .execute();
+
+      if (checks.length === 0) {
+        this.env.logger.warn('⚠️  No compliance checks found', { documentId });
+        return {
+          success: false,
+          correctedText: '',
+          correctionsApplied: [],
+          generatedAt: Date.now(),
+          modelUsed: '',
+          issuesAddressed: 0,
+          error: 'No compliance checks found. Please run a compliance check first.',
+        };
+      }
+
+      const checkIds = checks.map((c) => c.id);
+      const issues = await db
+        .selectFrom('compliance_issues')
+        .selectAll()
+        .where('check_id', 'in', checkIds)
+        .execute();
+
+      const issuesWithFramework = issues.map((issue) => ({
+        ...issue,
+        framework: checks.find((c) => c.id === issue.check_id)?.framework,
+      }));
+
+      if (issues.length === 0) {
+        this.env.logger.warn('⚠️  No compliance issues found', { documentId });
+        return {
+          success: false,
+          correctedText: '',
+          correctionsApplied: [],
+          generatedAt: Date.now(),
+          modelUsed: '',
+          issuesAddressed: 0,
+          error: 'No compliance issues found. Document appears compliant!',
+        };
+      }
+
+      this.env.logger.info('✅ Compliance issues fetched', {
+        documentId,
+        issueCount: issues.length,
+      });
+
+      // Step 3: Build correction prompt
+      const correctionPrompt = this.buildCorrectionPrompt(
+        document.extracted_text,
+        issuesWithFramework,
+        document.filename || 'Document'
+      );
+
+      // Step 4: Call Cerebras LLM
+      const startTime = Date.now();
+      const systemMessage = `You are a compliance document correction assistant. Your task is to rewrite documents to address ALL identified compliance issues.
+
+CRITICAL RULES:
+1. Return ONLY the corrected document text in markdown format
+2. Address EVERY issue provided in the prompt
+3. Maintain the original document structure and style where possible
+4. Add necessary sections to address missing requirements
+5. Use clear headings and proper markdown formatting (# ## ### for headings)
+6. DO NOT add explanations or meta-commentary outside the document
+7. DO NOT skip any issues - address them all
+8. Keep the tone professional and policy-appropriate
+9. Preserve any existing good content from the original
+10. Add clear section headings for new compliance requirements`;
+
+      const response = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.env.CEREBRAS_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b',
+          messages: [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: correctionPrompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 16000,
+        }),
+        signal: AbortSignal.timeout(120000),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Cerebras API error: ${response.statusText}`);
+      }
+
+      const data: any = await response.json();
+      const correctedText = data.choices?.[0]?.message?.content || '';
+
+      if (!correctedText || correctedText.trim().length === 0) {
+        throw new Error('Cerebras returned empty response');
+      }
+
+      const llmLatency = Date.now() - startTime;
+      this.env.logger.info('✅ Correction generated successfully', {
+        documentId,
+        correctedLength: correctedText.length,
+        llmLatency,
+      });
+
+      // Step 5: Save to database
+      const correctionsApplied = issues.map((issue) => `${issue.severity}: ${issue.title}`);
+      const now = Date.now();
+
+      await db
+        .updateTable('documents')
+        .set({
+          corrected_text: correctedText,
+          corrected_at: now,
+          corrected_by: userId,
+          corrections_count: issues.length,
+          updated_at: now,
+        })
+        .where('id', '=', documentId)
+        .where('workspace_id', '=', workspaceId)
+        .execute();
+
+      this.env.logger.info('🎉 Document correction completed successfully', {
+        documentId,
+        issuesAddressed: issues.length,
+        totalTime: Date.now() - startTime,
+      });
+
+      return {
+        success: true,
+        correctedText,
+        correctionsApplied,
+        generatedAt: Date.now(),
+        modelUsed: 'llama-3.3-70b',
+        issuesAddressed: issues.length,
+      };
+    } catch (error) {
+      this.env.logger.error('❌ Document correction failed', {
+        documentId,
+        workspaceId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+
+      return {
+        success: false,
+        correctedText: '',
+        correctionsApplied: [],
+        generatedAt: Date.now(),
+        modelUsed: '',
+        issuesAddressed: 0,
+        error: error instanceof Error ? error.message : 'Correction generation failed',
+      };
+    }
+  }
+
+  /**
+   * Build correction prompt with document text and all issues
+   */
+  private buildCorrectionPrompt(extractedText: string, issues: any[], filename: string): string {
+    const issuesText = issues
+      .map((issue, index) => {
+        let suggestedText = '';
+        if (issue.llm_response) {
+          try {
+            const parsed = JSON.parse(issue.llm_response);
+            suggestedText = parsed.suggested_text || parsed.fix || '';
+          } catch (e) {
+            suggestedText = issue.llm_response;
+          }
+        }
+
+        return `
+Issue ${index + 1}: ${issue.title} (${issue.severity})
+Framework: ${issue.framework || 'Unknown'}
+Category: ${issue.category || 'General'}
+
+Description:
+${issue.description}
+
+Recommendation:
+${issue.recommendation}
+
+${suggestedText ? `Suggested Text/Fix:\n${suggestedText}` : ''}
+---`;
+      })
+      .join('\n');
+
+    return `# Document Correction Task
+
+## Original Document
+Filename: ${filename}
+Length: ${extractedText.length} characters
+
+## Document Text
+${extractedText}
+
+## Compliance Issues to Address (${issues.length} total)
+${issuesText}
+
+## Instructions
+Rewrite the above document to address ALL ${issues.length} compliance issues listed.
+
+Requirements:
+1. Maintain the original document's purpose and structure
+2. Address EVERY issue listed above comprehensively
+3. Add missing sections as needed (e.g., Article 30 records, security measures, data retention policies)
+4. Use clear markdown formatting with proper headings (# for main title, ## for sections, ### for subsections)
+5. Keep the corrected document professional and policy-appropriate
+6. Preserve good existing content from the original document
+7. DO NOT add meta-commentary or explanations - just return the corrected document
+8. Make sure all compliance requirements from the issues are explicitly addressed in the text
+
+Return the complete corrected document in markdown format.`;
   }
 }

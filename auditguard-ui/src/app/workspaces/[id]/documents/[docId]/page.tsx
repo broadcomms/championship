@@ -9,12 +9,13 @@ import { ProcessingIndicator } from '@/components/documents/ProcessingIndicator'
 import { ProcessingProgress } from '@/components/documents/ProcessingProgress';
 import { DocumentContentViewer } from '@/components/documents/DocumentContentViewer';
 import { DocumentComplianceTab } from '@/components/compliance/DocumentComplianceTab';
+import { DocumentCorrectionTab } from '@/components/documents/DocumentCorrectionTab';
 import { ComponentErrorBoundary } from '@/components/common/ErrorBoundary';
 import { useDocumentPolling } from '@/hooks/useDocumentPolling';
 import { api } from '@/lib/api';
 import { Document, DocumentCategory } from '@/types';
 
-type TabType = 'overview' | 'fulltext' | 'compliance';
+type TabType = 'preview' | 'issues' | 'correction';
 
 const getErrorMessage = (err: unknown, fallback: string): string => {
   if (err instanceof Error) {
@@ -47,7 +48,7 @@ export default function DocumentDetailsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>('preview');
 
   // Form state for editing
   const [editFilename, setEditFilename] = useState('');
@@ -357,51 +358,51 @@ export default function DocumentDetailsPage() {
         <div className="mb-6 border-b border-gray-200">
           <nav className="-mb-px flex space-x-8" aria-label="Tabs">
             <button
-              onClick={() => setActiveTab('overview')}
+              onClick={() => setActiveTab('preview')}
               className={`
                 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors
                 ${
-                  activeTab === 'overview'
+                  activeTab === 'preview'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                 }
               `}
             >
-              Overview
+              Document Preview
             </button>
             <button
-              onClick={() => setActiveTab('fulltext')}
+              onClick={() => setActiveTab('issues')}
               className={`
                 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors
                 ${
-                  activeTab === 'fulltext'
+                  activeTab === 'issues'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                 }
               `}
             >
-              Full Text
+              Compliance Issues
             </button>
             <button
-              onClick={() => setActiveTab('compliance')}
+              onClick={() => setActiveTab('correction')}
               className={`
                 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium transition-colors
                 ${
-                  activeTab === 'compliance'
+                  activeTab === 'correction'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                 }
               `}
             >
-              Compliance
+              Document Correction
             </button>
           </nav>
         </div>
 
         {/* Tab Content */}
         <div className="mb-8">
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
+          {/* Document Preview Tab */}
+          {activeTab === 'preview' && (
             <div className="space-y-6">
               {/* Processing Status */}
               {document.processingStatus !== 'failed' && !document.fullyCompleted && (
@@ -466,28 +467,41 @@ export default function DocumentDetailsPage() {
                   )}
                 </dl>
               </div>
+
+              {/* Full Text Viewer */}
+              <ComponentErrorBoundary>
+                <DocumentContentViewer
+                  workspaceId={workspaceId}
+                  documentId={documentId}
+                  document={document}
+                  hasExtractedText={document.textExtracted || false}
+                  chunkCount={document.chunkCount}
+                />
+              </ComponentErrorBoundary>
             </div>
           )}
 
-          {/* Full Text Tab */}
-          {activeTab === 'fulltext' && (
-            <ComponentErrorBoundary>
-              <DocumentContentViewer
-                workspaceId={workspaceId}
-                documentId={documentId}
-                document={document}
-                hasExtractedText={document.textExtracted || false}
-                chunkCount={document.chunkCount}
-              />
-            </ComponentErrorBoundary>
-          )}
-
-          {/* Compliance Tab */}
-          {activeTab === 'compliance' && (
+          {/* Compliance Issues Tab */}
+          {activeTab === 'issues' && (
             <ComponentErrorBoundary>
               <DocumentComplianceTab
                 workspaceId={workspaceId}
                 documentId={documentId}
+              />
+            </ComponentErrorBoundary>
+          )}
+
+          {/* Document Correction Tab */}
+          {activeTab === 'correction' && (
+            <ComponentErrorBoundary>
+              <DocumentCorrectionTab
+                workspaceId={workspaceId}
+                documentId={documentId}
+                document={{
+                  filename: document.filename,
+                  characterCount: document.characterCount,
+                  pageCount: document.pageCount
+                }}
               />
             </ComponentErrorBoundary>
           )}

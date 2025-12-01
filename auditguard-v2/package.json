@@ -38,6 +38,7 @@
     "@modelcontextprotocol/sdk": "^1",
     "@workos-inc/node": "^7.73.0",
     "bcryptjs": "^3.0.2",
+    "jspdf": "^2.5.2",
     "kysely": "^0.27.2",
     "kysely-d1": "^0.3.0",
     "mammoth": "^1.11.0",

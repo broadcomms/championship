@@ -25,6 +25,12 @@ export type documents = {
     processing_status: string;
     text_extracted: number;
     chunk_count: number;
+    extracted_text: string | null;
+    character_count: number | null;
+    corrected_text: string | null;
+    corrected_at: number | null;
+    corrected_by: string | null;
+    corrections_count: number | null;
 };
 
 export type sessions = {

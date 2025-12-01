@@ -1,4 +1,4 @@
-application "auditguard-v2" {
+application "auditguard-v1" {
 
   // SQL database for users, sessions, workspaces, and document metadata
   sql_database "auditguard-db" {}
@@ -184,7 +184,11 @@ application "auditguard-v2" {
     visibility = "private"
   }
 
-
+  // DISABLED: Private SSO service for enterprise authentication
+  // TODO: Re-enable after document correction is working
+  // service "sso-service" {
+  //   visibility = "private"
+  // }
 
   // Public webhook handler for Stripe events
   service "stripe-webhook-service" {
@@ -238,6 +242,12 @@ application "auditguard-v2" {
   service "issue-comment-service" {
     visibility = "private"
   }
+
+  // TEMPORARILY DISABLED: Document correction service - AI-powered document correction using Cerebras (markdown only)
+  // Moved inline to api-gateway due to deployment issues (see DOCUMENT_CORRECTION_DEPLOYMENT_ISSUE.md)
+  // service "document-correction-service" {
+  //   visibility = "private"
+  // }
 
 
 
