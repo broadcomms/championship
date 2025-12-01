@@ -6,6 +6,7 @@ import { DocumentChunksViewer } from './DocumentChunksViewer';
 import { CategoryBadge } from './CategoryBadge';
 import { ComplianceFrameworkBadge } from './ComplianceFrameworkBadge';
 import { ProcessingIndicator } from './ProcessingIndicator';
+import { PDFViewer } from './PDFViewer';
 import { Document } from '@/types';
 
 interface DocumentContent {
@@ -36,7 +37,7 @@ export function DocumentContentViewer({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isContentUnavailable, setIsContentUnavailable] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'fullText' | 'chunks'>('info');
+  const [activeTab, setActiveTab] = useState<'pdf' | 'info' | 'fullText' | 'chunks'>('pdf');
 
   const totalChunks = chunkCount ?? content?.chunks?.length ?? 0;
   const hasChunks = totalChunks > 0;
@@ -172,6 +173,11 @@ export function DocumentContentViewer({
       <div className="border-b border-gray-200">
         <nav className="flex" aria-label="Tabs">
           <TabButton
+            active={activeTab === 'pdf'}
+            onClick={() => setActiveTab('pdf')}
+            label="PDF Preview"
+          />
+          <TabButton
             active={activeTab === 'info'}
             onClick={() => setActiveTab('info')}
             label="Information"
@@ -193,6 +199,12 @@ export function DocumentContentViewer({
 
       {/* Content Display */}
       <div className="p-6">
+        {activeTab === 'pdf' && (
+          <PDFViewer
+            workspaceId={workspaceId}
+            documentId={documentId}
+          />
+        )}
         {activeTab === 'info' && <InfoTab document={document} />}
         {activeTab === 'fullText' && (
           <FullTextTab 

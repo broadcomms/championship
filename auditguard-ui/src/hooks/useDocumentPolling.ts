@@ -116,7 +116,7 @@ export function useDocumentPolling(
     return () => {
       stopPolling();
     };
-  }, []);
+  }, [stopPolling]);
 
   return {
     status,

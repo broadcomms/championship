@@ -49,12 +49,13 @@ export function DocumentCorrectionTab({
   useEffect(() => {
     fetchIssues();
     fetchExistingCorrection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, documentId]);
 
   const fetchIssues = async () => {
     setIssuesLoading(true);
     try {
-      const data = await api.get<any>(
+      const data = await api.get<{ issues?: ComplianceIssue[] } | ComplianceIssue[]>(
         `/api/workspaces/${workspaceId}/documents/${documentId}/issues`
       );
       // Handle different API response formats
@@ -77,7 +78,11 @@ export function DocumentCorrectionTab({
   const fetchExistingCorrection = async () => {
     setLoadingExisting(true);
     try {
-      const data = await api.get<any>(
+      const data = await api.get<{
+        corrected_text?: string | null;
+        corrected_at?: number | null;
+        corrections_count?: number | null;
+      }>(
         `/api/workspaces/${workspaceId}/documents/${documentId}`
       );
       
@@ -126,9 +131,9 @@ export function DocumentCorrectionTab({
       } else {
         setError(result.error || 'Failed to generate correction');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearInterval(progressInterval);
-      setError(err.message || 'Failed to generate corrected document');
+      setError(err instanceof Error ? err.message : 'Failed to generate corrected document');
     } finally {
       setIsGenerating(false);
     }
