@@ -194,9 +194,7 @@ export function DocumentCorrectionTab({
     window.URL.revokeObjectURL(url);
   };
 
-  const issueCountsByS
-
-everity = issues.reduce((acc, issue) => {
+  const issueCountsBySeverity = issues.reduce((acc, issue) => {
     acc[issue.severity.toLowerCase()] = (acc[issue.severity.toLowerCase()] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
