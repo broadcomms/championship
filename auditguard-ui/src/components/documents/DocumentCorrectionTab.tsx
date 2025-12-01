@@ -90,11 +90,28 @@ export function DocumentCorrectionTab({
       if (data.corrected_text && data.corrected_at) {
         console.log('✅ Loaded existing correction from database');
         
+        // Fetch the issues to reconstruct correctionsApplied list
+        let correctionsAppliedList: string[] = [];
+        try {
+          const issuesData = await api.get<{ issues?: ComplianceIssue[] } | ComplianceIssue[]>(
+            `/api/workspaces/${workspaceId}/documents/${documentId}/issues`
+          );
+          
+          const issuesList = Array.isArray(issuesData) ? issuesData : issuesData.issues || [];
+          
+          // Reconstruct the corrections applied from issues
+          correctionsAppliedList = issuesList.map(
+            (issue) => `${issue.severity}: ${issue.title}`
+          );
+        } catch (err) {
+          console.warn('Could not fetch issues for corrections list:', err);
+        }
+        
         // Reconstruct correction result from database fields
         setCorrectionResult({
           success: true,
           correctedText: data.corrected_text,
-          correctionsApplied: [], // We don't store this in DB, will regenerate if needed
+          correctionsApplied: correctionsAppliedList,
           generatedAt: data.corrected_at,
           modelUsed: 'llama-3.3-70b',
           issuesAddressed: data.corrections_count || 0,
