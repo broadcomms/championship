@@ -78,22 +78,22 @@ function OrganizationLayoutContent({
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto bg-gray-50 relative">
-          {/* Sidebar Toggle Button */}
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="absolute top-4 left-4 z-10 p-2 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg shadow-sm transition-colors"
-            title={isSidebarOpen ? 'Hide navigation' : 'Show navigation'}
-          >
-            {isSidebarOpen ? (
-              <PanelLeftClose className="w-4 h-4 text-gray-600" />
-            ) : (
-              <PanelLeft className="w-4 h-4 text-gray-600" />
-            )}
-          </button>
-          
-          {/* Breadcrumb */}
+          {/* Breadcrumb + Sidebar Toggle Row */}
           <div className="bg-white border-b border-gray-200">
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
+              {/* Sidebar Toggle Button */}
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="p-2 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg shadow-sm transition-colors flex items-center justify-center"
+                title={isSidebarOpen ? 'Hide navigation' : 'Show navigation'}
+              >
+                {isSidebarOpen ? (
+                  <PanelLeftClose className="w-4 h-4 text-gray-600" />
+                ) : (
+                  <PanelLeft className="w-4 h-4 text-gray-600" />
+                )}
+              </button>
+
               <Breadcrumb
                 accountId={accountId}
                 orgId={orgId}
