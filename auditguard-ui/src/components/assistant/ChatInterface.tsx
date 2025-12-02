@@ -311,29 +311,29 @@ export function ChatInterface({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200 bg-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">
+      <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-white">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-base sm:text-xl font-semibold text-gray-900 truncate">
               AI Compliance Assistant
             </h1>
             {currentSessionId && (
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-xs sm:text-sm text-gray-500 mt-1 truncate">
                 Session active • {messages.length} messages
               </p>
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {/* Export Menu */}
             {messages.length > 0 && (
               <div className="relative">
                 <button
                   onClick={() => setShowExportMenu(!showExportMenu)}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                   title="Export conversation"
                 >
                   <Download className="w-4 h-4" />
-                  <span className="hidden sm:inline">Export</span>
+                  <span className="hidden md:inline">Export</span>
                 </button>
 
                 {showExportMenu && (
@@ -469,7 +469,7 @@ export function ChatInterface({
 
       {/* Suggestions */}
       {suggestions.length > 0 && !isLoading && (
-        <div className="px-6 py-4 bg-white border-t border-gray-200">
+        <div className="px-3 sm:px-6 py-3 sm:py-4 bg-white border-t border-gray-200">
           <SuggestionChips
             suggestions={suggestions}
             onSelect={handleSuggestionClick}
@@ -479,7 +479,7 @@ export function ChatInterface({
       )}
 
       {/* Input Area */}
-      <div className="px-6 py-4 border-t border-gray-200 bg-white">
+      <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-white">
         <EnhancedInput
           value={input}
           onChange={setInput}

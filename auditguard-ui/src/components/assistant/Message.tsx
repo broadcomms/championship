@@ -132,7 +132,7 @@ export function Message({ message, onRegenerate, onFeedback }: MessageProps) {
       >
         {/* Message Header (Assistant only) */}
         {!isUser && (
-          <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-gray-100">
+          <div className="flex items-center gap-2 px-3 sm:px-4 pt-3 pb-2 border-b border-gray-100">
             <div className="flex items-center justify-center w-6 h-6 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full">
               <svg
                 className="w-4 h-4 text-white"
@@ -153,9 +153,9 @@ export function Message({ message, onRegenerate, onFeedback }: MessageProps) {
         )}
 
         {/* Message Content */}
-        <div className={`px-4 ${isUser ? 'py-3' : 'py-3'}`}>
+        <div className={`px-3 sm:px-4 ${isUser ? 'py-3' : 'py-3'}`}>
           {!isUser ? (
-            <div className="prose prose-sm max-w-none prose-headings:font-semibold prose-a:text-primary-600 prose-code:text-primary-600 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-900 prose-pre:text-gray-100">
+            <div className="prose prose-sm max-w-none prose-headings:font-semibold prose-a:text-primary-600 prose-code:text-primary-600 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-pre:text-xs sm:prose-pre:text-sm">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeHighlight, rehypeRaw]}
@@ -192,7 +192,7 @@ export function Message({ message, onRegenerate, onFeedback }: MessageProps) {
 
         {/* Message Footer */}
         <div
-          className={`px-4 pb-3 flex items-center justify-between ${
+          className={`px-3 sm:px-4 pb-3 flex items-center justify-between gap-2 ${
             isUser ? 'text-white/70' : 'text-gray-500'
           }`}
         >
@@ -273,7 +273,7 @@ export function Message({ message, onRegenerate, onFeedback }: MessageProps) {
 
         {/* Action Buttons (from message.actions) */}
         {message.actions && message.actions.length > 0 && (
-          <div className="px-4 pb-3 flex flex-wrap gap-2">
+          <div className="px-3 sm:px-4 pb-3 flex flex-wrap gap-2">
             {message.actions.map((action, index) => (
               <button
                 key={index}

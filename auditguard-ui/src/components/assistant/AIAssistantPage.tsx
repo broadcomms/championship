@@ -6,7 +6,7 @@ import { ChatInterface } from './ChatInterface';
 import { DetailsSidebar } from './DetailsSidebar';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import NotificationSettingsPanel from './NotificationSettingsPanel';
-import { MessageSquare, BarChart3, Settings, Mic } from 'lucide-react';
+import { MessageSquare, BarChart3, Settings, Mic, PanelLeft, PanelLeftClose } from 'lucide-react';
 import type { Message } from '@/types/assistant';
 import { useKeyboardShortcuts } from '@/lib/keyboard';
 import { announceToScreenReader } from '@/lib/focus';
@@ -61,6 +61,7 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [conversationRefreshTrigger, setConversationRefreshTrigger] = useState(0);
+  const [isConversationSidebarOpen, setIsConversationSidebarOpen] = useState(true);
 
   // Chat widget context - this is the SINGLE source of truth for sessionId
   const chatWidget = useChatWidget();
@@ -306,66 +307,66 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header with Navigation and Notifications */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-semibold text-gray-900">AI Compliance Assistant</h1>
+      <div className="bg-white border-b border-gray-200 px-3 sm:px-6 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+            <h1 className="text-base sm:text-xl font-semibold text-gray-900 truncate">AI Compliance Assistant</h1>
 
-            {/* View Mode Tabs */}
-            <div className="flex items-center gap-1 ml-8" role="tablist" aria-label="View modes">
+            {/* View Mode Tabs - Responsive */}
+            <div className="flex items-center gap-1 ml-2 sm:ml-8" role="tablist" aria-label="View modes">
               <button
                 onClick={() => setViewMode('chat')}
                 role="tab"
                 aria-selected={viewMode === 'chat'}
                 aria-controls="chat-panel"
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${TRANSITIONS.all} ${
+                className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg ${TRANSITIONS.all} ${
                   viewMode === 'chat'
                     ? 'bg-blue-100 text-blue-700 font-medium'
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
                 <MessageSquare className="w-4 h-4" />
-                Chat
+                <span className="hidden sm:inline">Chat</span>
               </button>
               <button
                 onClick={() => setViewMode('analytics')}
                 role="tab"
                 aria-selected={viewMode === 'analytics'}
                 aria-controls="analytics-panel"
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${TRANSITIONS.all} ${
+                className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg ${TRANSITIONS.all} ${
                   viewMode === 'analytics'
                     ? 'bg-blue-100 text-blue-700 font-medium'
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
                 <BarChart3 className="w-4 h-4" />
-                Analytics
+                <span className="hidden sm:inline">Analytics</span>
               </button>
               <button
                 onClick={() => setViewMode('settings')}
                 role="tab"
                 aria-selected={viewMode === 'settings'}
                 aria-controls="settings-panel"
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${TRANSITIONS.all} ${
+                className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg ${TRANSITIONS.all} ${
                   viewMode === 'settings'
                     ? 'bg-blue-100 text-blue-700 font-medium'
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
                 <Settings className="w-4 h-4" />
-                Settings
+                <span className="hidden sm:inline">Settings</span>
               </button>
             </div>
           </div>
 
-          {/* Voice Mode Button */}
+          {/* Voice Mode Button - Responsive */}
           <button
             onClick={handleVoiceModeClick}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg transition-all shadow-md hover:shadow-lg flex-shrink-0"
             title="Enable voice mode in chat widget"
           >
             <Mic className="w-4 h-4" />
-            <span className="font-medium">Voice Mode</span>
+            <span className="hidden sm:inline font-medium">Voice Mode</span>
           </button>
         </div>
       </div>
@@ -374,8 +375,14 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
       <div className="flex-1 flex overflow-hidden">
         {viewMode === 'chat' && (
           <div id="chat-panel" role="tabpanel" className="flex w-full animate-fadeIn">
-            {/* Left Panel - Conversation Management */}
-            <div className="w-[280px] bg-white border-r border-gray-200 flex-shrink-0 hidden md:block">
+            {/* Left Panel - Conversation Management - Collapsible on all screens */}
+            <div 
+              className={`bg-white border-r border-gray-200 flex-shrink-0 transition-all duration-300 ${
+                isConversationSidebarOpen 
+                  ? 'w-[280px] lg:w-[300px]' 
+                  : 'w-0'
+              } overflow-hidden`}
+            >
               <ConversationSidebar
                 workspaceId={workspaceId}
                 currentId={currentConversationId}
@@ -385,8 +392,22 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
               />
             </div>
 
-            {/* Center Panel - Chat Interface */}
-            <div className="flex-1 flex flex-col min-w-0">
+            {/* Center Panel - Chat Interface with Toggle Button */}
+            <div className="flex-1 flex flex-col min-w-0 w-full relative">
+              {/* Toggle Button for Conversation Sidebar */}
+              <button
+                onClick={() => setIsConversationSidebarOpen(!isConversationSidebarOpen)}
+                className="absolute top-4 left-4 z-10 p-2 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg shadow-sm transition-colors"
+                title={isConversationSidebarOpen ? 'Hide conversations' : 'Show conversations'}
+                aria-label={isConversationSidebarOpen ? 'Hide conversations' : 'Show conversations'}
+              >
+                {isConversationSidebarOpen ? (
+                  <PanelLeftClose className="w-4 h-4 text-gray-600" />
+                ) : (
+                  <PanelLeft className="w-4 h-4 text-gray-600" />
+                )}
+              </button>
+
               <ChatInterface
                 workspaceId={workspaceId}
                 messages={messages}
@@ -395,8 +416,8 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
               />
             </div>
 
-            {/* Right Panel - Details & Actions */}
-            <div className="w-[320px] bg-white border-l border-gray-200 flex-shrink-0 hidden lg:block">
+            {/* Right Panel - Details & Actions - Hidden on tablet and mobile */}
+            <div className="w-0 xl:w-[320px] bg-white border-l border-gray-200 flex-shrink-0 transition-all duration-300 overflow-hidden xl:overflow-visible">
               <DetailsSidebar
                 sessionId={currentSessionId ?? undefined}
                 conversationId={currentConversationId}
@@ -408,13 +429,13 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
         )}
 
         {viewMode === 'analytics' && (
-          <div id="analytics-panel" role="tabpanel" className="flex-1 overflow-y-auto p-6 animate-fadeIn">
+          <div id="analytics-panel" role="tabpanel" className="flex-1 overflow-y-auto p-3 sm:p-6 animate-fadeIn">
             <AnalyticsDashboard workspaceId={workspaceId} />
           </div>
         )}
 
         {viewMode === 'settings' && (
-          <div id="settings-panel" role="tabpanel" className="flex-1 overflow-y-auto p-6 animate-fadeIn">
+          <div id="settings-panel" role="tabpanel" className="flex-1 overflow-y-auto p-3 sm:p-6 animate-fadeIn">
             <NotificationSettingsPanel workspaceId={workspaceId} />
           </div>
         )}
