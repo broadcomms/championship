@@ -487,6 +487,7 @@ export default function DocumentDetailsPage() {
               <DocumentComplianceTab
                 workspaceId={workspaceId}
                 documentId={documentId}
+                complianceFrameworkId={document.complianceFrameworkId}
               />
             </ComponentErrorBoundary>
           )}

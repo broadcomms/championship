@@ -12,6 +12,7 @@ import { DocumentComplianceIssuesList } from './DocumentComplianceIssuesList';
 interface DocumentComplianceTabProps {
   workspaceId: string;
   documentId: string;
+  complianceFrameworkId?: number | null;
 }
 
 // Framework definitions with readable labels
@@ -49,6 +50,7 @@ const STATUS_COLORS: Record<ComplianceCheckStatus, string> = {
 export function DocumentComplianceTab({
   workspaceId,
   documentId,
+  complianceFrameworkId,
 }: DocumentComplianceTabProps) {
   const [summary, setSummary] = useState<DocumentComplianceSummary | null>(null);
   const [checks, setChecks] = useState<ComplianceCheck[]>([]);
@@ -57,9 +59,69 @@ export function DocumentComplianceTab({
   const [error, setError] = useState<string | null>(null);
   const [runningCheck, setRunningCheck] = useState(false);
   
-  // Framework selection state
+  // Framework selection state - will be set after fetching document's framework
   const [selectedFramework, setSelectedFramework] = useState<ComplianceFramework>('GDPR');
   const [showFrameworkDropdown, setShowFrameworkDropdown] = useState(false);
+  const [frameworkLoading, setFrameworkLoading] = useState(false);
+
+  // Fetch document's compliance framework and set as default
+  useEffect(() => {
+    const fetchDocumentFramework = async () => {
+      if (!complianceFrameworkId) {
+        return; // Use default GDPR if no framework set
+      }
+
+      setFrameworkLoading(true);
+      try {
+        const response = await fetch(
+          `/api/workspaces/${workspaceId}/compliance-frameworks/${complianceFrameworkId}`,
+          { credentials: 'include' }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const frameworkName = data.framework?.name;
+          
+          // Map framework name to ComplianceFramework enum
+          const frameworkMap: Record<string, ComplianceFramework> = {
+            'gdpr': 'GDPR',
+            'hipaa': 'HIPAA',
+            'soc2': 'SOC2',
+            'pci_dss': 'PCI_DSS',
+            'iso27001': 'ISO_27001',
+            'iso_27001': 'ISO_27001',
+            'nist': 'NIST_CSF',
+            'nist_csf': 'NIST_CSF',
+            'ccpa': 'CCPA',
+            'ferpa': 'FERPA',
+            'glba': 'GLBA',
+            'fisma': 'FISMA',
+            'pipeda': 'PIPEDA',
+            'pipeda_sg': 'PIPEDA',
+            'pdpa_sg': 'PIPEDA',
+            'coppa': 'COPPA',
+            'sox': 'SOX',
+            'gdpr_uk': 'GDPR',
+            'cmmc': 'NIST_CSF', // CMMC maps to NIST for now
+          };
+          
+          const normalized = frameworkName?.toLowerCase().trim();
+          const mappedFramework = normalized ? frameworkMap[normalized] : null;
+          
+          if (mappedFramework) {
+            setSelectedFramework(mappedFramework);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch document framework:', err);
+        // Keep default GDPR on error
+      } finally {
+        setFrameworkLoading(false);
+      }
+    };
+
+    fetchDocumentFramework();
+  }, [complianceFrameworkId, workspaceId]);
 
   const fetchSummary = useCallback(async () => {
     setLoading(true);
