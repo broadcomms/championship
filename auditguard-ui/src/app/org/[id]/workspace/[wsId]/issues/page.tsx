@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
+import { IssuesListView } from '@/components/issues/IssuesListView';
 
 export default function WorkspaceIssuesPage() {
   const params = useParams<{ id: string; wsId: string }>();
@@ -77,26 +78,33 @@ export default function WorkspaceIssuesPage() {
             </div>
           </div>
 
-          {/* Kanban Board */}
+          {/* Kanban Board or List View */}
           {viewMode === 'kanban' ? (
             <KanbanBoard workspaceId={wsId} orgId={orgId} />
           ) : (
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
-              List view coming soon
-            </div>
+            <IssuesListView workspaceId={wsId} orgId={orgId} filterSeverity={filterSeverity} />
           )}
 
           {/* Help Text */}
           <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
             <h3 className="font-semibold text-blue-900 mb-2">
-              💡 How to use the Kanban board
+              💡 How to use {viewMode === 'kanban' ? 'the Kanban board' : 'the List view'}
             </h3>
-            <ul className="space-y-1 text-sm text-blue-800">
-              <li>• Drag and drop cards between columns to update their status</li>
-              <li>• Click on a card to view details and add comments</li>
-              <li>• Issues are color-coded by severity (Critical, High, Medium, Low)</li>
-              <li>• Assign team members to issues for accountability</li>
-            </ul>
+            {viewMode === 'kanban' ? (
+              <ul className="space-y-1 text-sm text-blue-800">
+                <li>• Drag and drop cards between columns to update their status</li>
+                <li>• Click on a card to view details and add comments</li>
+                <li>• Issues are color-coded by severity (Critical, High, Medium, Low)</li>
+                <li>• Assign team members to issues for accountability</li>
+              </ul>
+            ) : (
+              <ul className="space-y-1 text-sm text-blue-800">
+                <li>• Click on any row to view full issue details and add comments</li>
+                <li>• Sort by clicking on column headers (Severity, Framework, Status, Created)</li>
+                <li>• Each issue shows the framework badge and document name</li>
+                <li>• Use filters above to narrow down issues by severity</li>
+              </ul>
+            )}
           </div>
       </div>
     </OrganizationLayout>
