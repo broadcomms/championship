@@ -287,6 +287,24 @@ interface IssueCardProps {
 }
 
 function IssueCard({ issue, onClick, formatDueDate, isDragging = false, isDragOverlay = false }: IssueCardProps) {
+  // Framework badge colors
+  const getFrameworkColor = (framework: string | null) => {
+    if (!framework) return 'bg-gray-100 text-gray-700 border-gray-300';
+    const fw = framework.toLowerCase();
+    if (fw.includes('soc2') || fw.includes('soc 2')) return 'bg-purple-100 text-purple-700 border-purple-300';
+    if (fw.includes('iso')) return 'bg-blue-100 text-blue-700 border-blue-300';
+    if (fw.includes('sox')) return 'bg-indigo-100 text-indigo-700 border-indigo-300';
+    if (fw.includes('gdpr')) return 'bg-green-100 text-green-700 border-green-300';
+    if (fw.includes('hipaa')) return 'bg-teal-100 text-teal-700 border-teal-300';
+    if (fw.includes('pci')) return 'bg-pink-100 text-pink-700 border-pink-300';
+    return 'bg-gray-100 text-gray-700 border-gray-300';
+  };
+
+  const formatFramework = (framework: string | null) => {
+    if (!framework) return 'General';
+    return framework.toUpperCase();
+  };
+
   return (
     <div
       onClick={!isDragOverlay ? onClick : undefined}
@@ -314,6 +332,20 @@ function IssueCard({ issue, onClick, formatDueDate, isDragging = false, isDragOv
         )}
       </div>
 
+      {/* Framework Badge */}
+      {issue.framework && (
+        <div className="mb-2">
+          <span
+            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${
+              getFrameworkColor(issue.framework)
+            }`}
+          >
+            <span className="mr-1">🔖</span>
+            {formatFramework(issue.framework)}
+          </span>
+        </div>
+      )}
+
       {/* Title */}
       <h4 className="font-medium text-gray-900 mb-2 line-clamp-2">
         {issue.title}
@@ -323,6 +355,14 @@ function IssueCard({ issue, onClick, formatDueDate, isDragging = false, isDragOv
       <p className="text-sm text-gray-600 mb-3 line-clamp-2">
         {issue.description}
       </p>
+
+      {/* Document Name */}
+      {issue.documentName && (
+        <div className="mb-3 flex items-center gap-1.5 text-xs text-gray-600">
+          <span>📄</span>
+          <span className="truncate font-medium">{issue.documentName}</span>
+        </div>
+      )}
 
       {/* Due Date */}
       {issue.dueDate && (

@@ -674,6 +674,10 @@ export default class extends Service<Env> {
       assignedTo: string | null;
       createdAt: number;
       resolvedAt: number | null;
+      framework: string | null;
+      priorityLevel: string | null;
+      dueDate: number | null;
+      documentName: string | null;
     }>;
   }> {
     const db = this.getDb();
@@ -700,8 +704,11 @@ export default class extends Service<Env> {
 
     // CRITICAL FIX: Query directly from compliance_issues with workspace_id
     // Include deduplication metadata fields for frontend status badges
+    // Join with documents to get document name and compliance_checks to get framework
     let query = db
       .selectFrom('compliance_issues')
+      .leftJoin('documents', 'documents.id', 'compliance_issues.document_id')
+      .leftJoin('compliance_checks', 'compliance_checks.id', 'compliance_issues.check_id')
       .select([
         'compliance_issues.id',
         'compliance_issues.check_id',
@@ -720,6 +727,10 @@ export default class extends Service<Env> {
         'compliance_issues.is_active',
         'compliance_issues.first_detected_check_id',
         'compliance_issues.last_confirmed_check_id',
+        'compliance_issues.framework',
+        'compliance_issues.priority_level',
+        'compliance_issues.due_date',
+        'documents.filename as documentName',
       ])
       .where('compliance_issues.workspace_id', '=', workspaceId);
 
@@ -761,6 +772,10 @@ export default class extends Service<Env> {
         isActive: issue.is_active,
         firstDetectedCheckId: issue.first_detected_check_id,
         lastConfirmedCheckId: issue.last_confirmed_check_id,
+        framework: issue.framework,
+        priorityLevel: issue.priority_level,
+        dueDate: issue.due_date,
+        documentName: issue.documentName,
       })),
     };
   }
