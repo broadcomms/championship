@@ -36,6 +36,39 @@ export const AVAILABLE_VOICES = [
   { id: 'sam', name: 'Sam', description: 'Dynamic and engaging' },
 ];
 
+/**
+ * Clean Markdown formatting from text before sending to TTS
+ * Removes: **bold**, *italic*, `code`, [links](url), ### headers, bullet points, etc.
+ */
+function cleanMarkdownForSpeech(text: string): string {
+  return text
+    // Remove bold: **text** or __text__
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    // Remove italic: *text* or _text_
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/_(.+?)_/g, '$1')
+    // Remove inline code: `code`
+    .replace(/`(.+?)`/g, '$1')
+    // Remove code blocks: ```code```
+    .replace(/```[\s\S]*?```/g, '')
+    // Remove links: [text](url) -> text
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+    // Remove headers: ### Header -> Header
+    .replace(/^#{1,6}\s+/gm, '')
+    // Remove bullet points: - item or * item
+    .replace(/^[-*]\s+/gm, '')
+    // Remove numbered lists: 1. item
+    .replace(/^\d+\.\s+/gm, '')
+    // Remove blockquotes: > quote
+    .replace(/^>\s+/gm, '')
+    // Remove horizontal rules: --- or ***
+    .replace(/^[-*_]{3,}$/gm, '')
+    // Clean up extra whitespace
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
   const { voiceSettings, onStart, onEnd, onError } = options;
 
@@ -55,6 +88,9 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
   const synthesizeSpeech = useCallback(
     async (text: string): Promise<Blob | null> => {
       try {
+        // Clean Markdown formatting before sending to TTS
+        const cleanedText = cleanMarkdownForSpeech(text);
+        
         // TODO: Replace with actual ElevenLabs API endpoint
         const response = await fetch('/api/assistant/synthesize', {
           method: 'POST',
@@ -62,7 +98,7 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            text,
+            text: cleanedText,
             voice_id: voiceSettings.voiceId,
             voice_settings: {
               stability: voiceSettings.stability || 0.5,
@@ -179,9 +215,12 @@ export function useSpeechSynthesis(options: SpeechSynthesisOptions) {
         // If server TTS returned null, use browser TTS fallback
         if (!audioBlob) {
           console.log('Using browser TTS fallback');
+          // Clean Markdown formatting for browser TTS too
+          const cleanedText = cleanMarkdownForSpeech(text);
+          
           // Use browser speech synthesis
           if ('speechSynthesis' in window) {
-            const utterance = new SpeechSynthesisUtterance(text);
+            const utterance = new SpeechSynthesisUtterance(cleanedText);
             utterance.rate = voiceSettings.speed;
             utterance.onstart = () => {
               setState((prev) => ({ ...prev, isSpeaking: true, isLoading: false }));
