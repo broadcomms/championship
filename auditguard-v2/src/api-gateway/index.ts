@@ -1422,17 +1422,8 @@ export default class extends Service<Env> {
         const workspaceId = analyticsDashboardMatch[1];
         const user = await this.validateSession(request);
 
-        const url = new URL(request.url);
-        const metrics = url.searchParams.get('metrics')?.split(',') || [];
-        const startDate = parseInt(url.searchParams.get('startDate') || '0');
-        const endDate = parseInt(url.searchParams.get('endDate') || '0');
-
-        const result = await this.env.REPORTING_SERVICE.getAnalyticsDashboard({
-          workspaceId,
-          userId: user.userId,
-          metrics,
-          dateRange: startDate && endDate ? { start: startDate, end: endDate } : undefined,
-        });
+        // Use ANALYTICS_SERVICE.getWorkspaceDashboard for full dashboard data
+        const result = await this.env.ANALYTICS_SERVICE.getWorkspaceDashboard(workspaceId, user.userId);
 
         return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },

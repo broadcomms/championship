@@ -1,47 +1,67 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { OrganizationLayout } from '@/components/layout/OrganizationLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
+import { ScoreCard } from '@/components/analytics/ScoreCard';
+import { RiskDistributionChart } from '@/components/analytics/RiskDistributionChart';
+import { ComplianceTrendChart } from '@/components/analytics/ComplianceTrendChart';
+import { FrameworkComparisonChart } from '@/components/analytics/FrameworkComparisonChart';
+import { TopIssuesTable } from '@/components/analytics/TopIssuesTable';
+import { calculatePercentage } from '@/lib/analytics/formatting';
 
-interface AnalyticsData {
-  compliance_trend: {
-    date: string;
-    score: number;
-    framework: string;
-  }[];
-  issue_breakdown: {
+interface FrameworkScore {
+  framework: string;
+  score: number;
+  checksPassed?: number;
+  checksFailed?: number;
+  totalChecks?: number;
+  lastCheckAt?: number | null;
+}
+
+interface ComplianceByFramework {
+  frameworkId: string;
+  frameworkName: string;
+  displayName: string;
+  score: number;
+  checksCount: number;
+  lastCheckDate?: number | null;
+}
+
+interface DashboardData {
+  overallScore: number;
+  riskLevel: 'critical' | 'high' | 'medium' | 'low' | 'minimal';
+  totalDocuments: number;
+  documentsChecked: number;
+  coveragePercentage: number;
+  totalIssues: number;
+  openIssues: number;
+  riskDistribution: {
     critical: number;
     high: number;
     medium: number;
     low: number;
+    info: number;
   };
-  document_uploads: {
-    date: string;
+  frameworkScores: FrameworkScore[];
+  recentActivity?: {
+    documentsUploaded: number;
+    checksCompleted: number;
+    issuesResolved: number;
+  };
+  complianceByFramework?: ComplianceByFramework[];
+  topIssues?: Array<{
+    category: string;
+    severity: string;
     count: number;
-  }[];
-  framework_scores: {
-    framework: string;
+  }>;
+  trends?: Array<{
+    date: string;
     score: number;
-    checks: number;
-  }[];
-  resolution_time: {
-    avg_hours: number;
-    by_severity: {
-      critical: number;
-      high: number;
-      medium: number;
-      low: number;
-    };
-  };
-  activity_summary: {
-    total_checks: number;
-    total_documents: number;
-    total_issues: number;
-    resolved_issues: number;
-  };
+    framework?: string;
+  }>;
 }
 
 const normalizeApiResponse = <T,>(response: T | { data: T }): T => {
@@ -65,9 +85,8 @@ export default function WorkspaceAnalyticsPage() {
   const { user } = useAuth();
   const accountId = user?.userId;
 
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [error, setError] = useState<string | null>(null);
 
   const fetchAnalytics = useCallback(async () => {
@@ -75,33 +94,49 @@ export default function WorkspaceAnalyticsPage() {
 
     setLoading(true);
     try {
-      const response = await api.get<AnalyticsData>(`/workspaces/${wsId}/analytics?range=${timeRange}`);
-      setAnalytics(normalizeApiResponse(response));
+      const response = await api.get<DashboardData>(`/api/workspaces/${wsId}/analytics/dashboard`);
+      const data = normalizeApiResponse(response);
+      
+      console.log('Analytics API response:', data);
+      
+      // Ensure riskDistribution has default values if not present
+      const normalizedData: DashboardData = {
+        ...data,
+        riskDistribution: data.riskDistribution || {
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+          info: 0,
+        },
+        frameworkScores: data.frameworkScores || [],
+        trends: data.trends || [],
+        topIssues: data.topIssues || [],
+        // Use complianceByFramework if available, otherwise convert frameworkScores
+        complianceByFramework: data.complianceByFramework || (data.frameworkScores || []).map(fs => ({
+          frameworkId: fs.framework,
+          frameworkName: fs.framework,
+          displayName: fs.framework.toUpperCase(),
+          score: Math.round(fs.score),
+          checksCount: fs.totalChecks || 0,
+          lastCheckDate: fs.lastCheckAt,
+        })),
+      };
+      
+      setDashboard(normalizedData);
       setError(null);
     } catch (fetchError) {
       console.error('Failed to fetch analytics:', fetchError);
       setError(getApiErrorMessage(fetchError));
-      setAnalytics(null);
+      setDashboard(null);
     } finally {
       setLoading(false);
     }
-  }, [timeRange, wsId]);
+  }, [wsId]);
 
   useEffect(() => {
     fetchAnalytics();
   }, [fetchAnalytics]);
-
-  const resolutionRate = useMemo(() => {
-    if (!analytics || analytics.activity_summary.total_issues === 0) return 0;
-    return Math.round(
-      (analytics.activity_summary.resolved_issues / analytics.activity_summary.total_issues) * 100
-    );
-  }, [analytics]);
-
-  const maxUploadCount = useMemo(() => {
-    if (!analytics || analytics.document_uploads.length === 0) return 0;
-    return Math.max(...analytics.document_uploads.map((upload) => upload.count));
-  }, [analytics]);
 
   if (loading) {
     return (
@@ -113,7 +148,7 @@ export default function WorkspaceAnalyticsPage() {
     );
   }
 
-  if (error || !analytics) {
+  if (error || !dashboard) {
     return (
       <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
         <div className="flex items-center justify-center p-8">
@@ -122,367 +157,133 @@ export default function WorkspaceAnalyticsPage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
               {error ? 'Unable to load analytics' : 'No analytics data available'}
             </h3>
-            <p className="text-gray-600">
+            <p className="text-gray-600 mb-4">
               {error
                 ? error
                 : 'Analytics will appear once you start running compliance checks'}
             </p>
+            {error && (
+              <button
+                onClick={fetchAnalytics}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Retry
+              </button>
+            )}
           </div>
         </div>
       </OrganizationLayout>
     );
   }
 
+  // Safe access with defaults
+  const totalIssues = dashboard.totalIssues || 0;
+  const openIssues = dashboard.openIssues || 0;
+  const totalDocuments = dashboard.totalDocuments || 0;
+  const documentsChecked = dashboard.documentsChecked || 0;
+  const coveragePercentage = dashboard.coveragePercentage || 0;
+  const overallScore = dashboard.overallScore || 0;
+  const riskLevel = dashboard.riskLevel || 'info';
+  
+  const resolutionRate = totalIssues > 0 
+    ? calculatePercentage(totalIssues - openIssues, totalIssues)
+    : 0;
+
   return (
     <OrganizationLayout accountId={accountId} orgId={orgId} workspaceId={wsId}>
       <div className="p-8">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics</h1>
-              <p className="text-gray-600">
-                Insights and trends for your compliance program
-              </p>
-            </div>
-
-            {/* Time Range Selector */}
-            <div className="flex gap-2 bg-white border border-gray-200 rounded-lg p-1">
-              {(['7d', '30d', '90d'] as const).map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-4 py-2 rounded font-medium text-sm transition ${
-                    timeRange === range
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  {range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : '90 Days'}
-                </button>
-              ))}
-            </div>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
+            <p className="text-gray-600">
+              Comprehensive compliance insights and performance metrics
+            </p>
           </div>
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <button
+            onClick={fetchAnalytics}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+          >
+            <span>🔄</span>
+            <span>Refresh</span>
+          </button>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <ScoreCard
+            title="Compliance Score"
+            score={overallScore}
+            subtitle={`Risk Level: ${riskLevel}`}
+            icon="📊"
+          />
+          
+          <ScoreCard
+            title="Documents"
+            score={totalDocuments}
+            subtitle={`${documentsChecked} checked (${coveragePercentage}%)`}
+            icon="📄"
+            colorClass="text-gray-900"
+          />
+          
+          <ScoreCard
+            title="Open Issues"
+            score={openIssues}
+            subtitle={`${totalIssues} total issues`}
+            icon="⚠️"
+            colorClass="text-orange-600"
+          />
+          
+          <ScoreCard
+            title="Resolution Rate"
+            score={`${resolutionRate}%`}
+            subtitle={`${totalIssues - openIssues} resolved`}
+            icon="✅"
+            colorClass="text-green-600"
+          />
+        </div>
+
+        {/* Charts Row 1 - Risk Distribution and Trends */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <RiskDistributionChart distribution={dashboard.riskDistribution} />
+          
+          {dashboard.trends && dashboard.trends.length > 0 ? (
+            <ComplianceTrendChart data={dashboard.trends} />
+          ) : (
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-600 text-sm">Total Checks</span>
-                <span className="text-2xl">✓</span>
-              </div>
-              <div className="text-3xl font-bold text-gray-900">
-                {analytics.activity_summary.total_checks}
-              </div>
-              <div className="text-sm text-gray-500 mt-1">Compliance checks run</div>
-            </div>
-
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-600 text-sm">Documents</span>
-                <span className="text-2xl">📄</span>
-              </div>
-              <div className="text-3xl font-bold text-gray-900">
-                {analytics.activity_summary.total_documents}
-              </div>
-              <div className="text-sm text-gray-500 mt-1">Total uploaded</div>
-            </div>
-
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-600 text-sm">Active Issues</span>
-                <span className="text-2xl">📋</span>
-              </div>
-              <div className="text-3xl font-bold text-orange-600">
-                {analytics.activity_summary.total_issues -
-                  analytics.activity_summary.resolved_issues}
-              </div>
-              <div className="text-sm text-gray-500 mt-1">Require attention</div>
-            </div>
-
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-600 text-sm">Resolution Rate</span>
-                <span className="text-2xl">🎯</span>
-              </div>
-              <div className="text-3xl font-bold text-green-600">{resolutionRate}%</div>
-              <div className="text-sm text-gray-500 mt-1">Issues resolved</div>
-            </div>
-          </div>
-
-          {/* Charts Row 1 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* Compliance Trend */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Compliance Score Trend
-              </h3>
-              {analytics.compliance_trend.length > 0 ? (
-                <div className="space-y-3">
-                  {analytics.compliance_trend.slice(-5).map((point, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600">
-                          {new Date(point.date).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </span>
-                        <span className="font-semibold text-gray-900">{point.score}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${
-                            point.score >= 80
-                              ? 'bg-green-500'
-                              : point.score >= 60
-                              ? 'bg-yellow-500'
-                              : 'bg-red-500'
-                          }`}
-                          style={{ width: `${point.score}%` }}
-                        />
-                      </div>
-                      <div className="text-xs text-gray-500">{point.framework}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  No compliance checks yet
-                </div>
-              )}
-            </div>
-
-            {/* Issue Breakdown */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Issue Breakdown by Severity
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-600">Critical</span>
-                    <span className="text-sm font-semibold text-red-900">
-                      {analytics.issue_breakdown.critical}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div
-                      className="bg-red-500 h-3 rounded-full"
-                      style={{
-                        width: `${
-                          (analytics.issue_breakdown.critical /
-                            (analytics.issue_breakdown.critical +
-                              analytics.issue_breakdown.high +
-                              analytics.issue_breakdown.medium +
-                              analytics.issue_breakdown.low || 1)) *
-                          100
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-600">High</span>
-                    <span className="text-sm font-semibold text-orange-900">
-                      {analytics.issue_breakdown.high}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div
-                      className="bg-orange-500 h-3 rounded-full"
-                      style={{
-                        width: `${
-                          (analytics.issue_breakdown.high /
-                            (analytics.issue_breakdown.critical +
-                              analytics.issue_breakdown.high +
-                              analytics.issue_breakdown.medium +
-                              analytics.issue_breakdown.low || 1)) *
-                          100
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-600">Medium</span>
-                    <span className="text-sm font-semibold text-yellow-900">
-                      {analytics.issue_breakdown.medium}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div
-                      className="bg-yellow-500 h-3 rounded-full"
-                      style={{
-                        width: `${
-                          (analytics.issue_breakdown.medium /
-                            (analytics.issue_breakdown.critical +
-                              analytics.issue_breakdown.high +
-                              analytics.issue_breakdown.medium +
-                              analytics.issue_breakdown.low || 1)) *
-                          100
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-600">Low</span>
-                    <span className="text-sm font-semibold text-blue-900">
-                      {analytics.issue_breakdown.low}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div
-                      className="bg-blue-500 h-3 rounded-full"
-                      style={{
-                        width: `${
-                          (analytics.issue_breakdown.low /
-                            (analytics.issue_breakdown.critical +
-                              analytics.issue_breakdown.high +
-                              analytics.issue_breakdown.medium +
-                              analytics.issue_breakdown.low || 1)) *
-                          100
-                        }%`,
-                      }}
-                    />
-                  </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Compliance Trend</h3>
+              <div className="flex items-center justify-center h-64 text-gray-500">
+                <div className="text-center">
+                  <div className="text-4xl mb-2">📈</div>
+                  <p>Trend data will appear after multiple compliance checks</p>
                 </div>
               </div>
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Charts Row 2 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* Framework Scores */}
+        {/* Charts Row 2 - Framework Comparison and Top Issues */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <FrameworkComparisonChart 
+            frameworks={dashboard.complianceByFramework || dashboard.frameworkScores} 
+          />
+          
+          {dashboard.topIssues && dashboard.topIssues.length > 0 ? (
+            <TopIssuesTable issues={dashboard.topIssues} />
+          ) : (
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Scores by Framework
-              </h3>
-              {analytics.framework_scores.length > 0 ? (
-                <div className="space-y-4">
-                  {analytics.framework_scores.map((framework, index) => (
-                    <div key={index}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-900">
-                          {framework.framework}
-                        </span>
-                        <span
-                          className={`text-sm font-semibold ${
-                            framework.score >= 80
-                              ? 'text-green-600'
-                              : framework.score >= 60
-                              ? 'text-yellow-600'
-                              : 'text-red-600'
-                          }`}
-                        >
-                          {framework.score}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${
-                            framework.score >= 80
-                              ? 'bg-green-500'
-                              : framework.score >= 60
-                              ? 'bg-yellow-500'
-                              : 'bg-red-500'
-                          }`}
-                          style={{ width: `${framework.score}%` }}
-                        />
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {framework.checks} checks run
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  No framework data available
-                </div>
-              )}
-            </div>
-
-            {/* Average Resolution Time */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Average Resolution Time
-              </h3>
-              <div className="mb-6">
-                <div className="text-4xl font-bold text-blue-600 mb-1">
-                  {analytics.resolution_time.avg_hours.toFixed(1)}h
-                </div>
-                <div className="text-sm text-gray-600">Overall average</div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Critical</span>
-                  <span className="text-sm font-semibold text-red-900">
-                    {analytics.resolution_time.by_severity.critical.toFixed(1)}h
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">High</span>
-                  <span className="text-sm font-semibold text-orange-900">
-                    {analytics.resolution_time.by_severity.high.toFixed(1)}h
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Medium</span>
-                  <span className="text-sm font-semibold text-yellow-900">
-                    {analytics.resolution_time.by_severity.medium.toFixed(1)}h
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Low</span>
-                  <span className="text-sm font-semibold text-blue-900">
-                    {analytics.resolution_time.by_severity.low.toFixed(1)}h
-                  </span>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Issues</h3>
+              <div className="flex items-center justify-center h-64 text-gray-500">
+                <div className="text-center">
+                  <div className="text-4xl mb-2">✅</div>
+                  <p>No open issues found</p>
+                  <p className="text-sm mt-1">Keep up the great work!</p>
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Document Uploads Timeline */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Document Upload Activity
-            </h3>
-              {analytics.document_uploads.length > 0 ? (
-              <div className="flex items-end gap-2 h-48">
-                  {analytics.document_uploads.map((upload, index) => {
-                    const height = maxUploadCount ? (upload.count / maxUploadCount) * 100 : 0;
-
-                    return (
-                      <div key={index} className="flex-1 flex flex-col items-center">
-                        <div className="flex-1 flex items-end w-full">
-                          <div
-                            className="w-full bg-blue-500 rounded-t hover:bg-blue-600 transition"
-                            style={{ height: `${height}%` }}
-                            title={`${upload.count} uploads`}
-                          />
-                        </div>
-                        <div className="text-xs text-gray-500 mt-2 text-center">
-                          {new Date(upload.date).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">No upload activity</div>
-            )}
-          </div>
+          )}
+        </div>
       </div>
     </OrganizationLayout>
   );
