@@ -593,17 +593,27 @@ Available tools:
   Args: { "documentId": "doc_xxxxx or filename" }
   IMPORTANT: This tool accepts BOTH document IDs and filenames!
 
-- get_compliance_issues: For listing all compliance issues/problems across workspace
-  Args: {} (no args needed)
+- get_compliance_issues: **USE THIS when user asks about issues in the workspace:**
+  * "What issues do we have?"
+  * "List all compliance issues"
+  * "What SOC2 issues do we have?" (use framework filter)
+  * "Show me critical issues" (use severity filter)
+  Args: 
+    - {} for all issues
+    - { "framework": "soc2" } for specific framework (soc2, gdpr, hipaa, sox, iso27001, nist_csf, pci_dss)
+    - { "severity": "critical" } for specific severity (critical, high, medium, low)
+    - { "framework": "gdpr", "severity": "high" } for both filters
 
-- search_knowledge: **USE THIS FOR ANY QUESTION ABOUT:**
-  * Compliance regulations (GDPR, SOC2, HIPAA, ISO27001, NIST CSF, PCI DSS)
-  * Legal requirements, notification timelines, breach procedures
-  * Best practices, checklists, implementation guides
-  * "What are the requirements for...", "How do I...", "What does GDPR say about..."
+- search_knowledge: **USE THIS ONLY FOR REGULATORY/COMPLIANCE INFORMATION:**
+  * "What are the GDPR requirements?" (general regulatory info)
+  * "How does HIPAA define breach notification?" (regulatory definitions)
+  * "What are SOC2 best practices?" (general guidance)
+  **DO NOT use this for workspace-specific questions like "what issues do we have"**
   Args: { "query": "user's exact question", "framework": "gdpr|soc2|hipaa|iso27001|nist_csf|pci_dss|all" }
 
-IMPORTANT: Questions about compliance frameworks MUST use search_knowledge, NOT your training data!
+CRITICAL: 
+- "What SOC2 issues do we have?" → use get_compliance_issues with framework filter
+- "What are SOC2 requirements?" → use search_knowledge
 
 Respond with this exact JSON structure:
 {
@@ -619,69 +629,43 @@ Respond with this exact JSON structure:
 }
 
 Examples:
-User: "What is my compliance score?"
+User: "What SOC2 issues do we have?"
 {
   "needsTools": true,
   "toolCalls": [
     {
-      "name": "get_compliance_status",
-      "arguments": {}
+      "name": "get_compliance_issues",
+      "arguments": { "framework": "soc2" }
     }
   ],
-  "reasoning": "User asking for current compliance score",
-  "userFacingMessage": "Let me check your current compliance status..."
+  "reasoning": "User asking for workspace SOC2 issues",
+  "userFacingMessage": "Checking SOC2 compliance issues in your workspace..."
 }
 
-User: "Find documents about GDPR"
-{
-  "needsTools": true,
-  "toolCalls": [
-    {
-      "name": "search_documents",
-      "arguments": { "query": "GDPR" }
-    }
-  ],
-  "reasoning": "User wants to search for specific documents",
-  "userFacingMessage": "Searching for GDPR-related documents..."
-}
-
-User: "Can you analyze the first document" OR "Analyze DataProtectionPolicy.pdf"
-{
-  "needsTools": true,
-  "toolCalls": [
-    {
-      "name": "get_document_compliance_analysis",
-      "arguments": { "documentId": "DataProtectionPolicy.pdf" }
-    }
-  ],
-  "reasoning": "User wants full compliance analysis results for a document",
-  "userFacingMessage": "Analyzing compliance results for that document..."
-}
-
-User: "What are GDPR data breach notification requirements?"
+User: "What are the SOC2 requirements for access control?"
 {
   "needsTools": true,
   "toolCalls": [
     {
       "name": "search_knowledge",
-      "arguments": { "query": "breach notification requirements", "framework": "gdpr" }
+      "arguments": { "query": "access control requirements", "framework": "soc2" }
     }
   ],
-  "reasoning": "User asking about specific GDPR regulatory requirements",
-  "userFacingMessage": "Let me look that up in our compliance knowledge base..."
+  "reasoning": "User asking about SOC2 regulatory requirements",
+  "userFacingMessage": "Looking up SOC2 access control requirements..."
 }
 
-User: "What are the requirements for incident response?"
+User: "Show me all critical issues"
 {
   "needsTools": true,
   "toolCalls": [
     {
-      "name": "search_knowledge",
-      "arguments": { "query": "incident response requirements", "framework": "all" }
+      "name": "get_compliance_issues",
+      "arguments": { "severity": "critical" }
     }
   ],
-  "reasoning": "User asking about general incident response across frameworks",
-  "userFacingMessage": "Searching our knowledge base for incident response guidance..."
+  "reasoning": "User wants to see critical severity issues",
+  "userFacingMessage": "Retrieving critical compliance issues..."
 }
 
 User: "thank you"
@@ -835,7 +819,33 @@ STRICT RULES:
 4. If the tool returned an error or no data, acknowledge that clearly
 5. Only discuss compliance scores, issues, and details that are EXPLICITLY in the tool results
 
-Provide a clear, accurate response based STRICTLY on the tool data provided above. Do not hallucinate or infer information.`
+WHEN LISTING ISSUES - ALWAYS INCLUDE:
+- Issue TITLE, CATEGORY, SEVERITY, and **FRAMEWORK** for each issue
+- Provide the DESCRIPTION and RECOMMENDATION for each issue
+- Mention the DOCUMENT filename where each issue was found
+- Group issues by framework OR severity when listing multiple issues
+- Be specific and actionable - don't just say "there are X issues", describe what they are
+
+EXAMPLE GOOD RESPONSE:
+"You have 3 issues related to SOC2:
+
+**Medium Severity:**
+1. **Inadequate data breach notification** (Security | SOC2) - Found in DataProtectionPolicy.pdf
+   - Issue: The policy doesn't specify a 72-hour notification timeline
+   - Recommendation: Add explicit timeline for breach notifications
+
+2. **Missing encryption requirements** (Confidentiality | SOC2) - Found in DataProtectionPolicy.pdf
+   - Issue: No mention of encryption standards for data at rest
+   - Recommendation: Specify AES-256 or equivalent encryption standards
+
+**Low Severity:**
+3. **Unclear access logging** (Monitoring | SOC2) - Found in AccessPolicy.pdf
+   - Issue: Policy doesn't specify log retention requirements
+   - Recommendation: Define log retention periods per SOC2 requirements"
+
+CRITICAL: Always mention which FRAMEWORK each issue belongs to (GDPR, SOC2, HIPAA, SOX, etc.)
+
+Provide a clear, specific, and actionable response based STRICTLY on the tool data provided above.`
             }
           ] as any,
           temperature: 0.7,
@@ -1567,11 +1577,18 @@ RULES:
       .select([
         'compliance_issues.id',
         'compliance_issues.severity',
+        'compliance_issues.category',
+        'compliance_issues.title',
+        'compliance_issues.description',
+        'compliance_issues.recommendation',
         'compliance_issues.regulation_citation',
         'compliance_issues.excerpt',
         'compliance_issues.remediation_steps',
         'compliance_issues.framework',
         'compliance_issues.status',
+        'compliance_issues.priority',
+        'compliance_issues.confidence',
+        'compliance_issues.location',
         'documents.filename',
         'documents.id as document_id',
       ])
@@ -1587,6 +1604,7 @@ RULES:
     }
 
     const issues = await query
+      .orderBy('compliance_issues.priority', 'desc')
       .orderBy('compliance_issues.severity', 'asc')
       .limit(args.limit || 20)
       .execute();
@@ -1595,16 +1613,24 @@ RULES:
       issues: issues.map((issue) => ({
         id: issue.id,
         severity: issue.severity,
+        category: issue.category,
+        title: issue.title,
+        description: issue.description,
+        recommendation: issue.recommendation,
         framework: issue.framework,
         regulation: issue.regulation_citation,
         excerpt: issue.excerpt,
         remediation: issue.remediation_steps,
+        priority: issue.priority,
+        confidence: issue.confidence,
+        location: issue.location,
         document: {
           id: issue.document_id,
           filename: issue.filename,
         },
       })),
       total: issues.length,
+      summary: `Found ${issues.length} open compliance issue(s)${args.severity ? ` with severity '${args.severity}'` : ''}${args.framework ? ` for framework '${args.framework}'` : ''}`,
     };
   }
 
