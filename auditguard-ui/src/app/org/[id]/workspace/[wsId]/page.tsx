@@ -30,6 +30,10 @@ interface WorkspaceStats {
   compliance_checks: number;
   open_issues: number;
   completion_rate: number;
+  avg_compliance_score: number;
+  analytics_compliance_score: number;
+  total_members: number;
+  total_ai_messages: number;
 }
 
 interface RecentActivity {
@@ -237,6 +241,58 @@ export default function WorkspaceDashboardPage() {
               </div>
               <div className="text-sm text-gray-500 mt-1">
                 Issues resolved
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-600 text-sm">Avg Compliance Score</span>
+                <span className="text-2xl">🎯</span>
+              </div>
+              <div className="text-3xl font-bold text-gray-900">
+                {stats.avg_compliance_score}%
+              </div>
+              <div className="text-sm text-gray-500 mt-1">
+                From compliance checks
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-600 text-sm">Workspace Risk Score</span>
+                <span className="text-2xl">🛡️</span>
+              </div>
+              <div className="text-3xl font-bold text-gray-900">
+                {stats.analytics_compliance_score}%
+              </div>
+              <div className="text-sm text-gray-500 mt-1">
+                Based on issue severity
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-600 text-sm">Total Members</span>
+                <span className="text-2xl">👥</span>
+              </div>
+              <div className="text-3xl font-bold text-gray-900">
+                {stats.total_members}
+              </div>
+              <div className="text-sm text-gray-500 mt-1">
+                Workspace collaborators
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-600 text-sm">Total AI Messages</span>
+                <span className="text-2xl">💬</span>
+              </div>
+              <div className="text-3xl font-bold text-gray-900">
+                {stats.total_ai_messages}
+              </div>
+              <div className="text-sm text-gray-500 mt-1">
+                AI assistant responses
               </div>
             </div>
           </div>

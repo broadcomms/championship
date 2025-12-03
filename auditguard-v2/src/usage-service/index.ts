@@ -343,6 +343,10 @@ export default class extends Service<Env> {
     compliance_checks: number;
     open_issues: number;
     completion_rate: number;
+    avg_compliance_score: number;
+    analytics_compliance_score: number;
+    total_members: number;
+    total_ai_messages: number;
   }> {
     const db = this.getDb();
 
@@ -362,7 +366,17 @@ export default class extends Service<Env> {
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
     // Get comprehensive stats
-    const [docCount, recentDocCount, checkCount, openIssueCount, resolvedIssueCount] = await Promise.all([
+    const [
+      docCount,
+      recentDocCount,
+      checkCount,
+      openIssueCount,
+      resolvedIssueCount,
+      complianceScores,
+      latestWorkspaceScore,
+      memberCount,
+      aiMessageCount,
+    ] = await Promise.all([
       // Total documents
       db
         .selectFrom('documents')
@@ -400,12 +414,53 @@ export default class extends Service<Env> {
         .where('workspace_id', '=', workspaceId)
         .where('status', '=', 'resolved')
         .executeTakeFirst(),
+
+      // Average compliance score (from compliance checks)
+      db
+        .selectFrom('compliance_checks')
+        .select(['overall_score'])
+        .where('workspace_id', '=', workspaceId)
+        .where('status', '=', 'completed')
+        .execute(),
+
+      // Analytics compliance score (latest from workspace_scores)
+      db
+        .selectFrom('workspace_scores')
+        .select(['overall_score'])
+        .where('workspace_id', '=', workspaceId)
+        .orderBy('calculated_at', 'desc')
+        .executeTakeFirst(),
+
+      // Total members
+      db
+        .selectFrom('workspace_members')
+        .select(({ fn }) => fn.count<number>('user_id').as('count'))
+        .where('workspace_id', '=', workspaceId)
+        .executeTakeFirst(),
+
+      // Total AI messages
+      db
+        .selectFrom('conversation_messages')
+        .select(({ fn }) => fn.count<number>('conversation_messages.id').as('count'))
+        .innerJoin('conversation_sessions', 'conversation_sessions.id', 'conversation_messages.session_id')
+        .where('conversation_sessions.workspace_id', '=', workspaceId)
+        .where('conversation_messages.role', '=', 'assistant')
+        .executeTakeFirst(),
     ]);
 
     // Calculate completion rate (resolved / total issues * 100)
     const totalIssues = (openIssueCount?.count || 0) + (resolvedIssueCount?.count || 0);
-    const completionRate = totalIssues > 0 
+    const completionRate = totalIssues > 0
       ? Math.round((resolvedIssueCount?.count || 0) / totalIssues * 100)
+      : 0;
+
+    // Calculate average compliance score from completed checks
+    const validScores = (complianceScores || [])
+      .map(c => c.overall_score)
+      .filter((score): score is number => typeof score === 'number' && score !== null);
+
+    const avgComplianceScore = validScores.length > 0
+      ? Math.round(validScores.reduce((sum, score) => sum + score, 0) / validScores.length)
       : 0;
 
     return {
@@ -414,6 +469,10 @@ export default class extends Service<Env> {
       compliance_checks: checkCount?.count || 0,
       open_issues: openIssueCount?.count || 0,
       completion_rate: completionRate,
+      avg_compliance_score: avgComplianceScore,
+      analytics_compliance_score: latestWorkspaceScore?.overall_score || 0,
+      total_members: memberCount?.count || 0,
+      total_ai_messages: aiMessageCount?.count || 0,
     };
   }
 

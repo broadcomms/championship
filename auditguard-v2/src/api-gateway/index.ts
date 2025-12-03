@@ -4071,6 +4071,105 @@ export default class extends Service<Env> {
         }
       }
 
+      // POST /api/workspaces/:id/assistant/analytics - Get assistant analytics
+      const assistantAnalyticsMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/assistant\/analytics$/);
+      if (assistantAnalyticsMatch && assistantAnalyticsMatch[1] && request.method === 'POST') {
+        const startTime = Date.now();
+        const operation = 'assistant.getAnalytics';
+
+        try {
+          const workspaceId = assistantAnalyticsMatch[1];
+          const user = await this.validateSession(request);
+
+          const parseResult = await this.safeParseJSON<{
+            timeRange?: 'week' | 'month' | 'all';
+            includeDetails?: boolean;
+          }>(request, []);
+
+          if (!parseResult.success) {
+            return this.trackAndReturn(
+              operation,
+              startTime,
+              new Response(JSON.stringify({ error: (parseResult as any).error }), {
+                status: (parseResult as any).status,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              })
+            );
+          }
+
+          const timeRange = parseResult.data.timeRange || 'week';
+          const result = await this.env.ASSISTANT_SERVICE.getAnalytics(workspaceId, user.userId, timeRange);
+
+          return this.trackAndReturn(
+            operation,
+            startTime,
+            new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            })
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await this.trackPerformance(operation, startTime, false, errorMessage);
+
+          return new Response(JSON.stringify({ error: errorMessage }), {
+            status: error instanceof Error && error.message.includes('Access denied') ? 403 : 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // POST /api/workspaces/:id/assistant/analytics/export - Export analytics as CSV
+      const assistantAnalyticsExportMatch = path.match(/^\/api\/workspaces\/([^\/]+)\/assistant\/analytics\/export$/);
+      if (assistantAnalyticsExportMatch && assistantAnalyticsExportMatch[1] && request.method === 'POST') {
+        const startTime = Date.now();
+        const operation = 'assistant.exportAnalytics';
+
+        try {
+          const workspaceId = assistantAnalyticsExportMatch[1];
+          const user = await this.validateSession(request);
+
+          const parseResult = await this.safeParseJSON<{
+            format?: 'csv';
+            timeRange?: 'week' | 'month' | 'all';
+          }>(request, []);
+
+          if (!parseResult.success) {
+            return this.trackAndReturn(
+              operation,
+              startTime,
+              new Response(JSON.stringify({ error: (parseResult as any).error }), {
+                status: (parseResult as any).status,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              })
+            );
+          }
+
+          const format = parseResult.data.format || 'csv';
+          const timeRange = parseResult.data.timeRange || 'week';
+          const csvData = await this.env.ASSISTANT_SERVICE.exportAnalytics(workspaceId, user.userId, format, timeRange);
+
+          return this.trackAndReturn(
+            operation,
+            startTime,
+            new Response(csvData, {
+              headers: {
+                'Content-Type': 'text/csv',
+                'Content-Disposition': `attachment; filename="assistant-analytics-${Date.now()}.csv"`,
+                ...corsHeaders,
+              },
+            })
+          );
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          await this.trackPerformance(operation, startTime, false, errorMessage);
+
+          return new Response(JSON.stringify({ error: errorMessage }), {
+            status: error instanceof Error && error.message.includes('Access denied') ? 403 : 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
       // Match /api/assistant/initialize (admin-only)
       if (path === '/api/assistant/initialize' && request.method === 'POST') {
         const startTime = Date.now();
