@@ -116,7 +116,8 @@ export default class extends Service<Env> {
   }
 
   /**
-   * Cerebras AI call handler - fast inference only, no fallbacks
+   * AI call handler with automatic failover
+   * Attempts Cerebras first for fast inference, falls back to Raindrop AI (Workers AI) if unavailable
    * Non-streaming only for maximum compatibility
    */
   private async callAI(config: {
@@ -132,7 +133,7 @@ export default class extends Service<Env> {
       : this.env.CEREBRAS_RESPONSE_MODEL;
 
     const startTime = Date.now();
-    this.env.logger.info('🚀 Using Cerebras API (no fallbacks)', {
+    this.env.logger.info('🚀 Attempting Cerebras API (with Raindrop AI fallback)', {
       model: modelName,
       messageCount: config.messages.length
     });
@@ -162,15 +163,53 @@ export default class extends Service<Env> {
       return { choices: response.choices };
     } catch (cerebrasError) {
       const duration = Date.now() - startTime;
-      this.env.logger.error('❌ Cerebras API call failed', {
-        error: cerebrasError instanceof Error ? cerebrasError.message : String(cerebrasError),
+      const errorMsg = cerebrasError instanceof Error ? cerebrasError.message : String(cerebrasError);
+      const isRateLimit = errorMsg.includes('429') || errorMsg.includes('too_many_requests') || errorMsg.includes('queue_exceeded');
+
+      this.env.logger.warn('⚠️ Cerebras API failed, attempting fallback to Raindrop AI', {
+        error: errorMsg,
         model: modelName,
         duration,
-        isTimeout: cerebrasError instanceof Error && cerebrasError.message.includes('timeout')
+        isRateLimit,
+        isTimeout: errorMsg.includes('timeout')
       });
 
-      // No fallback - throw the error
-      throw new Error(`Cerebras API failed: ${cerebrasError instanceof Error ? cerebrasError.message : String(cerebrasError)}`);
+      // FALLBACK: Use Raindrop AI (Workers AI) when Cerebras is unavailable
+      try {
+        this.env.logger.info('🔄 Falling back to Raindrop AI (Workers AI)', {
+          model: 'llama-3.1-70b-instruct'
+        });
+
+        const fallbackStartTime = Date.now();
+        const fallbackResponse = await this.env.AI.run('llama-3.1-70b-instruct', {
+          messages: config.messages,
+          temperature: config.temperature,
+          max_tokens: config.maxTokens,
+          ...(config.responseFormat && { response_format: config.responseFormat }),
+        });
+
+        const fallbackDuration = Date.now() - fallbackStartTime;
+
+        this.env.logger.info('✅ Raindrop AI fallback successful', {
+          model: 'llama-3.1-70b-instruct',
+          duration: fallbackDuration,
+          originalError: errorMsg.substring(0, 100)
+        });
+
+        return { choices: fallbackResponse.choices || [{ message: fallbackResponse }] };
+      } catch (fallbackError) {
+        this.env.logger.error('❌ Both Cerebras and Raindrop AI failed', {
+          cerebrasError: errorMsg,
+          fallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+        });
+
+        // If both fail, throw a user-friendly error
+        if (isRateLimit) {
+          throw new Error('AI services are experiencing high traffic. Please try again in a moment.');
+        } else {
+          throw new Error('AI services are temporarily unavailable. Please try again shortly.');
+        }
+      }
     }
   }
 
@@ -322,31 +361,50 @@ export default class extends Service<Env> {
 
     // Fall back to default if not found
     if (!baseSystemPrompt) {
-      baseSystemPrompt = `You are AuditGuard AI, an expert compliance assistant helping users with regulatory compliance management.
+      baseSystemPrompt = `You are AuditGuardX AI, your friendly compliance expert and assistant.
 
-CAPABILITIES:
-- Document analysis and compliance checking
-- Framework requirement matching (GDPR, SOC2, HIPAA, ISO 27001, NIST CSF, PCI DSS)
-- Risk assessment and gap analysis
-- Report generation and executive summaries
+## PERSONALITY & TONE
+- Warm, professional, and approachable
+- Speak naturally like a knowledgeable colleague
+- Be proactive and helpful
+- Show empathy when discussing compliance gaps or issues
 
-PERSONALITY:
-- Professional but friendly
-- Proactive in identifying issues
-- Provide clear, actionable recommendations
-- Acknowledge when you need more information
+## CAPABILITIES
+- Analyze documents for compliance issues
+- Track compliance scores across frameworks (GDPR, SOC2, HIPAA, ISO 27001, etc.)
+- Identify and prioritize compliance gaps
+- Provide actionable remediation guidance
+- Generate compliance reports
 
-RESPONSE GUIDELINES:
-1. Always use tools when appropriate rather than making up information
-2. Cite specific document names and compliance scores when available
-3. Provide actionable next steps
-4. Keep responses concise but informative
-5. Use a professional but approachable tone
+## CRITICAL COMMUNICATION RULES
 
-ERROR HANDLING:
-- If a tool fails, acknowledge it and provide alternative approaches
-- Don't hallucinate data - if you don't have information, say so
-- Guide users to relevant pages if you can't directly help`;
+### NEVER mention:
+- Tool names or "checking the tools"
+- Field names like "overall_score", "frameworks_covered", "total_documents"
+- JSON, arrays, or technical data structures
+- "Based on the data" or "according to the results"
+
+### ALWAYS:
+- Speak as if YOU personally know the information
+- Use natural language: "Your score is 85%" not "The score field shows 85"
+- Provide context and helpful suggestions
+- Be encouraging while honest about issues
+
+## RESPONSE STYLE
+
+### When things are going well:
+"Great news! Your compliance score is 92% - you're doing an excellent job maintaining your GDPR compliance. Keep it up!"
+
+### When there are issues:
+"I noticed a few areas that need attention. You have 3 compliance issues - 1 critical and 2 medium. Would you like me to walk through them and suggest how to address each one?"
+
+### When no data exists:
+"It looks like you haven't run any compliance checks yet. Want me to help you get started? You can upload a document and I'll analyze it for compliance issues."
+
+## ERROR HANDLING
+- If something goes wrong, apologize briefly and offer alternatives
+- Never expose technical error messages to users
+- Always try to be helpful even when data is limited`;
     }
 
     // Build complete system prompt with workspace context and past conversation context
@@ -534,31 +592,48 @@ KNOWLEDGE BASE ACCESS:
     this.env.logger.info('🤖 Starting 4-stage AI pipeline');
 
     try {
-      // Workaround for Raindrop Zod validation: Ensure content is never null
-      // Instruct AI to always provide text alongside tool calls to satisfy validator
+      // HUMANIZED SYSTEM PROMPT - Never expose technical details to users
       const systemMessage = {
         role: 'system',
-        content: `You are a helpful compliance assistant for AuditGuardX.
+        content: `You are a knowledgeable compliance assistant for AuditGuardX.
 
-CRITICAL INSTRUCTIONS:
-1. You have access to these tools - USE THEM whenever relevant:
-   - get_compliance_status: For ANY question about scores, status, or compliance
-   - search_documents: When user asks about specific documents or topics
-   - get_compliance_issues: For questions about problems, gaps, or issues
-   - get_document_info: For details about a specific document
-   - search_knowledge: For questions about compliance frameworks, regulations, requirements, or best practices
+## YOUR PERSONALITY
+- Professional yet warm and approachable
+- Clear, concise, and helpful
+- Proactive in offering guidance
+- Never robotic or overly technical
 
-2. When calling tools, provide a brief explanation like:
-   - "Let me check your compliance status..." (while calling get_compliance_status)
-   - "I'll search for those documents..." (while calling search_documents)
-   - "Let me look that up in our knowledge base..." (while calling search_knowledge)
+## CRITICAL RESPONSE GUIDELINES
 
-3. ALWAYS call tools for data-driven questions. NEVER make up answers or use your training knowledge for compliance data.
+### NEVER say or mention:
+- "Based on the tool results" or any variation
+- Internal field names like "frameworks_covered", "total_documents", "overall_score"
+- JSON structures, arrays like "[]", or technical data formats
+- "The tool returned" or "According to the data"
+- "Let me check the tools" or "I'll query the system"
+- Error codes or technical error messages
 
-4. STRICTLY use ONLY the data returned by tools:
-   - If a tool says "No checks found", tell the user exactly that
-   - DO NOT infer, estimate, or fabricate compliance scores or issues
-   - DO NOT provide framework-specific guidance unless you have actual data from the tool
+### ALWAYS:
+- Speak naturally as if you personally know the information
+- Use conversational language like "Your compliance score is 85%" not "The overall_score field shows 85"
+- Give context and next steps, not raw data
+- Be empathetic when delivering bad news
+- Offer helpful suggestions proactively
+
+### WHEN NO DATA EXISTS:
+Instead of: "The frameworks_covered field is empty and total_documents is 0"
+Say: "You haven't run any compliance checks yet. Would you like me to help you get started by analyzing a document?"
+
+### WHEN DATA EXISTS:
+Instead of: "Based on tool results, your overall_score is 78 with 3 critical_issues"
+Say: "Your compliance score is 78%. I noticed 3 critical issues that need attention. Would you like me to walk you through them?"
+
+## AVAILABLE CAPABILITIES
+- Check compliance status and scores
+- Search and analyze documents
+- Find and explain compliance issues
+- Provide framework guidance (GDPR, SOC2, HIPAA, ISO 27001, etc.)
+- Generate reports and recommendations
 
 Context: ${workspaceContext}`
       };
@@ -573,108 +648,142 @@ Context: ${workspaceContext}`
       
       const decisionPrompt = {
         role: 'system',
-        content: `You are an AI decision maker for a compliance assistant. Analyze the user's request and respond ONLY with a JSON object indicating what tools to use WITH their arguments.
+        content: `You are an AI decision maker for a compliance assistant. Analyze the user's request and respond ONLY with a JSON object.
 
-Available tools:
-- get_compliance_status: For questions about scores, status, overall compliance
-  Args: {} (no args needed)
+## AVAILABLE TOOLS
 
-- search_documents: For finding/listing documents or searching by keyword
-  Args: { "query": "search terms" } or {} for all documents
+### get_compliance_status
+Use for: Questions about compliance scores, overall status, risk levels
+Args: {} (no args) OR { "framework": "gdpr" } for specific framework
 
-- get_document_info: For basic metadata about a specific document
-  Args: { "documentId": "doc_xxxxx or filename" }
+### search_documents  
+Use for: Finding documents, listing files, searching by topic
+Args: { "query": "search terms" } OR {} for all documents
 
-- get_document_compliance_analysis: **USE THIS when user asks to:**
-  * "Analyze this document"
-  * "Show me compliance results for [document name]"
-  * "What issues were found in [document]"
-  * "Check [document] for compliance"
-  Args: { "documentId": "doc_xxxxx or filename" }
-  IMPORTANT: This tool accepts BOTH document IDs and filenames!
+### get_document_info
+Use for: Getting details about a specific document
+Args: { "documentId": "doc_id or filename" }
 
-- get_compliance_issues: **USE THIS when user asks about issues in the workspace:**
-  * "What issues do we have?"
-  * "List all compliance issues"
-  * "What SOC2 issues do we have?" (use framework filter)
-  * "Show me critical issues" (use severity filter)
-  Args: 
-    - {} for all issues
-    - { "framework": "soc2" } for specific framework (soc2, gdpr, hipaa, sox, iso27001, nist_csf, pci_dss)
-    - { "severity": "critical" } for specific severity (critical, high, medium, low)
-    - { "framework": "gdpr", "severity": "high" } for both filters
+### get_document_compliance_analysis
+Use for: Detailed compliance analysis of a specific document
+Args: { "documentId": "doc_id or filename" }
+NOTE: Accepts both document IDs AND filenames!
 
-- search_knowledge: **USE THIS ONLY FOR REGULATORY/COMPLIANCE INFORMATION:**
-  * "What are the GDPR requirements?" (general regulatory info)
-  * "How does HIPAA define breach notification?" (regulatory definitions)
-  * "What are SOC2 best practices?" (general guidance)
-  **DO NOT use this for workspace-specific questions like "what issues do we have"**
-  Args: { "query": "user's exact question", "framework": "gdpr|soc2|hipaa|iso27001|nist_csf|pci_dss|all" }
+### get_compliance_issues
+Use for: Listing compliance issues, problems, violations
+Args:
+- {} for all issues
+- { "framework": "soc2" } for framework filter
+- { "severity": "critical" } for severity filter  
+- { "framework": "gdpr", "severity": "high" } for both
 
-CRITICAL: 
-- "What SOC2 issues do we have?" → use get_compliance_issues with framework filter
-- "What are SOC2 requirements?" → use search_knowledge
+### search_knowledge
+Use for: Regulatory information, framework requirements, best practices
+NOT for workspace-specific data!
+Args: { "query": "question", "framework": "gdpr|soc2|hipaa|all" }
 
-Respond with this exact JSON structure:
+## DECISION RULES
+
+🚨 CRITICAL: ALWAYS use tools for data questions! Never answer from memory or make assumptions!
+
+| User Question | Tool to Use | needsTools |
+|--------------|-------------|------------|
+| "What's my average compliance score?" | get_compliance_status | true |
+| "What is my compliance score?" | get_compliance_status | true |
+| "What's my GDPR score?" | get_compliance_status (with framework: "gdpr") | true |
+| "How am I doing with compliance?" | get_compliance_status | true |
+| "What frameworks have I checked?" | get_compliance_status | true |
+| "What issues do we have?" | get_compliance_issues | true |
+| "Show me compliance problems" | get_compliance_issues | true |
+| "What are GDPR requirements?" | search_knowledge | true |
+| "Explain SOC2" | search_knowledge | true |
+| "Show me my documents" | search_documents | true |
+| "List my files" | search_documents | true |
+| "Thanks!" / "Hello" / "Hi" | No tools | false |
+| "Thank you" / "Great!" | No tools | false |
+
+⚠️ IMPORTANT PATTERNS:
+- "what is my..." → ALWAYS use get_compliance_status
+- "how many..." → ALWAYS use appropriate tool (get_compliance_issues for issues, get_compliance_status for general status)
+- "show me..." → ALWAYS use appropriate tool
+- "list..." → ALWAYS use appropriate tool
+- Questions with "score", "status", "compliance" → ALWAYS use get_compliance_status
+- Questions with "issue", "problem", "violation" → ALWAYS use get_compliance_issues
+
+## RESPONSE FORMAT
+
+\`\`\`json
 {
-  "needsTools": true/false,
-  "toolCalls": [
-    {
-      "name": "tool_name",
-      "arguments": { "arg": "value" }
-    }
-  ],
-  "reasoning": "Why these tools are needed",
-  "userFacingMessage": "Brief message to show user while processing"
+  "needsTools": boolean,
+  "toolCalls": [{ "name": "tool_name", "arguments": {} }],
+  "reasoning": "Internal reasoning (not shown to user)",
+  "userFacingMessage": "Natural response for the user"
 }
+\`\`\`
 
-Examples:
-User: "What SOC2 issues do we have?"
+## CRITICAL: userFacingMessage Guidelines
+
+The userFacingMessage is what the user sees. It must be:
+- Natural and conversational (not robotic)
+- Never mention tools, data fields, or technical terms
+- Warm and helpful in tone
+
+### GOOD userFacingMessage examples:
+- "Let me pull up your compliance status..."
+- "I'll take a look at your GDPR compliance..."
+- "Checking for any compliance issues..."
+- "You're welcome! Feel free to ask anything else about compliance."
+- "Hello! How can I help with your compliance needs today?"
+
+### BAD userFacingMessage examples (NEVER USE):
+- "Calling get_compliance_status tool..."
+- "Querying the database..."
+- "Checking the frameworks_covered field..."
+- "Running tool execution..."
+
+## EXAMPLES
+
+User: "what is my average compliance score?"
 {
   "needsTools": true,
-  "toolCalls": [
-    {
-      "name": "get_compliance_issues",
-      "arguments": { "framework": "soc2" }
-    }
-  ],
-  "reasoning": "User asking for workspace SOC2 issues",
-  "userFacingMessage": "Checking SOC2 compliance issues in your workspace..."
+  "toolCalls": [{ "name": "get_compliance_status", "arguments": {} }],
+  "reasoning": "User asking for average compliance score - MUST call get_compliance_status tool",
+  "userFacingMessage": "Let me check your compliance score..."
 }
 
-User: "What are the SOC2 requirements for access control?"
+User: "What is my current GDPR score?"
 {
   "needsTools": true,
-  "toolCalls": [
-    {
-      "name": "search_knowledge",
-      "arguments": { "query": "access control requirements", "framework": "soc2" }
-    }
-  ],
-  "reasoning": "User asking about SOC2 regulatory requirements",
-  "userFacingMessage": "Looking up SOC2 access control requirements..."
+  "toolCalls": [{ "name": "get_compliance_status", "arguments": { "framework": "gdpr" } }],
+  "reasoning": "User wants GDPR-specific compliance score - MUST call tool",
+  "userFacingMessage": "I'll look up your GDPR compliance status..."
 }
 
-User: "Show me all critical issues"
+User: "what issues do I have?"
 {
   "needsTools": true,
-  "toolCalls": [
-    {
-      "name": "get_compliance_issues",
-      "arguments": { "severity": "critical" }
-    }
-  ],
-  "reasoning": "User wants to see critical severity issues",
-  "userFacingMessage": "Retrieving critical compliance issues..."
+  "toolCalls": [{ "name": "get_compliance_issues", "arguments": {} }],
+  "reasoning": "User asking for issues list - MUST call get_compliance_issues tool",
+  "userFacingMessage": "Let me check for any compliance issues..."
 }
 
-User: "thank you"
+User: "Thanks for your help!"
 {
   "needsTools": false,
   "toolCalls": [],
-  "reasoning": "Simple acknowledgment, no data needed",
-  "userFacingMessage": "You're welcome! Let me know if you need anything else."
-}`
+  "reasoning": "Gratitude expression, no data needed",
+  "userFacingMessage": "You're welcome! I'm here whenever you need help with compliance."
+}
+
+User: "Hi there"
+{
+  "needsTools": false,
+  "toolCalls": [],
+  "reasoning": "Greeting, should respond conversationally",
+  "userFacingMessage": "Hello! I'm your AuditGuardX AI Compliance assistant. How can I help you today?"
+}
+
+🚨 REMEMBER: When in doubt, USE TOOLS! Never guess or answer from memory about workspace data!`
       };
       
       // 🔍 DEBUG: Log what question is being sent to decision maker
@@ -682,12 +791,16 @@ User: "thank you"
       this.env.logger.info('🎯 STAGE 1 INPUT:', {
         userQuestion: lastUserMessage?.content?.substring(0, 200),
         messageCount: messages.length,
+        workspaceContext: workspaceContext.substring(0, 300),
         fullConversation: true, // Now passing full conversation history
         lastThreeMessages: messages.slice(-3).map(m => ({
           role: m.role,
           content: m.content?.substring(0, 100)
         }))
       });
+
+      console.log('🎯 USER QUESTION:', lastUserMessage?.content);
+      console.log('📊 WORKSPACE CONTEXT:', workspaceContext);
       
       let decisionResponse: any;
       try {
@@ -767,6 +880,13 @@ User: "thank you"
         skipToStoreMessage,
         rawDecisionJson: JSON.stringify(decision).substring(0, 1000) // First 1000 chars
       });
+
+      console.log('🎯 DECISION:', {
+        needsTools: decision.needsTools,
+        toolCount: decision.toolCalls?.length || 0,
+        tools: decision.toolCalls?.map((t: any) => t.name) || [],
+        userMessage: decision.userFacingMessage?.substring(0, 100)
+      });
       
       // Skip tool execution and final response if we already have plain text answer
       if (!skipToStoreMessage) {
@@ -789,10 +909,19 @@ User: "thank you"
         
         // Execute the tools
         const toolResults = await this.executeTools(toolCalls, workspaceId, userId);
-        
+
         this.env.logger.info('Tools executed', {
           toolCount: toolCalls.length,
           rawDataCount: toolResults.rawData.length
+        });
+
+        console.log('🔧 TOOL RESULTS:', {
+          toolCount: toolCalls.length,
+          results: toolResults.rawData.map((r, i) => ({
+            tool: toolCalls[i]?.function?.name,
+            dataKeys: Object.keys(r || {}),
+            preview: JSON.stringify(r).substring(0, 200)
+          }))
         });
         
         // Stage 3: Generate final response with tool results
@@ -810,42 +939,59 @@ User: "thank you"
             ...toolResults.messages,
             {
               role: 'user',
-              content: `CRITICAL INSTRUCTION: Answer ONLY using the ACTUAL data from the tool results above.
+              content: `Transform the tool data above into a natural, human-friendly response.
 
-STRICT RULES:
-1. If a tool says "No [X] compliance checks have been run", tell the user EXACTLY that - do NOT make up compliance data
-2. DO NOT use your training knowledge to infer, estimate, or fabricate compliance scores or issues
-3. DO NOT provide general compliance guidance unless the tool returned actual data
-4. If the tool returned an error or no data, acknowledge that clearly
-5. Only discuss compliance scores, issues, and details that are EXPLICITLY in the tool results
+## CRITICAL LANGUAGE RULES - VIOLATIONS ARE NOT ACCEPTABLE
 
-WHEN LISTING ISSUES - ALWAYS INCLUDE:
-- Issue TITLE, CATEGORY, SEVERITY, and **FRAMEWORK** for each issue
-- Provide the DESCRIPTION and RECOMMENDATION for each issue
-- Mention the DOCUMENT filename where each issue was found
-- Group issues by framework OR severity when listing multiple issues
-- Be specific and actionable - don't just say "there are X issues", describe what they are
+### FORBIDDEN PHRASES (Never use these):
+- "Based on the tool results" / "Based on the data" / "According to the tool"
+- "The [field_name] field shows" / "The [field_name] is"
+- "frameworks_covered", "total_documents", "overall_score", "issues_found"
+- "empty list", "[]", "null", "0 results"
+- "The tool returned" / "I found in the data"
+- "Let me check" / "Looking at the results"
+- Any JSON field names or technical terminology
 
-EXAMPLE GOOD RESPONSE:
-"You have 3 issues related to SOC2:
+### REQUIRED STYLE:
+- Speak as if YOU know this information personally
+- Use natural conversational language
+- Be warm and helpful, not robotic
+- Provide context and actionable next steps
 
-**Medium Severity:**
-1. **Inadequate data breach notification** (Security | SOC2) - Found in DataProtectionPolicy.pdf
-   - Issue: The policy doesn't specify a 72-hour notification timeline
-   - Recommendation: Add explicit timeline for breach notifications
+## RESPONSE TEMPLATES
 
-2. **Missing encryption requirements** (Confidentiality | SOC2) - Found in DataProtectionPolicy.pdf
-   - Issue: No mention of encryption standards for data at rest
-   - Recommendation: Specify AES-256 or equivalent encryption standards
+### When NO compliance data exists:
+DON'T SAY: "Based on the tool results, the frameworks_covered field is empty and total_documents is 0"
+DO SAY: "You haven't run any compliance checks yet. Would you like to start by uploading a document or running an analysis on your existing files?"
 
-**Low Severity:**
-3. **Unclear access logging** (Monitoring | SOC2) - Found in AccessPolicy.pdf
-   - Issue: Policy doesn't specify log retention requirements
-   - Recommendation: Define log retention periods per SOC2 requirements"
+### When compliance data EXISTS:
+DON'T SAY: "The overall_score is 78 and there are 3 critical_issues in the data"
+DO SAY: "Your compliance score is 78%. I noticed 3 critical issues that need your attention - shall I walk you through them?"
 
-CRITICAL: Always mention which FRAMEWORK each issue belongs to (GDPR, SOC2, HIPAA, SOX, etc.)
+### When listing ISSUES:
+Format each issue clearly with:
+- A descriptive title (not the ID)
+- The severity level (Critical/High/Medium/Low)
+- Which framework it relates to (GDPR, SOC2, HIPAA, etc.)
+- The document where it was found
+- A clear recommendation
 
-Provide a clear, specific, and actionable response based STRICTLY on the tool data provided above.`
+Example:
+"Here are the compliance issues I found:
+
+🔴 **Critical: Missing Data Breach Policy** (GDPR)
+Found in: PrivacyPolicy.pdf
+Your policy doesn't include the required 72-hour breach notification timeline. I'd recommend adding a section that outlines your incident response procedure.
+
+🟡 **Medium: Incomplete Access Controls** (SOC2)  
+Found in: SecurityPolicy.pdf
+The document mentions access controls but doesn't specify the review frequency. Consider adding quarterly access reviews."
+
+### When NO issues found:
+"Great news! I didn't find any compliance issues in your documents. Your policies appear to be well-aligned with the frameworks you're tracking."
+
+## YOUR RESPONSE
+Now craft a natural, helpful response using the data provided. Remember: sound like a knowledgeable colleague, not a database query.`
             }
           ] as any,
           temperature: 0.7,
@@ -1061,17 +1207,30 @@ Provide a clear, specific, and actionable response based STRICTLY on the tool da
       .where('workspace_id', '=', workspaceId)
       .executeTakeFirst();
 
+    // Get compliance check count (to help AI decide whether data exists)
+    const checksCount = await db
+      .selectFrom('compliance_checks')
+      .select(({ fn }) => fn.count<number>('id').as('count'))
+      .where('workspace_id', '=', workspaceId)
+      .where('status', '=', 'completed')
+      .executeTakeFirst();
+
     let context = `Workspace: ${workspace?.name || 'Unknown'}\n`;
     if (workspace?.description) {
       context += `Description: ${workspace.description}\n`;
     }
 
     context += `Total Documents: ${docCount?.count || 0}\n`;
+    context += `Completed Compliance Checks: ${checksCount?.count || 0}\n`;
 
     // IMPORTANT: Don't provide cached compliance data here - instruct AI to use tools instead
     // The workspace_scores table may be outdated or empty even when checks exist
     // Always let the AI call get_compliance_status tool for current data
-    context += `\nFor compliance scores and status: USE get_compliance_status tool (data may have changed since last aggregation)\n`;
+    if ((checksCount?.count || 0) > 0) {
+      context += `\n⚠️ IMPORTANT: Compliance checks exist! ALWAYS call get_compliance_status tool for ANY questions about scores, status, or frameworks.\n`;
+    } else {
+      context += `\nNo compliance checks completed yet. If user asks about scores/status, check tools first, then guide them to upload documents.\n`;
+    }
 
     return context;
   }
@@ -1203,15 +1362,21 @@ Provide a clear, specific, and actionable response based STRICTLY on the tool da
           workspaceId: workspaceId
         });
 
+        // Format tool result as context for AI (hidden from user)
+        // The AI will transform this into natural language
         messages.push({
           role: 'assistant',
-          content: `Tool result for ${toolCall.function.name}: ${JSON.stringify(result)}`,
+          content: `[INTERNAL DATA - Transform into natural language, never expose raw data to user]
+Tool: ${toolCall.function.name}
+Data: ${JSON.stringify(result)}`,
         });
       } catch (error) {
         this.env.logger.error(`Tool execution failed: ${error instanceof Error ? error.message : 'Unknown'}`);
+        // Format error in a way the AI can humanize
         messages.push({
           role: 'assistant',
-          content: `Tool error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          content: `[INTERNAL ERROR - Apologize naturally, don't expose technical details]
+The ${toolCall.function.name.replace(/_/g, ' ')} encountered an issue. Suggest the user try again or contact support if the issue persists.`,
         });
       }
     }
@@ -1353,144 +1518,100 @@ RULES:
   ): Promise<any> {
     const db = this.getDb();
 
-    // Get latest workspace score
-    let latestScore = await db
-      .selectFrom('workspace_scores')
-      .selectAll()
+    // ALWAYS calculate from compliance_checks to ensure current data
+    // The workspace_scores table may contain stale data from scheduled aggregations
+    // By calculating directly, we guarantee accuracy even if aggregation is delayed
+
+    // Build query for compliance checks
+    let checksQuery = db
+      .selectFrom('compliance_checks')
+      .select(['overall_score', 'document_id', 'framework'])
       .where('workspace_id', '=', workspaceId)
-      .orderBy('calculated_at', 'desc')
-      .limit(1)
-      .executeTakeFirst();
+      .where('status', '=', 'completed');
 
-    // FALLBACK: If workspace_scores is empty, calculate from compliance_checks
-    // This ensures tools always return current data even if aggregation hasn't run
-    if (!latestScore) {
-      // Build query for compliance checks
-      let checksQuery = db
-        .selectFrom('compliance_checks')
-        .select(['overall_score', 'document_id', 'framework'])
-        .where('workspace_id', '=', workspaceId)
-        .where('status', '=', 'completed');
+    // Filter by framework if specified
+    if (args.framework) {
+      checksQuery = checksQuery.where('framework', '=', args.framework.toUpperCase());
+    }
 
-      // Filter by framework if specified
-      if (args.framework) {
-        checksQuery = checksQuery.where('framework', '=', args.framework.toUpperCase());
-      }
+    const checks = await checksQuery.execute();
 
-      const checks = await checksQuery.execute();
-
-      if (checks.length === 0) {
-        const message = args.framework 
-          ? `No ${args.framework.toUpperCase()} compliance checks have been run yet for this workspace.`
-          : 'No compliance checks have been run yet for this workspace.';
-        return {
-          message,
-          overall_score: null,
-          framework: args.framework?.toUpperCase() || null,
-        };
-      }
-
-      // Calculate average score from completed checks
-      const avgScore = Math.round(
-        checks.reduce((sum, c) => sum + (c.overall_score || 0), 0) / checks.length
-      );
-
-      // Determine which frameworks were checked
-      const frameworksChecked = [...new Set(checks.map(c => c.framework))].join(', ');
-
-      // Count unique documents checked
-      const uniqueDocs = new Set(checks.map(c => c.document_id)).size;
-
-      // Get total documents count
-      const totalDocsResult = await db
-        .selectFrom('documents')
-        .select(({ fn }) => fn.count<number>('id').as('count'))
-        .where('workspace_id', '=', workspaceId)
-        .executeTakeFirst();
-
-      // Get issues breakdown
-      const issuesBreakdown = await db
-        .selectFrom('compliance_issues')
-        .select(['status', 'severity', ({ fn }) => fn.count<number>('id').as('count')])
-        .where('workspace_id', '=', workspaceId)
-        .groupBy(['status', 'severity'])
-        .execute();
-
-      // Count issues by severity
-      let critical = 0, high = 0, medium = 0, low = 0, info = 0;
-      for (const row of issuesBreakdown) {
-        const count = Number(row.count);
-        if (row.severity === 'critical') critical += count;
-        else if (row.severity === 'high') high += count;
-        else if (row.severity === 'medium') medium += count;
-        else if (row.severity === 'low') low += count;
-        else if (row.severity === 'info') info += count;
-      }
-
-      // Determine risk level
-      let riskLevel = 'low';
-      if (critical > 0 || avgScore < 60) riskLevel = 'critical';
-      else if (high > 0 || avgScore < 80) riskLevel = 'high';
-      else if (medium > 0 || avgScore < 90) riskLevel = 'medium';
-
-      // Return calculated data directly without inserting to database
+    if (checks.length === 0) {
+      // Return structured data that helps AI generate helpful response
       return {
-        overall_score: avgScore,
-        risk_level: riskLevel,
-        documents_checked: uniqueDocs,
-        total_documents: totalDocsResult?.count || 0,
-        critical_issues: critical,
-        high_issues: high,
-        medium_issues: medium,
-        low_issues: low,
-        info_issues: info,
-        frameworks_covered: args.framework ? 1 : frameworksChecked.split(', ').length,
-        frameworks_checked: frameworksChecked,
+        status: 'no_data',
         framework_requested: args.framework?.toUpperCase() || 'ALL',
-        framework_score: null,
-        message: args.framework 
-          ? `Found ${uniqueDocs} ${args.framework.toUpperCase()} compliance checks with an average score of ${avgScore}%. Risk level: ${riskLevel}. Issues: ${critical} critical, ${high} high, ${medium} medium, ${low} low, ${info} info.`
-          : `Found ${uniqueDocs} compliance checks across ${frameworksChecked} with an average score of ${avgScore}%. Risk level: ${riskLevel}. Issues: ${critical} critical, ${high} high, ${medium} medium, ${low} low, ${info} info.`
+        guidance: args.framework
+          ? `No ${args.framework.toUpperCase()} compliance checks exist yet. User should upload documents and run compliance analysis.`
+          : 'No compliance checks exist yet. User should upload documents and run compliance analysis.',
+        suggestions: [
+          'Upload a document to get started',
+          'Navigate to Documents to upload files',
+          'Run a compliance check on existing documents'
+        ]
       };
     }
 
-    // Get framework-specific scores if requested
-    let frameworkScore = null;
-    if (args.framework) {
-      frameworkScore = await db
-        .selectFrom('framework_scores')
-        .selectAll()
-        .where('workspace_id', '=', workspaceId)
-        .where('framework', '=', args.framework.toLowerCase())
-        .orderBy('last_check_at', 'desc')
-        .limit(1)
-        .executeTakeFirst();
+    // Calculate average score from completed checks
+    const avgScore = Math.round(
+      checks.reduce((sum, c) => sum + (c.overall_score || 0), 0) / checks.length
+    );
+
+    // Determine which frameworks were checked
+    const frameworksChecked = [...new Set(checks.map(c => c.framework))].join(', ');
+
+    // Count unique documents checked
+    const uniqueDocs = new Set(checks.map(c => c.document_id)).size;
+
+    // Get total documents count
+    const totalDocsResult = await db
+      .selectFrom('documents')
+      .select(({ fn }) => fn.count<number>('id').as('count'))
+      .where('workspace_id', '=', workspaceId)
+      .executeTakeFirst();
+
+    // Get issues breakdown
+    const issuesBreakdown = await db
+      .selectFrom('compliance_issues')
+      .select(['status', 'severity', ({ fn }) => fn.count<number>('id').as('count')])
+      .where('workspace_id', '=', workspaceId)
+      .groupBy(['status', 'severity'])
+      .execute();
+
+    // Count issues by severity
+    let critical = 0, high = 0, medium = 0, low = 0, info = 0;
+    for (const row of issuesBreakdown) {
+      const count = Number(row.count);
+      if (row.severity === 'critical') critical += count;
+      else if (row.severity === 'high') high += count;
+      else if (row.severity === 'medium') medium += count;
+      else if (row.severity === 'low') low += count;
+      else if (row.severity === 'info') info += count;
     }
 
+    // Determine risk level
+    let riskLevel = 'low';
+    if (critical > 0 || avgScore < 60) riskLevel = 'critical';
+    else if (high > 0 || avgScore < 80) riskLevel = 'high';
+    else if (medium > 0 || avgScore < 90) riskLevel = 'medium';
+
+    // Return calculated data directly (no caching, always fresh)
     return {
-      overall_score: latestScore.overall_score,
-      risk_level: latestScore.risk_level,
-      documents_checked: latestScore.documents_checked,
-      total_documents: latestScore.total_documents,
-      critical_issues: latestScore.critical_issues,
-      high_issues: latestScore.high_issues,
-      medium_issues: latestScore.medium_issues,
-      low_issues: latestScore.low_issues,
-      info_issues: latestScore.info_issues,
-      frameworks_covered: latestScore.frameworks_covered,
-      last_analyzed: latestScore.calculated_at,
-      framework_specific: frameworkScore
-        ? {
-            framework: frameworkScore.framework,
-            score: frameworkScore.score,
-            risk_level: frameworkScore.risk_level,
-            documents_checked: frameworkScore.documents_checked,
-            critical_issues: frameworkScore.critical_issues,
-            high_issues: frameworkScore.high_issues,
-            medium_issues: frameworkScore.medium_issues,
-            low_issues: frameworkScore.low_issues,
-          }
-        : null,
+      overall_score: avgScore,
+      risk_level: riskLevel,
+      documents_checked: uniqueDocs,
+      total_documents: totalDocsResult?.count || 0,
+      critical_issues: critical,
+      high_issues: high,
+      medium_issues: medium,
+      low_issues: low,
+      info_issues: info,
+      frameworks_covered: args.framework ? 1 : frameworksChecked.split(', ').length,
+      frameworks_checked: frameworksChecked,
+      framework_requested: args.framework?.toUpperCase() || 'ALL',
+      message: args.framework
+        ? `Found ${uniqueDocs} ${args.framework.toUpperCase()} compliance checks with an average score of ${avgScore}%. Risk level: ${riskLevel}. Issues: ${critical} critical, ${high} high, ${medium} medium, ${low} low, ${info} info.`
+        : `Found ${uniqueDocs} compliance checks across ${frameworksChecked} with an average score of ${avgScore}%. Risk level: ${riskLevel}. Issues: ${critical} critical, ${high} high, ${medium} medium, ${low} low, ${info} info.`
     };
   }
 
@@ -1609,6 +1730,22 @@ RULES:
       .limit(args.limit || 20)
       .execute();
 
+    // Return helpful response when no issues found
+    if (issues.length === 0) {
+      return {
+        status: 'no_issues',
+        issues: [],
+        total: 0,
+        framework_filter: args.framework || null,
+        severity_filter: args.severity || null,
+        guidance: args.framework 
+          ? `No ${args.framework.toUpperCase()} compliance issues found. Either no issues exist or no ${args.framework.toUpperCase()} compliance checks have been run.`
+          : args.severity
+            ? `No ${args.severity} severity issues found. This is good news!`
+            : 'No compliance issues found. Either all issues have been resolved or no compliance checks have been run yet.'
+      };
+    }
+
     return {
       issues: issues.map((issue) => ({
         id: issue.id,
@@ -1630,7 +1767,8 @@ RULES:
         },
       })),
       total: issues.length,
-      summary: `Found ${issues.length} open compliance issue(s)${args.severity ? ` with severity '${args.severity}'` : ''}${args.framework ? ` for framework '${args.framework}'` : ''}`,
+      framework_filter: args.framework || null,
+      severity_filter: args.severity || null,
     };
   }
 
