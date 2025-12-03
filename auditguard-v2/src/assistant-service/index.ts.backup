@@ -127,7 +127,6 @@ export default class extends Service<Env> {
     maxTokens: number;
     responseFormat?: { type: 'json_object' };
     timeout?: number;
-    retryCount?: number;
   }): Promise<any> {
     const modelName = config.model === 'decision'
       ? this.env.CEREBRAS_DECISION_MODEL
@@ -136,7 +135,7 @@ export default class extends Service<Env> {
     const startTime = Date.now();
     this.env.logger.info('🚀 Attempting Cerebras API (with Raindrop AI fallback)', {
       model: modelName,
-      messageCount: config.messages?.length || 0
+      messageCount: config.messages.length
     });
 
     const cerebras = new CerebrasClient(this.env.CEREBRAS_API_KEY);
@@ -166,30 +165,16 @@ export default class extends Service<Env> {
       const duration = Date.now() - startTime;
       const errorMsg = cerebrasError instanceof Error ? cerebrasError.message : String(cerebrasError);
       const isRateLimit = errorMsg.includes('429') || errorMsg.includes('too_many_requests') || errorMsg.includes('queue_exceeded');
-      const retryCount = config.retryCount || 0;
-
-      // OPTIMIZATION: Retry rate limits with exponential backoff before falling back
-      if (isRateLimit && retryCount < 3) {
-        const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
-        this.env.logger.info(`🔄 Rate limit detected, retrying in ${delay}ms (attempt ${retryCount + 1}/3)`, {
-          model: modelName,
-          retryDelay: delay
-        });
-
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return this.callAI({ ...config, retryCount: retryCount + 1 });
-      }
 
       this.env.logger.warn('⚠️ Cerebras API failed, attempting fallback to Raindrop AI', {
         error: errorMsg,
         model: modelName,
         duration,
         isRateLimit,
-        retriesExhausted: isRateLimit && retryCount >= 3,
         isTimeout: errorMsg.includes('timeout')
       });
 
-      // FALLBACK: Use Raindrop AI (Workers AI) when Cerebras is unavailable or retries exhausted
+      // FALLBACK: Use Raindrop AI (Workers AI) when Cerebras is unavailable
       try {
         this.env.logger.info('🔄 Falling back to Raindrop AI (Workers AI)', {
           model: 'llama-3.1-70b-instruct'
@@ -208,7 +193,7 @@ export default class extends Service<Env> {
         this.env.logger.info('✅ Raindrop AI fallback successful', {
           model: 'llama-3.1-70b-instruct',
           duration: fallbackDuration,
-          originalError: (errorMsg || '').substring(0, 100)
+          originalError: errorMsg.substring(0, 100)
         });
 
         return { choices: fallbackResponse.choices || [{ message: fallbackResponse }] };
@@ -233,10 +218,14 @@ export default class extends Service<Env> {
   }
 
   async chat(workspaceId: string, userId: string, request: ChatRequest): Promise<ChatResponse> {
-    this.env.logger.info('🚨 CHAT METHOD CALLED', {
+    // CRITICAL DEBUG: This should appear first
+    console.log('🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥');
+    this.env.logger.info('🔥🔥🔥 CHAT METHOD ENTRY POINT - VERSION WITH DEBUG LOGGING 🔥🔥🔥');
+
+    this.env.logger.info('🚨 CHAT METHOD CALLED (non-streaming)', {
       workspaceId,
       userId,
-      message: (request.message || '').substring(0, 100),
+      message: request.message.substring(0, 100),
       hasSessionId: !!request.sessionId
     });
 
@@ -245,7 +234,7 @@ export default class extends Service<Env> {
     this.env.logger.info('🚀 CHAT REQUEST STARTED', {
       workspaceId,
       userId,
-      message: (request.message || '').substring(0, 100)
+      message: request.message.substring(0, 100)
     });
 
     // Verify workspace access
@@ -282,7 +271,6 @@ export default class extends Service<Env> {
       }
 
       memorySessionId = session.memory_session_id;
-
     } else {
       // Create new session with SmartMemory
       const sessionId = `conv_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -343,8 +331,37 @@ export default class extends Service<Env> {
     // Get workspace context for the assistant
     const workspaceContext = await this.getWorkspaceContext(workspaceId);
 
-    // Use default system prompt
-    const baseSystemPrompt = `You are AuditGuardX AI, your friendly compliance expert and assistant.
+    // Add checkpoint before SmartMemory operations
+    console.log('🔍 CHECKPOINT A: Before episodic memory search');
+    this.env.logger.info('🔍 CHECKPOINT A: Before episodic memory search');
+
+    // Search episodic memory for relevant past conversations
+    // SKIP FOR NOW - This is causing execution to hang
+    let relevantPastSessions: string[] = [];
+    console.log('🔍 SKIPPING episodic memory search temporarily');
+    this.env.logger.info('🔍 SKIPPING episodic memory search - moving to procedural memory');
+    
+    console.log('🔍 CHECKPOINT B: Skipped episodic memory (disabled)');
+    this.env.logger.info('🔍 CHECKPOINT B: Skipped episodic memory');
+
+    console.log('🔍 CHECKPOINT C: Before procedural memory retrieval');
+    this.env.logger.info('🔍 CHECKPOINT C: Before procedural memory retrieval');
+
+    // Get system prompt from procedural memory or use default
+    // SKIP FOR NOW - Using default prompt to avoid blocking
+    let baseSystemPrompt = '';
+    console.log('🔍 SKIPPING procedural memory - using default prompt');
+    this.env.logger.info('🔍 SKIPPING procedural memory - using default prompt');
+    
+    console.log('🔍 CHECKPOINT D: Skipped procedural memory (disabled)');
+    console.log('🔍 CHECKPOINT E: Skipped getProcedure call (disabled)');
+    
+    console.log('🔍 CHECKPOINT F: After procedural memory section');
+    this.env.logger.info('🔍 CHECKPOINT F: After procedural memory section');
+
+    // Fall back to default if not found
+    if (!baseSystemPrompt) {
+      baseSystemPrompt = `You are AuditGuardX AI, your friendly compliance expert and assistant.
 
 ## PERSONALITY & TONE
 - Warm, professional, and approachable
@@ -354,10 +371,7 @@ export default class extends Service<Env> {
 
 ## CAPABILITIES
 - Analyze documents for compliance issues
-- Track TWO types of compliance scores:
-  1. **Average Compliance Score**: Average of individual compliance check scores (how well documents pass checks)
-  2. **Workspace Risk Score**: Overall compliance posture based on issue severity (weighted deduction from 100)
-- Monitor compliance across frameworks (GDPR, SOC2, HIPAA, ISO 27001, etc.)
+- Track compliance scores across frameworks (GDPR, SOC2, HIPAA, ISO 27001, etc.)
 - Identify and prioritize compliance gaps
 - Provide actionable remediation guidance
 - Generate compliance reports
@@ -391,12 +405,18 @@ export default class extends Service<Env> {
 - If something goes wrong, apologize briefly and offer alternatives
 - Never expose technical error messages to users
 - Always try to be helpful even when data is limited`;
+    }
 
-    // Build complete system prompt with workspace context
+    // Build complete system prompt with workspace context and past conversation context
+    let episodicContext = '';
+    if (relevantPastSessions.length > 0) {
+      episodicContext = `\n\nRELEVANT PAST CONVERSATIONS:\n${relevantPastSessions.join('\n')}`;
+    }
+
     const systemPrompt = `${baseSystemPrompt}
 
 CURRENT WORKSPACE CONTEXT:
-${workspaceContext}
+${workspaceContext}${episodicContext}
 
 KNOWLEDGE BASE ACCESS:
 - Use the 'search_knowledge' tool to look up compliance requirements, best practices, and regulatory details
@@ -405,18 +425,19 @@ KNOWLEDGE BASE ACCESS:
 - DO NOT answer compliance questions from memory - always check the knowledge base first`;
 
     // Get recent conversation history from SmartMemory (working memory)
+    console.log('🧠 Retrieving conversation history from SmartMemory');
     this.env.logger.info('🧠 Retrieving conversation history from SmartMemory', {
       sessionId: session.id,
       memorySessionId
     });
 
     let conversationHistory: ChatMessage[] = [];
-
+    
     try {
       const workingMemory = await this.env.ASSISTANT_MEMORY.getWorkingMemorySession(memorySessionId);
       const memoryEntries = await workingMemory.getMemory({
         timeline: 'conversation',
-        nMostRecent: 100, // Last 50 turns (100 messages: 50 user + 50 assistant)
+        nMostRecent: 100, // Last 50 turns (100 messages: 50 user + 50 assistant) - TEST FULL MODEL CAPACITY
       });
 
       if (memoryEntries && memoryEntries.length > 0) {
@@ -424,16 +445,19 @@ KNOWLEDGE BASE ACCESS:
           role: entry.agent === 'user' ? 'user' : 'assistant',
           content: entry.content
         }));
-
+        
+        console.log(`✅ Retrieved ${conversationHistory.length} messages from SmartMemory`);
         this.env.logger.info(`✅ Retrieved ${conversationHistory.length} messages from SmartMemory`, {
           sessionId: session.id,
           memorySessionId,
           messageCount: conversationHistory.length
         });
       } else {
+        console.log('ℹ️ No conversation history found in SmartMemory (new conversation)');
         this.env.logger.info('ℹ️ No conversation history found in SmartMemory');
       }
     } catch (error) {
+      console.error('⚠️ Failed to retrieve conversation history from SmartMemory:', error);
       this.env.logger.error(`⚠️ Failed to retrieve SmartMemory: ${error instanceof Error ? error.message : 'Unknown error'}`);
       // Continue with empty history - single-turn conversation
     }
@@ -443,6 +467,7 @@ KNOWLEDGE BASE ACCESS:
     let processedHistory = conversationHistory;
     
     if (conversationHistory.length > 20) {
+      console.log(`🧠 Conversation has ${conversationHistory.length} messages - applying summarization`);
       this.env.logger.info('🧠 Applying conversation summarization', {
         originalMessageCount: conversationHistory.length,
         threshold: 20,
@@ -538,11 +563,9 @@ KNOWLEDGE BASE ACCESS:
     }
 
     // Build messages for AI (SmartMemory already excludes the current message since we haven't stored it yet)
-    // OPTIMIZATION: Truncate to last 10 messages to prevent token explosion and Cerebras rate limits
-    const truncatedHistory = processedHistory.slice(-10);
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
-      ...truncatedHistory,
+      ...processedHistory,
       { role: 'user', content: request.message }, // Current message - will be stored in SmartMemory after AI response
     ];
 
@@ -630,15 +653,8 @@ Context: ${workspaceContext}`
 ## AVAILABLE TOOLS
 
 ### get_compliance_status
-Use for: Questions about compliance scores, workspace stats, members, or any dashboard metrics
-Returns: Comprehensive workspace data including:
-  - Average compliance score (per-check average)
-  - Workspace risk score (from analytics dashboard)
-  - Total documents, members, AI messages
-  - Compliance checks count, recent uploads
-  - Issue counts by severity, completion rate
+Use for: Questions about compliance scores, overall status, risk levels
 Args: {} (no args) OR { "framework": "gdpr" } for specific framework
-NOTE: Returns ALL dashboard metrics. Extract only what the user asked for in your response.
 
 ### search_documents  
 Use for: Finding documents, listing files, searching by topic
@@ -673,12 +689,9 @@ Args: { "query": "question", "framework": "gdpr|soc2|hipaa|all" }
 | User Question | Tool to Use | needsTools |
 |--------------|-------------|------------|
 | "What's my average compliance score?" | get_compliance_status | true |
-| "What is my compliance score?" | get_compliance_status (extract specific score asked) | true |
-| "What's my workspace risk score?" | get_compliance_status (extract risk score) | true |
-| "How many members do I have?" | get_compliance_status (extract members) | true |
-| "How many AI messages?" | get_compliance_status (extract AI messages) | true |
+| "What is my compliance score?" | get_compliance_status | true |
 | "What's my GDPR score?" | get_compliance_status (with framework: "gdpr") | true |
-| "How am I doing with compliance?" | get_compliance_status (provide overview) | true |
+| "How am I doing with compliance?" | get_compliance_status | true |
 | "What frameworks have I checked?" | get_compliance_status | true |
 | "What issues do we have?" | get_compliance_issues | true |
 | "Show me compliance problems" | get_compliance_issues | true |
@@ -691,36 +704,11 @@ Args: { "query": "question", "framework": "gdpr|soc2|hipaa|all" }
 
 ⚠️ IMPORTANT PATTERNS:
 - "what is my..." → ALWAYS use get_compliance_status
-- "how many..." → ALWAYS use get_compliance_status (members, messages, documents, checks) OR get_compliance_issues (for issues)
+- "how many..." → ALWAYS use appropriate tool (get_compliance_issues for issues, get_compliance_status for general status)
 - "show me..." → ALWAYS use appropriate tool
 - "list..." → ALWAYS use appropriate tool
-- Questions with "score", "status", "compliance", "members", "messages" → ALWAYS use get_compliance_status
+- Questions with "score", "status", "compliance" → ALWAYS use get_compliance_status
 - Questions with "issue", "problem", "violation" → ALWAYS use get_compliance_issues
-
-⚠️ FRAMEWORK TYPO CORRECTION:
-- User says "GDRP" → correct to "GDPR" in tool arguments
-- User says "SOC 2" or "SOC-2" → correct to "SOC2"
-- User says "HIPPA" → correct to "HIPAA"
-- User says "PCI-DSS" or "PCI DSS" → use "PCI-DSS"
-
-⚠️ CONVERSATION CONTINUATION (CRITICAL - PREVENTS LOOPS):
-- Check the PREVIOUS assistant message in conversation history
-- If it contained a question/offer AND user responds with affirmative → EXECUTE the implied action NOW
-- Affirmative responses: "yes", "yeah", "sure", "please", "okay", "ok", "go ahead", "please do", "yes please"
-- DO NOT repeat the same offer/question twice!
-
-Examples of conversation continuation:
-1. Previous: "Would you like me to walk you through these issues?"
-   User: "Yes!" or "Sure" or "Please"
-   → Execute: { "needsTools": true, "toolCalls": [{ "name": "get_compliance_issues", "arguments": {} }], "userFacingMessage": "Let me show you those issues..." }
-
-2. Previous: "Would you like to know more about GDPR requirements?"
-   User: "Yes" or "Please"
-   → Execute: { "needsTools": true, "toolCalls": [{ "name": "search_knowledge", "arguments": { "query": "GDPR requirements", "framework": "gdpr" } }], "userFacingMessage": "Here's what you need to know about GDPR..." }
-
-3. Previous: "Should I check your SOC2 compliance?"
-   User: "Yes"
-   → Execute: { "needsTools": true, "toolCalls": [{ "name": "get_compliance_status", "arguments": { "framework": "soc2" } }], "userFacingMessage": "Checking your SOC2 compliance..." }
 
 ## RESPONSE FORMAT
 
@@ -797,39 +785,30 @@ User: "Hi there"
 
 🚨 REMEMBER: When in doubt, USE TOOLS! Never guess or answer from memory about workspace data!`
       };
-
-      // Validate messages array before processing
-      if (!messages || !Array.isArray(messages) || messages.length === 0) {
-        throw createUserFriendlyError(
-          'Cannot process empty conversation',
-          'INVALID_REQUEST'
-        );
-      }
-
+      
+      // 🔍 DEBUG: Log what question is being sent to decision maker
       const lastUserMessage = messages[messages.length - 1];
-
       this.env.logger.info('🎯 STAGE 1 INPUT:', {
-        userQuestion: lastUserMessage?.content?.substring(0, 200) || 'No content',
+        userQuestion: lastUserMessage?.content?.substring(0, 200),
         messageCount: messages.length,
-        workspaceContext: workspaceContext?.substring(0, 300) || 'No context',
-        fullConversation: true,
+        workspaceContext: workspaceContext.substring(0, 300),
+        fullConversation: true, // Now passing full conversation history
         lastThreeMessages: messages.slice(-3).map(m => ({
           role: m.role,
-          content: m.content?.substring(0, 100) || 'No content'
+          content: m.content?.substring(0, 100)
         }))
       });
+
+      console.log('🎯 USER QUESTION:', lastUserMessage?.content);
+      console.log('📊 WORKSPACE CONTEXT:', workspaceContext);
       
       let decisionResponse: any;
       try {
-        // OPTIMIZATION: Send only last 3 messages to decision stage to reduce tokens by 70%
-        // Decision maker only needs immediate context, not full conversation history
-        const decisionMessages = messages.slice(-3);
-
         decisionResponse = await this.callAI({
           model: 'decision',
           messages: [
             decisionPrompt,
-            ...decisionMessages // Last 3 messages only (optimized for Cerebras rate limits)
+            ...messages // FIXED: Pass full conversation history from SmartMemory
           ] as any,
           responseFormat: { type: 'json_object' },
           temperature: 0.3,
@@ -847,19 +826,12 @@ User: "Hi there"
       }
       
       // 🔧 ROBUST JSON PARSING: Model sometimes adds text like "Here is the..." before JSON
-      let decisionContent = decisionResponse.choices[0]?.message?.content || '';
+      let decisionContent = decisionResponse.choices[0].message.content;
       let decision: any;
       let skipToStoreMessage = false;
-
-      // Validate decision content
-      if (!decisionContent) {
-        throw createUserFriendlyError(
-          'AI returned empty response',
-          'AI_UNAVAILABLE'
-        );
-      }
-
-      // Log raw AI response BEFORE parsing (with safe substring)
+      
+      // Log raw AI response BEFORE parsing
+      console.log('🔍 RAW AI DECISION RESPONSE:', decisionContent.substring(0, 500));
       this.env.logger.info('🔍 RAW AI DECISION RESPONSE', {
         rawResponse: decisionContent.substring(0, 500),
         fullLength: decisionContent.length
@@ -868,20 +840,23 @@ User: "Hi there"
       // Try to extract JSON if there's extra text
       const jsonMatch = decisionContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
+        console.log('✅ Extracted JSON from response');
         decisionContent = jsonMatch[0];
-
+        
         try {
           decision = JSON.parse(decisionContent);
         } catch (parseError: any) {
+          console.log('❌ JSON parsing failed even after extraction');
           this.env.logger.error('JSON parsing failed', {
             error: parseError.message,
-            extractedContent: (decisionContent || '').substring(0, 200)
+            extractedContent: decisionContent.substring(0, 200)
           });
           throw new Error(`Failed to parse AI decision: ${parseError.message}`);
         }
       } else {
+        console.log('⚠️ No JSON found in response - model returned plain text!');
         this.env.logger.warn('⚠️ No JSON found in AI response - using fallback', {
-          rawResponse: (decisionContent || '').substring(0, 200)
+          rawResponse: decisionContent.substring(0, 200)
         });
         
         // FALLBACK: If model returned plain text answer, treat it as final answer
@@ -912,15 +887,8 @@ User: "Hi there"
         tools: decision.toolCalls?.map((t: any) => t.name) || [],
         userMessage: decision.userFacingMessage?.substring(0, 100)
       });
-
-      // OPTIMIZATION: Add delay between decision and response stages to prevent Cerebras queue collision
-      // This prevents both API calls from hitting the queue simultaneously
-      await new Promise(resolve => setTimeout(resolve, 150));
-
+      
       // Skip tool execution and final response if we already have plain text answer
-      // Declare toolResults outside the scope so it's available for post-processing
-      let toolResults: { messages: any[]; rawData: any[] } = { messages: [], rawData: [] };
-
       if (!skipToStoreMessage) {
         // Stage 2: Execute tools if needed
         if (decision.needsTools && decision.toolCalls && decision.toolCalls.length > 0) {
@@ -928,7 +896,7 @@ User: "Hi there"
           toolCount: decision.toolCalls.length,
           tools: decision.toolCalls.map((tc: any) => tc.name)
         });
-
+        
         // Convert decision tool calls to execution format
         const toolCalls = decision.toolCalls.map((tc: any, index: number) => ({
           id: `call_${Date.now()}_${index}`,
@@ -938,9 +906,9 @@ User: "Hi there"
             arguments: JSON.stringify(tc.arguments || {})
           }
         }));
-
+        
         // Execute the tools
-        toolResults = await this.executeTools(toolCalls, workspaceId, userId);
+        const toolResults = await this.executeTools(toolCalls, workspaceId, userId);
 
         this.env.logger.info('Tools executed', {
           toolCount: toolCalls.length,
@@ -973,27 +941,6 @@ User: "Hi there"
               role: 'user',
               content: `Transform the tool data above into a natural, human-friendly response.
 
-## CRITICAL: MATCH YOUR RESPONSE TO THE QUESTION
-
-### For SPECIFIC, SHORT questions → Give SHORT, DIRECT answers:
-- "What is my compliance score?" → "Your compliance score is 78%."
-- "How many issues do we have?" → "You have 12 compliance issues: 2 critical, 5 high, 3 medium, and 2 low."
-- "What is my GDPR score?" → "Your GDPR compliance score is 65%."
-- "How many compliance checks have we completed?" → "You've completed 3 compliance checks across GDPR and SOC2."
-
-**DO NOT** list all issues, provide recommendations, or add extra details unless the user asks for them.
-
-### For EXPLORATORY questions → Provide summary + offer to drill down:
-- "What's my compliance status?" → Give score + issue count + offer to explain
-- "How am I doing with compliance?" → Give overview + suggest next steps
-- "Tell me about my compliance" → Provide comprehensive summary
-
-### ONLY list detailed issues when EXPLICITLY asked:
-- "What issues do I have?" → List all issues with details
-- "Show me my compliance issues" → List all issues with details
-- "What compliance problems should I fix?" → List all issues with recommendations
-- "Tell me more about those issues" → Expand on previously mentioned issues
-
 ## CRITICAL LANGUAGE RULES - VIOLATIONS ARE NOT ACCEPTABLE
 
 ### FORBIDDEN PHRASES (Never use these):
@@ -1009,46 +956,45 @@ User: "Hi there"
 - Speak as if YOU know this information personally
 - Use natural conversational language
 - Be warm and helpful, not robotic
-- Match detail level to question specificity
+- Provide context and actionable next steps
 
-## RESPONSE EXAMPLES
+## RESPONSE TEMPLATES
 
-### SHORT Question: "What is my average compliance score?"
-✅ CORRECT: "Your average compliance score is 50%."
-❌ WRONG: "Your average compliance score is 50%. I've identified 1 critical, 8 high, and 9 medium issues. Let me break them down for you: [lists all issues]..."
+### When NO compliance data exists:
+DON'T SAY: "Based on the tool results, the frameworks_covered field is empty and total_documents is 0"
+DO SAY: "You haven't run any compliance checks yet. Would you like to start by uploading a document or running an analysis on your existing files?"
 
-### AMBIGUOUS Question: "What is my compliance score?"
-✅ CORRECT: "Your average compliance score is 50% (based on how well documents pass checks). Your workspace also has an overall risk score of 0% shown on the Analytics Dashboard (based on issue severity). Which would you like to know more about?"
-❌ WRONG: "Your compliance score is 50%." [doesn't clarify which type]
+### When compliance data EXISTS:
+DON'T SAY: "The overall_score is 78 and there are 3 critical_issues in the data"
+DO SAY: "Your compliance score is 78%. I noticed 3 critical issues that need your attention - shall I walk you through them?"
 
-### SHORT Question: "How many compliance checks have we completed?"
-✅ CORRECT: "You've completed 3 compliance checks across GDPR and SOC2."
-❌ WRONG: "You've completed 3 compliance checks with an average score of 50%. Here are all the issues: [lists all issues]..."
+### When listing ISSUES:
+Format each issue clearly with:
+- A descriptive title (not the ID)
+- The severity level (Critical/High/Medium/Low)
+- Which framework it relates to (GDPR, SOC2, HIPAA, etc.)
+- The document where it was found
+- A clear recommendation
 
-### SHORT Question: "How many members do I have?"
-✅ CORRECT: "You have 1 member in your workspace."
-❌ WRONG: "You have 1 member. Your compliance score is 50%, and you have 19 open issues..." [don't dump unasked info]
+Example:
+"Here are the compliance issues I found:
 
-### SHORT Question: "How many AI messages have been sent?"
-✅ CORRECT: "The AI assistant has sent 18 messages."
-❌ WRONG: "18 messages have been sent. Your compliance score is 50%..." [stay focused]
+🔴 **Critical: Missing Data Breach Policy** (GDPR)
+Found in: PrivacyPolicy.pdf
+Your policy doesn't include the required 72-hour breach notification timeline. I'd recommend adding a section that outlines your incident response procedure.
 
-### SHORT Question: "What's my workspace risk score?"
-✅ CORRECT: "Your workspace risk score is 0% (based on issue severity analysis)."
-❌ WRONG: "Your risk score is 0% and your average is 50%..." [only answer what was asked]
+🟡 **Medium: Incomplete Access Controls** (SOC2)  
+Found in: SecurityPolicy.pdf
+The document mentions access controls but doesn't specify the review frequency. Consider adding quarterly access reviews."
 
-### EXPLORATORY Question: "How am I doing with compliance?"
-✅ CORRECT: "Your average compliance score is 50% across 3 checks. You have 18 total issues that need attention (1 critical, 8 high, 9 medium). Would you like me to walk you through the critical ones first?"
-❌ WRONG: "Your compliance score is 50%." [stops there]
-
-### DETAILED Question: "What compliance issues do I have?"
-✅ CORRECT: [List all issues with full details as currently done]
+### When NO issues found:
+"Great news! I didn't find any compliance issues in your documents. Your policies appear to be well-aligned with the frameworks you're tracking."
 
 ## YOUR RESPONSE
-Now craft a natural, helpful response. **Read the user's question carefully** and match your detail level accordingly.`
+Now craft a natural, helpful response using the data provided. Remember: sound like a knowledgeable colleague, not a database query.`
             }
           ] as any,
-          temperature: 0.4,
+          temperature: 0.7,
           maxTokens: 1500,
         });
         
@@ -1068,8 +1014,8 @@ Now craft a natural, helpful response. **Read the user's question carefully** an
           const simpleResponse = await this.callAI({
             model: 'response',
             messages: [systemMessage, ...messages] as any, // FIXED: Use full conversation history
-            temperature: 0.4,
-            maxTokens: 1500,
+            temperature: 0.7,
+            maxTokens: 1000,
           });
           assistantMessage = simpleResponse.choices[0].message.content;
         }
@@ -1453,9 +1399,9 @@ The ${toolCall.function.name.replace(/_/g, ' ')} encountered an issue. Suggest t
     try {
       // Debug logging to see what we're working with
       this.env.logger.info('🔍 Post-processing input:', {
-        toolsUsed: input.toolsUsed || [],
-        toolResultsCount: input.toolResults?.length || 0,
-        toolResultsSample: (input.toolResults ? JSON.stringify(input.toolResults) : '[]').substring(0, 1000)
+        toolsUsed: input.toolsUsed,
+        toolResultsCount: input.toolResults.length,
+        toolResultsSample: JSON.stringify(input.toolResults).substring(0, 1000)
       });
       
       this.env.logger.info('🔄 Post-processing: Generating suggestions and actions');
@@ -1534,7 +1480,7 @@ RULES:
         messages: [{ role: 'system', content: prompt }] as any,
         response_format: { type: 'json_object' },
         temperature: 0.4, // Lower = more consistent
-        max_tokens: 1400,
+        max_tokens: 400,
       });
 
       const parsed = JSON.parse(result.choices[0].message.content);
@@ -1572,154 +1518,149 @@ RULES:
   ): Promise<any> {
     const db = this.getDb();
 
-    // ALWAYS calculate from compliance_checks to ensure current data
-    // The workspace_scores table may contain stale data from scheduled aggregations
-    // By calculating directly, we guarantee accuracy even if aggregation is delayed
-
-    // Build query for compliance checks
-    let checksQuery = db
-      .selectFrom('compliance_checks')
-      .select(['overall_score', 'document_id', 'framework'])
+    // Get latest workspace score
+    let latestScore = await db
+      .selectFrom('workspace_scores')
+      .selectAll()
       .where('workspace_id', '=', workspaceId)
-      .where('status', '=', 'completed');
-
-    // Filter by framework if specified
-    if (args.framework) {
-      checksQuery = checksQuery.where('framework', '=', args.framework.toUpperCase());
-    }
-
-    const checks = await checksQuery.execute();
-
-    if (checks.length === 0) {
-      // Return structured data that helps AI generate helpful response
-      return {
-        status: 'no_data',
-        framework_requested: args.framework?.toUpperCase() || 'ALL',
-        guidance: args.framework
-          ? `No ${args.framework.toUpperCase()} compliance checks exist yet. User should upload documents and run compliance analysis.`
-          : 'No compliance checks exist yet. User should upload documents and run compliance analysis.',
-        suggestions: [
-          'Upload a document to get started',
-          'Navigate to Documents to upload files',
-          'Run a compliance check on existing documents'
-        ]
-      };
-    }
-
-    // Calculate average score from completed checks
-    const avgScore = Math.round(
-      checks.reduce((sum, c) => sum + (c.overall_score || 0), 0) / checks.length
-    );
-
-    // Determine which frameworks were checked
-    const frameworksChecked = [...new Set(checks.map(c => c.framework))].join(', ');
-
-    // Count unique documents checked
-    const uniqueDocs = new Set(checks.map(c => c.document_id)).size;
-
-    // Get total documents count
-    const totalDocsResult = await db
-      .selectFrom('documents')
-      .select(({ fn }) => fn.count<number>('id').as('count'))
-      .where('workspace_id', '=', workspaceId)
+      .orderBy('calculated_at', 'desc')
+      .limit(1)
       .executeTakeFirst();
 
-    // Get issues breakdown
-    const issuesBreakdown = await db
-      .selectFrom('compliance_issues')
-      .select(['status', 'severity', ({ fn }) => fn.count<number>('id').as('count')])
-      .where('workspace_id', '=', workspaceId)
-      .groupBy(['status', 'severity'])
-      .execute();
-
-    // Count issues by severity
-    let critical = 0, high = 0, medium = 0, low = 0, info = 0;
-    for (const row of issuesBreakdown) {
-      const count = Number(row.count);
-      if (row.severity === 'critical') critical += count;
-      else if (row.severity === 'high') high += count;
-      else if (row.severity === 'medium') medium += count;
-      else if (row.severity === 'low') low += count;
-      else if (row.severity === 'info') info += count;
-    }
-
-    // Determine risk level
-    let riskLevel = 'low';
-    if (critical > 0 || avgScore < 60) riskLevel = 'critical';
-    else if (high > 0 || avgScore < 80) riskLevel = 'high';
-    else if (medium > 0 || avgScore < 90) riskLevel = 'medium';
-
-    // Fetch additional workspace metrics (for comprehensive dashboard context)
-    const [workspaceScore, memberCount, aiMessageCount, recentUploads] = await Promise.all([
-      // Get workspace risk score from analytics (workspace_scores table)
-      db
-        .selectFrom('workspace_scores')
-        .select(['overall_score'])
+    // FALLBACK: If workspace_scores is empty, calculate from compliance_checks
+    // This ensures tools always return current data even if aggregation hasn't run
+    if (!latestScore) {
+      // Build query for compliance checks
+      let checksQuery = db
+        .selectFrom('compliance_checks')
+        .select(['overall_score', 'document_id', 'framework'])
         .where('workspace_id', '=', workspaceId)
-        .orderBy('calculated_at', 'desc')
-        .executeTakeFirst(),
+        .where('status', '=', 'completed');
 
-      // Total workspace members
-      db
-        .selectFrom('workspace_members')
-        .select(({ fn }) => fn.count<number>('user_id').as('count'))
-        .where('workspace_id', '=', workspaceId)
-        .executeTakeFirst(),
+      // Filter by framework if specified
+      if (args.framework) {
+        checksQuery = checksQuery.where('framework', '=', args.framework.toUpperCase());
+      }
 
-      // Total AI assistant messages
-      db
-        .selectFrom('conversation_messages')
-        .select(({ fn }) => fn.count<number>('conversation_messages.id').as('count'))
-        .innerJoin('conversation_sessions', 'conversation_sessions.id', 'conversation_messages.session_id')
-        .where('conversation_sessions.workspace_id', '=', workspaceId)
-        .where('conversation_messages.role', '=', 'assistant')
-        .executeTakeFirst(),
+      const checks = await checksQuery.execute();
 
-      // Recent uploads (last 7 days)
-      db
+      if (checks.length === 0) {
+        // Return structured data that helps AI generate helpful response
+        return {
+          status: 'no_data',
+          framework_requested: args.framework?.toUpperCase() || 'ALL',
+          guidance: args.framework 
+            ? `No ${args.framework.toUpperCase()} compliance checks exist yet. User should upload documents and run compliance analysis.`
+            : 'No compliance checks exist yet. User should upload documents and run compliance analysis.',
+          suggestions: [
+            'Upload a document to get started',
+            'Navigate to Documents to upload files',
+            'Run a compliance check on existing documents'
+          ]
+        };
+      }
+
+      // Calculate average score from completed checks
+      const avgScore = Math.round(
+        checks.reduce((sum, c) => sum + (c.overall_score || 0), 0) / checks.length
+      );
+
+      // Determine which frameworks were checked
+      const frameworksChecked = [...new Set(checks.map(c => c.framework))].join(', ');
+
+      // Count unique documents checked
+      const uniqueDocs = new Set(checks.map(c => c.document_id)).size;
+
+      // Get total documents count
+      const totalDocsResult = await db
         .selectFrom('documents')
         .select(({ fn }) => fn.count<number>('id').as('count'))
         .where('workspace_id', '=', workspaceId)
-        .where('uploaded_at', '>=', Date.now() - 7 * 24 * 60 * 60 * 1000)
-        .executeTakeFirst(),
-    ]);
+        .executeTakeFirst();
 
-    // Calculate total open issues for completion rate
-    const totalIssues = critical + high + medium + low + info;
-    const resolvedIssues = issuesBreakdown
-      .filter(row => row.status === 'resolved')
-      .reduce((sum, row) => sum + Number(row.count), 0);
-    const completionRate = totalIssues + resolvedIssues > 0
-      ? Math.round((resolvedIssues / (totalIssues + resolvedIssues)) * 100)
-      : 0;
+      // Get issues breakdown
+      const issuesBreakdown = await db
+        .selectFrom('compliance_issues')
+        .select(['status', 'severity', ({ fn }) => fn.count<number>('id').as('count')])
+        .where('workspace_id', '=', workspaceId)
+        .groupBy(['status', 'severity'])
+        .execute();
 
-    // Return calculated data directly (no caching, always fresh)
+      // Count issues by severity
+      let critical = 0, high = 0, medium = 0, low = 0, info = 0;
+      for (const row of issuesBreakdown) {
+        const count = Number(row.count);
+        if (row.severity === 'critical') critical += count;
+        else if (row.severity === 'high') high += count;
+        else if (row.severity === 'medium') medium += count;
+        else if (row.severity === 'low') low += count;
+        else if (row.severity === 'info') info += count;
+      }
+
+      // Determine risk level
+      let riskLevel = 'low';
+      if (critical > 0 || avgScore < 60) riskLevel = 'critical';
+      else if (high > 0 || avgScore < 80) riskLevel = 'high';
+      else if (medium > 0 || avgScore < 90) riskLevel = 'medium';
+
+      // Return calculated data directly without inserting to database
+      return {
+        overall_score: avgScore,
+        risk_level: riskLevel,
+        documents_checked: uniqueDocs,
+        total_documents: totalDocsResult?.count || 0,
+        critical_issues: critical,
+        high_issues: high,
+        medium_issues: medium,
+        low_issues: low,
+        info_issues: info,
+        frameworks_covered: args.framework ? 1 : frameworksChecked.split(', ').length,
+        frameworks_checked: frameworksChecked,
+        framework_requested: args.framework?.toUpperCase() || 'ALL',
+        framework_score: null,
+        message: args.framework 
+          ? `Found ${uniqueDocs} ${args.framework.toUpperCase()} compliance checks with an average score of ${avgScore}%. Risk level: ${riskLevel}. Issues: ${critical} critical, ${high} high, ${medium} medium, ${low} low, ${info} info.`
+          : `Found ${uniqueDocs} compliance checks across ${frameworksChecked} with an average score of ${avgScore}%. Risk level: ${riskLevel}. Issues: ${critical} critical, ${high} high, ${medium} medium, ${low} low, ${info} info.`
+      };
+    }
+
+    // Get framework-specific scores if requested
+    let frameworkScore = null;
+    if (args.framework) {
+      frameworkScore = await db
+        .selectFrom('framework_scores')
+        .selectAll()
+        .where('workspace_id', '=', workspaceId)
+        .where('framework', '=', args.framework.toLowerCase())
+        .orderBy('last_check_at', 'desc')
+        .limit(1)
+        .executeTakeFirst();
+    }
+
     return {
-      // Primary compliance metrics
-      overall_score: avgScore,
-      risk_level: riskLevel,
-      documents_checked: uniqueDocs,
-      total_documents: totalDocsResult?.count || 0,
-      critical_issues: critical,
-      high_issues: high,
-      medium_issues: medium,
-      low_issues: low,
-      info_issues: info,
-      frameworks_covered: args.framework ? 1 : frameworksChecked.split(', ').length,
-      frameworks_checked: frameworksChecked,
-      framework_requested: args.framework?.toUpperCase() || 'ALL',
-
-      // Dashboard metrics (available but not shown unless asked)
-      workspace_risk_score: workspaceScore?.overall_score || 0,
-      total_members: memberCount?.count || 0,
-      total_ai_messages: aiMessageCount?.count || 0,
-      recent_uploads: recentUploads?.count || 0,
-      completion_rate: completionRate,
-      total_compliance_checks: checks.length,
-
-      message: args.framework
-        ? `Found ${uniqueDocs} ${args.framework.toUpperCase()} compliance checks with an average score of ${avgScore}%. Risk level: ${riskLevel}. Issues: ${critical} critical, ${high} high, ${medium} medium, ${low} low, ${info} info.`
-        : `Found ${uniqueDocs} compliance checks across ${frameworksChecked} with an average score of ${avgScore}%. Risk level: ${riskLevel}. Issues: ${critical} critical, ${high} high, ${medium} medium, ${low} low, ${info} info.`
+      overall_score: latestScore.overall_score,
+      risk_level: latestScore.risk_level,
+      documents_checked: latestScore.documents_checked,
+      total_documents: latestScore.total_documents,
+      critical_issues: latestScore.critical_issues,
+      high_issues: latestScore.high_issues,
+      medium_issues: latestScore.medium_issues,
+      low_issues: latestScore.low_issues,
+      info_issues: latestScore.info_issues,
+      frameworks_covered: latestScore.frameworks_covered,
+      last_analyzed: latestScore.calculated_at,
+      framework_specific: frameworkScore
+        ? {
+            framework: frameworkScore.framework,
+            score: frameworkScore.score,
+            risk_level: frameworkScore.risk_level,
+            documents_checked: frameworkScore.documents_checked,
+            critical_issues: frameworkScore.critical_issues,
+            high_issues: frameworkScore.high_issues,
+            medium_issues: frameworkScore.medium_issues,
+            low_issues: frameworkScore.low_issues,
+          }
+        : null,
     };
   }
 
@@ -1829,8 +1770,7 @@ RULES:
     }
 
     if (args.framework) {
-      // Convert to uppercase to match database storage (GDPR, SOC2, HIPAA, etc.)
-      query = query.where('compliance_issues.framework', '=', args.framework.toUpperCase());
+      query = query.where('compliance_issues.framework', '=', args.framework.toLowerCase());
     }
 
     const issues = await query
@@ -2700,228 +2640,6 @@ RULES:
     // If needed, we could add: await this.env.ASSISTANT_MEMORY.delete({ sessionId: session.memory_session_id });
 
     return { success: true };
-  }
-
-  async getAnalytics(workspaceId: string, userId: string, timeRange: 'week' | 'month' | 'all' = 'week'): Promise<any> {
-    const db = this.getDb();
-
-    // Verify workspace access
-    const membership = await db
-      .selectFrom('workspace_members')
-      .select('role')
-      .where('workspace_id', '=', workspaceId)
-      .where('user_id', '=', userId)
-      .executeTakeFirst();
-
-    if (!membership) {
-      throw new Error('Access denied: You are not a member of this workspace');
-    }
-
-    // Calculate time cutoff
-    const now = Date.now();
-    const timeCutoffs = {
-      week: now - (7 * 24 * 60 * 60 * 1000),
-      month: now - (30 * 24 * 60 * 60 * 1000),
-      all: 0,
-    };
-    const cutoff = timeCutoffs[timeRange];
-
-    // Get conversation metrics
-    const sessions = await db
-      .selectFrom('conversation_sessions')
-      .select(['id', 'started_at', 'last_activity_at', 'message_count', 'user_id'])
-      .where('workspace_id', '=', workspaceId)
-      .where('started_at', '>=', cutoff)
-      .execute();
-
-    const totalSessions = sessions.length;
-    const uniqueUsers = new Set(sessions.map(s => s.user_id)).size;
-
-    // Calculate average session duration
-    const sessionDurations = sessions.map(s => s.last_activity_at - s.started_at).filter(d => d > 0);
-    const avgSessionDuration = sessionDurations.length > 0
-      ? Math.round(sessionDurations.reduce((sum, d) => sum + d, 0) / sessionDurations.length / 1000)
-      : 0;
-
-    // Calculate messages per session
-    const totalMessages = sessions.reduce((sum, s) => sum + s.message_count, 0);
-    const avgMessagesPerSession = totalSessions > 0 ? Math.round(totalMessages / totalSessions * 10) / 10 : 0;
-
-    // Get tool usage analytics
-    const toolUsage = await db
-      .selectFrom('tool_usage_analytics')
-      .select(['tool_name', 'success'])
-      .where('workspace_id', '=', workspaceId)
-      .where('executed_at', '>=', cutoff)
-      .execute();
-
-    // Aggregate tool usage by tool name
-    const toolStats: Record<string, { calls: number; success: number }> = {};
-    toolUsage.forEach(t => {
-      if (!toolStats[t.tool_name]) {
-        toolStats[t.tool_name] = { calls: 0, success: 0 };
-      }
-      toolStats[t.tool_name].calls++;
-      if (t.success) toolStats[t.tool_name].success++;
-    });
-
-    const toolUsageArray = Object.entries(toolStats).map(([name, stats]) => ({
-      tool: name,
-      count: stats.calls,
-      successRate: stats.calls > 0 ? Math.round((stats.success / stats.calls) * 100) : 0,
-    })).sort((a, b) => b.count - a.count);
-
-    // Get usage trends (messages over time)
-    const messages = await db
-      .selectFrom('conversation_messages')
-      .select(['created_at', 'role'])
-      .innerJoin('conversation_sessions', 'conversation_sessions.id', 'conversation_messages.session_id')
-      .where('conversation_sessions.workspace_id', '=', workspaceId)
-      .where('conversation_messages.created_at', '>=', cutoff)
-      .execute();
-
-    // Group messages by day
-    const messageTrends: Record<string, { user: number; assistant: number }> = {};
-    messages.forEach(m => {
-      const date = new Date(m.created_at).toISOString().split('T')[0]!;
-      if (!messageTrends[date]) {
-        messageTrends[date] = { user: 0, assistant: 0 };
-      }
-      if (m.role === 'user') messageTrends[date].user++;
-      if (m.role === 'assistant') messageTrends[date].assistant++;
-    });
-
-    const usageTrends = Object.entries(messageTrends).map(([date, counts]) => ({
-      date,
-      messages: counts.user + counts.assistant,
-      sessions: 0, // Could calculate from sessions table if needed
-    })).sort((a, b) => a.date.localeCompare(b.date));
-
-    // Count assistant messages
-    const assistantMessages = messages.filter(m => m.role === 'assistant').length;
-
-    // Calculate response quality (placeholder - would need message_feedback table)
-    const responseQuality = {
-      helpful: 85,
-      accurate: 88,
-      complete: 82,
-      actionable: 80,
-      averageScore: 84,
-    };
-
-    // Calculate user engagement
-    const returningSessions = sessions.filter(s => s.message_count > 1).length;
-    const returnRate = totalSessions > 0 ? Math.round((returningSessions / totalSessions) * 100) : 0;
-
-    // Calculate voice usage rate (placeholder - would need voice tracking)
-    const voiceUsageRate = 0;
-
-    // Cost analysis (placeholder - would need token tracking)
-    const costAnalysis = {
-      totalTokens: assistantMessages * 500, // Rough estimate
-      apiCost: assistantMessages * 0.002, // Rough estimate
-      costPerSession: totalSessions > 0 ? Math.round((assistantMessages * 0.002 / totalSessions) * 1000) / 1000 : 0,
-      estimatedMonthlyCost: Math.round(assistantMessages * 0.002 * 30 * 100) / 100,
-      roi: 250, // Placeholder
-    };
-
-    // Get top questions (most recent user messages)
-    const recentQuestions = await db
-      .selectFrom('conversation_messages')
-      .select(['content'])
-      .innerJoin('conversation_sessions', 'conversation_sessions.id', 'conversation_messages.session_id')
-      .where('conversation_sessions.workspace_id', '=', workspaceId)
-      .where('conversation_messages.role', '=', 'user')
-      .where('conversation_messages.created_at', '>=', cutoff)
-      .orderBy('conversation_messages.created_at', 'desc')
-      .limit(5)
-      .execute();
-
-    const topQuestions = recentQuestions.map(q => q.content.substring(0, 100));
-
-    // Compliance intelligence (per-framework tracking)
-    const complianceIntelligence = {
-      GDPR: { issuesDetected: 12, resolved: 4, resolutionRate: 33 },
-      SOC2: { issuesDetected: 8, resolved: 6, resolutionRate: 75 },
-      HIPAA: { issuesDetected: 0, resolved: 0, resolutionRate: 0 },
-    };
-
-    return {
-      keyMetrics: {
-        conversations: totalSessions,
-        responseTime: 1200, // Placeholder - would need actual tracking
-        satisfaction: 4.2, // Placeholder
-        activeUsers: uniqueUsers,
-      },
-      usageTrends,
-      toolUsage: toolUsageArray,
-      responseQuality,
-      userEngagement: {
-        avgSessionDuration,
-        messagesPerSession: avgMessagesPerSession,
-        returnRate,
-        voiceUsageRate,
-      },
-      costAnalysis,
-      topQuestions,
-      complianceIntelligence,
-    };
-  }
-
-  async exportAnalytics(workspaceId: string, userId: string, format: 'csv', timeRange: 'week' | 'month' | 'all' = 'week'): Promise<string> {
-    const analytics = await this.getAnalytics(workspaceId, userId, timeRange);
-
-    if (format !== 'csv') {
-      throw new Error('Only CSV format is supported');
-    }
-
-    // Generate CSV from analytics data
-    const lines: string[] = [];
-
-    // Header
-    lines.push('Section,Metric,Value');
-
-    // Key Metrics
-    lines.push(`Key Metrics,Conversations,${analytics.keyMetrics.conversations}`);
-    lines.push(`Key Metrics,Response Time (ms),${analytics.keyMetrics.responseTime}`);
-    lines.push(`Key Metrics,Satisfaction,${analytics.keyMetrics.satisfaction}`);
-    lines.push(`Key Metrics,Active Users,${analytics.keyMetrics.activeUsers}`);
-
-    // User Engagement
-    lines.push(`User Engagement,Avg Session Duration (s),${analytics.userEngagement.avgSessionDuration}`);
-    lines.push(`User Engagement,Messages Per Session,${analytics.userEngagement.messagesPerSession}`);
-    lines.push(`User Engagement,Return Rate (%),${analytics.userEngagement.returnRate}`);
-    lines.push(`User Engagement,Voice Usage Rate (%),${analytics.userEngagement.voiceUsageRate}`);
-
-    // Response Quality
-    lines.push(`Response Quality,Helpful (%),${analytics.responseQuality.helpful}`);
-    lines.push(`Response Quality,Accurate (%),${analytics.responseQuality.accurate}`);
-    lines.push(`Response Quality,Complete (%),${analytics.responseQuality.complete}`);
-    lines.push(`Response Quality,Actionable (%),${analytics.responseQuality.actionable}`);
-    lines.push(`Response Quality,Average Score,${analytics.responseQuality.averageScore}`);
-
-    // Cost Analysis
-    lines.push(`Cost Analysis,Total Tokens,${analytics.costAnalysis.totalTokens}`);
-    lines.push(`Cost Analysis,API Cost ($),${analytics.costAnalysis.apiCost}`);
-    lines.push(`Cost Analysis,Cost Per Session ($),${analytics.costAnalysis.costPerSession}`);
-    lines.push(`Cost Analysis,Estimated Monthly Cost ($),${analytics.costAnalysis.estimatedMonthlyCost}`);
-    lines.push(`Cost Analysis,ROI (%),${analytics.costAnalysis.roi}`);
-
-    // Tool Usage
-    lines.push('');
-    lines.push('Tool Name,Usage Count,Success Rate (%)');
-    analytics.toolUsage.forEach((tool: any) => {
-      lines.push(`${tool.tool},${tool.count},${tool.successRate}`);
-    });
-
-    // Usage Trends
-    lines.push('');
-    lines.push('Date,Messages,Sessions');
-    analytics.usageTrends.forEach((trend: any) => {
-      lines.push(`${trend.date},${trend.messages},${trend.sessions}`);
-    });
-
-    return lines.join('\n');
   }
 
   // ============================================================================
