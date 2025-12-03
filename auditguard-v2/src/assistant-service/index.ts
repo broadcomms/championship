@@ -271,6 +271,7 @@ export default class extends Service<Env> {
       }
 
       memorySessionId = session.memory_session_id;
+
     } else {
       // Create new session with SmartMemory
       const sessionId = `conv_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -470,7 +471,6 @@ KNOWLEDGE BASE ACCESS:
     let processedHistory = conversationHistory;
     
     if (conversationHistory.length > 20) {
-      console.log(`🧠 Conversation has ${conversationHistory.length} messages - applying summarization`);
       this.env.logger.info('🧠 Applying conversation summarization', {
         originalMessageCount: conversationHistory.length,
         threshold: 20,
@@ -808,13 +808,13 @@ User: "Hi there"
       // 🔍 DEBUG: Log what question is being sent to decision maker
       const lastUserMessage = messages[messages.length - 1];
       this.env.logger.info('🎯 STAGE 1 INPUT:', {
-        userQuestion: lastUserMessage?.content?.substring(0, 200),
+        userQuestion: lastUserMessage?.content?.substring(0, 200) || 'No content',
         messageCount: messages.length,
-        workspaceContext: workspaceContext.substring(0, 300),
+        workspaceContext: workspaceContext?.substring(0, 300) || 'No context',
         fullConversation: true, // Now passing full conversation history
         lastThreeMessages: messages.slice(-3).map(m => ({
           role: m.role,
-          content: m.content?.substring(0, 100)
+          content: m.content?.substring(0, 100) || 'No content'
         }))
       });
 
@@ -908,6 +908,9 @@ User: "Hi there"
       });
       
       // Skip tool execution and final response if we already have plain text answer
+      // Declare toolResults outside the scope so it's available for post-processing
+      let toolResults: { messages: any[]; rawData: any[] } = { messages: [], rawData: [] };
+
       if (!skipToStoreMessage) {
         // Stage 2: Execute tools if needed
         if (decision.needsTools && decision.toolCalls && decision.toolCalls.length > 0) {
@@ -915,7 +918,7 @@ User: "Hi there"
           toolCount: decision.toolCalls.length,
           tools: decision.toolCalls.map((tc: any) => tc.name)
         });
-        
+
         // Convert decision tool calls to execution format
         const toolCalls = decision.toolCalls.map((tc: any, index: number) => ({
           id: `call_${Date.now()}_${index}`,
@@ -925,9 +928,9 @@ User: "Hi there"
             arguments: JSON.stringify(tc.arguments || {})
           }
         }));
-        
+
         // Execute the tools
-        const toolResults = await this.executeTools(toolCalls, workspaceId, userId);
+        toolResults = await this.executeTools(toolCalls, workspaceId, userId);
 
         this.env.logger.info('Tools executed', {
           toolCount: toolCalls.length,
@@ -1035,7 +1038,7 @@ User: "Hi there"
 Now craft a natural, helpful response. **Read the user's question carefully** and match your detail level accordingly.`
             }
           ] as any,
-          temperature: 0.7,
+          temperature: 0.4,
           maxTokens: 1500,
         });
         
@@ -1055,8 +1058,8 @@ Now craft a natural, helpful response. **Read the user's question carefully** an
           const simpleResponse = await this.callAI({
             model: 'response',
             messages: [systemMessage, ...messages] as any, // FIXED: Use full conversation history
-            temperature: 0.7,
-            maxTokens: 1000,
+            temperature: 0.4,
+            maxTokens: 1500,
           });
           assistantMessage = simpleResponse.choices[0].message.content;
         }
@@ -1440,9 +1443,9 @@ The ${toolCall.function.name.replace(/_/g, ' ')} encountered an issue. Suggest t
     try {
       // Debug logging to see what we're working with
       this.env.logger.info('🔍 Post-processing input:', {
-        toolsUsed: input.toolsUsed,
-        toolResultsCount: input.toolResults.length,
-        toolResultsSample: JSON.stringify(input.toolResults).substring(0, 1000)
+        toolsUsed: input.toolsUsed || [],
+        toolResultsCount: input.toolResults?.length || 0,
+        toolResultsSample: (input.toolResults ? JSON.stringify(input.toolResults) : '[]').substring(0, 1000)
       });
       
       this.env.logger.info('🔄 Post-processing: Generating suggestions and actions');
@@ -1521,7 +1524,7 @@ RULES:
         messages: [{ role: 'system', content: prompt }] as any,
         response_format: { type: 'json_object' },
         temperature: 0.4, // Lower = more consistent
-        max_tokens: 400,
+        max_tokens: 1400,
       });
 
       const parsed = JSON.parse(result.choices[0].message.content);
