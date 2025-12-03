@@ -33,6 +33,7 @@ interface ConversationSidebarProps {
   currentId?: string;
   onSelect: (id: string) => void;
   onNewConversation: () => void;
+  onConversationDeleted?: (conversationId: string) => void; // Notify parent when conversation deleted
   className?: string;
   refreshTrigger?: number; // Increment to trigger refresh
 }
@@ -42,6 +43,7 @@ export function ConversationSidebar({
   currentId,
   onSelect,
   onNewConversation,
+  onConversationDeleted,
   className = '',
   refreshTrigger = 0,
 }: ConversationSidebarProps) {
@@ -225,6 +227,9 @@ export function ConversationSidebar({
         console.error('Failed to delete conversation:', await response.text());
         // Reload to restore state if delete failed
         loadConversations();
+      } else {
+        // Notify parent that conversation was deleted
+        onConversationDeleted?.(conversationId);
       }
     } catch (error) {
       console.error('Failed to delete conversation:', error);

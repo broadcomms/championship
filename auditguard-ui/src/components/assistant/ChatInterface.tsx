@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Download, Copy, FileText } from 'lucide-react';
+import { Download, Copy, FileText, PanelLeft, PanelLeftClose } from 'lucide-react';
 import type { Message as MessageType } from '@/types/assistant';
 import { Message } from './Message';
 import { EnhancedInput } from './EnhancedInput';
@@ -24,6 +24,8 @@ interface ChatInterfaceProps {
   messages: MessageType[];
   onMessageSent: (message: MessageType) => void;
   onSessionCreated: (sessionId: string) => void;
+  isConversationSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 interface AssistantResponse {
@@ -39,6 +41,8 @@ export function ChatInterface({
   messages: externalMessages,
   onMessageSent,
   onSessionCreated,
+  isConversationSidebarOpen = true,
+  onToggleSidebar,
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<MessageType[]>(externalMessages);
   const [input, setInput] = useState('');
@@ -207,12 +211,35 @@ export function ChatInterface({
 
       // Generate context-aware suggestions
       if (data.suggestions && data.suggestions.length > 0) {
+        console.log('✅ Using backend suggestions:', data.suggestions);
         setSuggestions(normalizeSuggestions(data.suggestions));
       } else {
+        console.log('⚠️ Backend suggestions empty, generating fallback suggestions');
+        // Extract context from the conversation for better fallback suggestions
+        const responseText = data.message.toLowerCase();
+        const userMessageText = messageText.toLowerCase();
+
+        // Detect frameworks mentioned
+        const frameworks: string[] = [];
+        ['gdpr', 'soc2', 'soc 2', 'hipaa', 'iso', 'pci'].forEach(fw => {
+          if (responseText.includes(fw) || userMessageText.includes(fw)) {
+            frameworks.push(fw.toUpperCase().replace(' ', '_'));
+          }
+        });
+
+        // Detect if issues or documents were mentioned
+        const mentionsIssues = responseText.includes('issue') || responseText.includes('critical') || responseText.includes('high');
+        const mentionsDocuments = responseText.includes('document') || responseText.includes('upload');
+
         setSuggestions(
           generateSuggestions({
-            currentTopic: data.message.substring(0, 100),
-            workspaceData: {},
+            currentTopic: data.message.substring(0, 150),
+            recentMessages: [messageText, data.message],
+            workspaceData: {
+              frameworks: frameworks.length > 0 ? frameworks : undefined,
+              issueCount: mentionsIssues ? 1 : 0,
+              documentCount: mentionsDocuments ? 1 : 0,
+            },
           })
         );
       }
@@ -313,15 +340,33 @@ export function ChatInterface({
       {/* Header */}
       <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-base sm:text-xl font-semibold text-gray-900 truncate">
-              AI Compliance Assistant
-            </h1>
-            {currentSessionId && (
-              <p className="text-xs sm:text-sm text-gray-500 mt-1 truncate">
-                Session active • {messages.length} messages
-              </p>
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            {/* Toggle Button for Conversation Sidebar */}
+            {onToggleSidebar && (
+              <button
+                onClick={onToggleSidebar}
+                className="p-2 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors flex-shrink-0"
+                title={isConversationSidebarOpen ? 'Hide conversations' : 'Show conversations'}
+                aria-label={isConversationSidebarOpen ? 'Hide conversations' : 'Show conversations'}
+              >
+                {isConversationSidebarOpen ? (
+                  <PanelLeftClose className="w-4 h-4 text-gray-600" />
+                ) : (
+                  <PanelLeft className="w-4 h-4 text-gray-600" />
+                )}
+              </button>
             )}
+
+            <div className="min-w-0 flex-1">
+              <h1 className="text-base sm:text-xl font-semibold text-gray-900 truncate">
+                Compliance Assistant
+              </h1>
+              {currentSessionId && (
+                <p className="text-xs sm:text-sm text-gray-500 mt-1 truncate">
+                  Session active • {messages.length} messages
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {/* Export Menu */}

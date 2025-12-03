@@ -328,6 +328,124 @@ export default class extends Service<Env> {
     return Math.round(finalPriority);
   }
 
+  /**
+   * Update framework-level aggregated scores in the framework_scores table
+   * This runs after each compliance check completes to keep analytics data fresh
+   */
+  private async updateFrameworkScores(
+    workspaceId: string,
+    framework: string,
+    db: ReturnType<typeof this.getDb>
+  ): Promise<void> {
+    try {
+      this.env.logger.info('📊 Updating framework scores', { workspaceId, framework });
+
+      // Query all completed checks for this framework in this workspace
+      const completedChecks = await db
+        .selectFrom('compliance_checks')
+        .select(['id', 'overall_score', 'document_id'])
+        .where('workspace_id', '=', workspaceId)
+        .where('framework', '=', framework)
+        .where('status', '=', 'completed')
+        .execute();
+
+      if (completedChecks.length === 0) {
+        this.env.logger.warn('No completed checks found for framework', { workspaceId, framework });
+        return;
+      }
+
+      // Calculate aggregated metrics
+      const totalChecks = completedChecks.length;
+      const scores = completedChecks.map(c => c.overall_score || 0);
+      const avgScore = Math.round(scores.reduce((sum, score) => sum + score, 0) / totalChecks);
+
+      // Count passed/failed (using 70% as passing threshold)
+      const checksPassed = scores.filter(score => score >= 70).length;
+      const checksFailed = totalChecks - checksPassed;
+
+      // Get last check timestamp
+      const lastCheck = await db
+        .selectFrom('compliance_checks')
+        .select('created_at')
+        .where('workspace_id', '=', workspaceId)
+        .where('framework', '=', framework)
+        .where('status', '=', 'completed')
+        .orderBy('created_at', 'desc')
+        .limit(1)
+        .executeTakeFirst();
+
+      const lastCheckAt = lastCheck?.created_at || Date.now();
+
+      // Upsert into framework_scores table
+      const scoreId = `${workspaceId}_${framework}`;
+      const now = Date.now();
+
+      // Check if record exists
+      const existing = await db
+        .selectFrom('framework_scores')
+        .select('id')
+        .where('id', '=', scoreId)
+        .executeTakeFirst();
+
+      if (existing) {
+        // Update existing record
+        await db
+          .updateTable('framework_scores')
+          .set({
+            score: avgScore,
+            checks_passed: checksPassed,
+            checks_failed: checksFailed,
+            total_checks: totalChecks,
+            last_check_at: lastCheckAt,
+          })
+          .where('id', '=', scoreId)
+          .execute();
+
+        this.env.logger.info('✅ Framework scores updated', {
+          workspaceId,
+          framework,
+          avgScore,
+          totalChecks,
+          checksPassed,
+          checksFailed,
+        });
+      } else {
+        // Insert new record
+        await db
+          .insertInto('framework_scores')
+          .values({
+            id: scoreId,
+            workspace_id: workspaceId,
+            framework: framework,
+            score: avgScore,
+            checks_passed: checksPassed,
+            checks_failed: checksFailed,
+            total_checks: totalChecks,
+            last_check_at: lastCheckAt,
+            created_at: now,
+          })
+          .execute();
+
+        this.env.logger.info('✅ Framework scores created', {
+          workspaceId,
+          framework,
+          avgScore,
+          totalChecks,
+          checksPassed,
+          checksFailed,
+        });
+      }
+    } catch (error) {
+      this.env.logger.error('❌ Failed to update framework scores', {
+        workspaceId,
+        framework,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      // Don't throw - this is a non-critical analytics update
+    }
+  }
+
   private async analyzeCompliance(
     checkId: string,
     documentId: string,
@@ -668,7 +786,21 @@ export default class extends Service<Env> {
         });
         // Don't fail the whole check if cache update fails - summary can be calculated on-demand
       }
-      
+
+      // Update framework-level aggregated scores for analytics dashboard
+      try {
+        await this.updateFrameworkScores(workspaceId, framework, db);
+        this.env.logger.info('📊 Framework scores updated successfully', { checkId, framework });
+      } catch (frameworkError) {
+        this.env.logger.error('⚠️ Failed to update framework scores', {
+          checkId,
+          framework,
+          error: frameworkError instanceof Error ? frameworkError.message : String(frameworkError),
+          stack: frameworkError instanceof Error ? frameworkError.stack : undefined,
+        });
+        // Don't fail the whole check if framework score update fails - it's analytics data
+      }
+
     } catch (error) {
       // Mark check as failed
       const duration = Date.now() - startTime;

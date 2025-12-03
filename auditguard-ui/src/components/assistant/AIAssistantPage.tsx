@@ -11,7 +11,6 @@ import type { Message } from '@/types/assistant';
 import { useKeyboardShortcuts } from '@/lib/keyboard';
 import { announceToScreenReader } from '@/lib/focus';
 import { useDeviceType, useViewportHeight } from '@/lib/mobile';
-import { SkeletonFullPage } from '@/components/common/Skeleton';
 import { TRANSITIONS } from '@/lib/animations';
 import { useChatWidget } from '@/contexts/ChatWidgetContext';
 
@@ -260,6 +259,30 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]); // Intentionally exclude chatWidget
 
+  // Handle when a conversation is deleted
+  const handleConversationDeleted = useCallback((deletedConversationId: string) => {
+    console.log('🗑️ Conversation deleted:', deletedConversationId);
+
+    // If the deleted conversation was the active one, clear it
+    if (currentConversationId === deletedConversationId) {
+      console.log('🧹 Clearing active conversation state');
+
+      // 1. Clear localStorage
+      const storageKey = getStorageKey(workspaceId);
+      localStorage.removeItem(storageKey);
+
+      // 2. Clear context sessionId
+      chatWidget.setSessionId(null);
+
+      // 3. Clear local state
+      setCurrentConversationId(undefined);
+      setMessages([]);
+
+      announceToScreenReader('Conversation deleted');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentConversationId, workspaceId]); // Intentionally exclude chatWidget
+
   // Handle when a message is sent (for local state tracking)
   const handleMessageSent = useCallback((message: Message) => {
     setMessages(prev => {
@@ -296,11 +319,6 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
     announceToScreenReader('Voice mode activated in chat widget');
   };
 
-  // Show loading skeleton while initializing
-  if (isLoading && !isInitialized) {
-    return <SkeletonFullPage />;
-  }
-
   // Get current sessionId from context for passing to children
   const currentSessionId = chatWidget.sessionId;
 
@@ -310,7 +328,7 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
       <div className="bg-white border-b border-gray-200 px-3 sm:px-6 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
-            <h1 className="text-base sm:text-xl font-semibold text-gray-900 truncate">AI Compliance Assistant</h1>
+            <h1 className="text-base sm:text-xl font-semibold text-gray-900 truncate">AuditGuardX AI</h1>
 
             {/* View Mode Tabs - Responsive */}
             <div className="flex items-center gap-1 ml-2 sm:ml-8" role="tablist" aria-label="View modes">
@@ -388,31 +406,20 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
                 currentId={currentConversationId}
                 onSelect={handleConversationSelect}
                 onNewConversation={handleNewConversation}
+                onConversationDeleted={handleConversationDeleted}
                 refreshTrigger={conversationRefreshTrigger}
               />
             </div>
 
-            {/* Center Panel - Chat Interface with Toggle Button */}
+            {/* Center Panel - Chat Interface */}
             <div className="flex-1 flex flex-col min-w-0 w-full relative">
-              {/* Toggle Button for Conversation Sidebar */}
-              <button
-                onClick={() => setIsConversationSidebarOpen(!isConversationSidebarOpen)}
-                className="absolute top-4 left-4 z-10 p-2 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg shadow-sm transition-colors"
-                title={isConversationSidebarOpen ? 'Hide conversations' : 'Show conversations'}
-                aria-label={isConversationSidebarOpen ? 'Hide conversations' : 'Show conversations'}
-              >
-                {isConversationSidebarOpen ? (
-                  <PanelLeftClose className="w-4 h-4 text-gray-600" />
-                ) : (
-                  <PanelLeft className="w-4 h-4 text-gray-600" />
-                )}
-              </button>
-
               <ChatInterface
                 workspaceId={workspaceId}
                 messages={messages}
                 onMessageSent={handleMessageSent}
                 onSessionCreated={handleSessionCreated}
+                isConversationSidebarOpen={isConversationSidebarOpen}
+                onToggleSidebar={() => setIsConversationSidebarOpen(!isConversationSidebarOpen)}
               />
             </div>
 
