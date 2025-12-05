@@ -212,6 +212,7 @@ function formatPlanFeatures(plan: PlanWithLimits): string[] {
   };
   
   // Add feature flags
+  /*
   if (plan.features && Array.isArray(plan.features)) {
     plan.features.forEach((feature) => {
       const readable = featureMap[feature];
@@ -221,6 +222,8 @@ function formatPlanFeatures(plan: PlanWithLimits): string[] {
     });
   }
   
+  return features;
+  */
   return features;
 }
 
@@ -288,6 +291,7 @@ export default function OrganizationBillingPage() {
           priceYearly: plan.priceYearly,
           uploads: plan.limits.documents,
           checks: plan.limits.compliance_checks,
+
           features: formatPlanFeatures(plan),
           limits: {
             documents: plan.limits.documents,
@@ -663,7 +667,7 @@ export default function OrganizationBillingPage() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">
-                      Document Uploads
+                      Documents Processed
                     </span>
                     <span className="text-sm text-gray-600">
                       {usage.uploads_used} / {usage.uploads_limit === -1 ? '∞' : usage.uploads_limit}

@@ -24,8 +24,8 @@ export default function MarketingHomePage() {
       <ValueProps />
       <VideoShowcase />
       <FeatureHighlights />
-      <StatsShowcase />
-      <TestimonialShowcase />
+      {/* <StatsShowcase /> */}
+     {/* <TestimonialShowcase /> */}
       <PricingPreview />
       <FinalCTA />
     </div>

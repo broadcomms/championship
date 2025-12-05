@@ -39,9 +39,9 @@ const timeline = [
   },
   {
     year: '2025',
-    title: 'Platform Launch',
+    title: 'Platform Release',
     description:
-      'AuditGuard released the preview of its core compliance analysis platform, serving enterprise customers across healthcare and financial services.',
+      'AuditGuard released the preview of its core document compliance analysis platform, serving enterprise customers across high-regulation industries.',
   },
 ];
 
@@ -49,7 +49,7 @@ const leadership = [
   {
     name: 'Patrick Ejelle-Ndille',
     role: 'Founder & CEO',
-    bio: 'Technology visionary with deep expertise in AI, machine learning, and enterprise platform architecture with a focus Information security and regulatory compliance automation.',
+    bio: 'Technology visionary with deep expertise in AI, machine learning, and enterprise platform architecture focused on information security and regulatory compliance automation.',
   },
 
 ];
