@@ -35,13 +35,13 @@ const timeline = [
     year: '2024',
     title: 'Foundation',
     description:
-      'AuditGuardX launched with a vision to revolutionize compliance management through intelligent automation and design.',
+      'AuditGuardX launched with a vision to revolutionize compliance management through intelligent automation and enterprise architecture design.',
   },
   {
     year: '2025',
     title: 'Platform Launch',
     description:
-      'Released the core compliance platform, serving enterprise customers across healthcare and financial services.',
+      'AuditGuard released the preview of its core compliance analysis platform, serving enterprise customers across healthcare and financial services.',
   },
 ];
 
@@ -104,14 +104,14 @@ export default function AboutPage() {
           <div className="text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Our Story</p>
             <p className="mt-4 text-base text-gray-600">
-              Founded in December 2024 by a Patrick Ejelle-Ndille a technology innovator and information security expert, AuditGuardX emerged when traditional
-              methods could no longer keep pace with rapidly evolving business and regulatory landscapes.
+              AuditGuardX was founded in December 2024 by Patrick Ejelle-Ndille, a technology innovator and seasoned information security professional with deep expertise in GRC and cybersecurity. 
+              AuditGuardX emerged from firsthand experience, watching organizations struggle as traditional compliance evaluation methods failed to keep pace with the rapidly evolving complexities of the regulatory landscape.
             </p>
           </div>
           <div className="mt-10 space-y-6">
             {timeline.map((item) => (
-              <div key={item.year} className="flex flex-col gap-4 rounded-2xl border border-gray-100 p-6 sm:flex-row sm:items-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-xl font-bold text-white">
+              <div key={item.year} className="flex flex-col gap-4 rounded-2x2 border border-gray-100 p-6 sm:flex-row sm:items-center">
+                <div className="flex h-16 w-20 items-center justify-center rounded-full bg-blue-600 text-xl font-bold text-white">
                   {item.year}
                 </div>
                 <div>

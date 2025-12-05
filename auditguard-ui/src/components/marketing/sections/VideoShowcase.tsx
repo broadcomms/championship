@@ -8,38 +8,43 @@ export function VideoShowcase() {
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-300">
             See AuditGuardX in action
           </p>
-          <h2 className="text-3xl font-bold sm:text-4xl">Watch how teams compress SOC 2 to 90 minutes</h2>
+          <h2 className="text-3xl font-bold sm:text-4xl">From Upload to GDPR Compliance in Under 3 Minutes</h2>
           <p className="text-base text-white/70">
-            Live footage from the AuditGuardX assistant analyzing 600+ controls, generating remediation plans, and answering
-            voice-mode questions in real time.
+             Watch AuditGuardX analyze policy documents against 37 GDPR controls, identify 
+            compliance gaps, generate corrected documents, and answer questions via 
+            voice—all in real time.
           </p>
         </div>
         <div className="mt-10 overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl">
-          <div className="aspect-video w-full bg-gradient-to-br from-blue-600 to-purple-600 p-8">
-            <div className="flex h-full w-full flex-col justify-between rounded-2xl bg-black/30 p-6">
-              <div className="flex items-center gap-3 text-sm text-white/80">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-lg font-semibold">▶</span>
-                02:13 Demo Recording • Voice Mode, Evidence Mapping, Live Remediation
-              </div>
-              <div className="grid gap-4 text-sm text-white/80 lg:grid-cols-4">
-                <div>
-                  <p className="text-3xl font-bold text-white">90s</p>
-                  <p>Average analysis time</p>
-                </div>
-                <div>
-                  <p className="text-3xl font-bold text-white">1,000+</p>
-                  <p>Documents processed per customer</p>
-                </div>
-                <div>
-                  <p className="text-3xl font-bold text-white">20+</p>
-                  <p>Frameworks mapped automatically</p>
-                </div>
-                <div>
-                  <p className="text-3xl font-bold text-white">0.12s</p>
-                  <p>Voice response latency</p>
-                </div>
-              </div>
-            </div>
+          <div className="aspect-video w-full">
+            <iframe
+              width="100%"
+              height="100%"
+              src="https://www.youtube.com/embed/T2caZzwCNrM"
+              title="AuditGuardX Demo"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              className="h-full w-full"
+            ></iframe>
+          </div>
+        </div>
+        <div className="mt-12 grid gap-6 text-center sm:grid-cols-4">
+          <div>
+            <p className="text-3xl font-bold text-white">30s</p>
+            <p className="text-sm text-white/70">Document processing time</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold text-white">39</p>
+            <p className="text-sm text-white/70">GDPR controls checks</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold text-white">9</p>
+            <p className="text-sm text-white/70">Issues instantly identified</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold text-white">20+</p>
+            <p className="text-sm text-white/70">Compliance frameworks supported</p>
           </div>
         </div>
         <div className="mt-8 text-center">
