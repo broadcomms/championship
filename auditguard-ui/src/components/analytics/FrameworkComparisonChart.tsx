@@ -1,7 +1,7 @@
 'use client';
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { getFrameworkColor, getScoreColor } from '@/lib/analytics/colors';
+import { getScoreColor } from '@/lib/analytics/colors';
 
 interface FrameworkScore {
   framework?: string;
@@ -74,17 +74,17 @@ export function FrameworkComparisonChart({ frameworks, className = '' }: Framewo
               borderRadius: '0.5rem',
               padding: '8px 12px',
             }}
-            formatter={(value: number, name: string, props: any) => {
+            formatter={(value: number, name: string, props: { payload?: { checks: number; passed: number; failed: number } }) => {
               const lines = [
                 `Score: ${value}%`,
               ];
-              if (props.payload.checks > 0) {
+              if (props.payload && props.payload.checks > 0) {
                 lines.push(`Checks: ${props.payload.checks}`);
               }
-              if (props.payload.passed > 0) {
+              if (props.payload && props.payload.passed > 0) {
                 lines.push(`Passed: ${props.payload.passed}`);
               }
-              if (props.payload.failed > 0) {
+              if (props.payload && props.payload.failed > 0) {
                 lines.push(`Failed: ${props.payload.failed}`);
               }
               return lines;

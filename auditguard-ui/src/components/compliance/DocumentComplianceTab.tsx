@@ -62,7 +62,6 @@ export function DocumentComplianceTab({
   // Framework selection state - will be set after fetching document's framework
   const [selectedFramework, setSelectedFramework] = useState<ComplianceFramework>('GDPR');
   const [showFrameworkDropdown, setShowFrameworkDropdown] = useState(false);
-  const [frameworkLoading, setFrameworkLoading] = useState(false);
 
   // Fetch document's compliance framework and set as default
   useEffect(() => {
@@ -71,7 +70,6 @@ export function DocumentComplianceTab({
         return; // Use default GDPR if no framework set
       }
 
-      setFrameworkLoading(true);
       try {
         const response = await fetch(
           `/api/workspaces/${workspaceId}/compliance-frameworks/${complianceFrameworkId}`,
@@ -115,8 +113,6 @@ export function DocumentComplianceTab({
       } catch (err) {
         console.error('Failed to fetch document framework:', err);
         // Keep default GDPR on error
-      } finally {
-        setFrameworkLoading(false);
       }
     };
 

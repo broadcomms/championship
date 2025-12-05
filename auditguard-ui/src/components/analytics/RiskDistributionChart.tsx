@@ -62,7 +62,7 @@ export function RiskDistributionChart({ distribution, className = '' }: RiskDist
             cx="50%"
             cy="50%"
             labelLine={false}
-            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+            label={({ name, percent }) => `${name} ${percent ? (percent * 100).toFixed(0) : 0}%`}
             outerRadius={100}
             fill="#8884d8"
             dataKey="value"
@@ -83,7 +83,10 @@ export function RiskDistributionChart({ distribution, className = '' }: RiskDist
           <Legend 
             verticalAlign="bottom" 
             height={36}
-            formatter={(value, entry: any) => `${value}: ${formatNumber(entry.payload.value)}`}
+            formatter={(value, entry) => {
+              const entryValue = entry?.payload?.value;
+              return entryValue !== undefined ? `${value}: ${formatNumber(entryValue)}` : String(value);
+            }}
           />
         </PieChart>
       </ResponsiveContainer>

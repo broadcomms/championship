@@ -6,7 +6,7 @@ import { ChatInterface } from './ChatInterface';
 import { DetailsSidebar } from './DetailsSidebar';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import NotificationSettingsPanel from './NotificationSettingsPanel';
-import { MessageSquare, BarChart3, Settings, Mic, PanelLeft, PanelLeftClose } from 'lucide-react';
+import { MessageSquare, BarChart3, Settings, Mic } from 'lucide-react';
 import type { Message } from '@/types/assistant';
 import { useKeyboardShortcuts } from '@/lib/keyboard';
 import { announceToScreenReader } from '@/lib/focus';
@@ -57,7 +57,6 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('chat');
-  const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [conversationRefreshTrigger, setConversationRefreshTrigger] = useState(0);
   const [isConversationSidebarOpen, setIsConversationSidebarOpen] = useState(true);
@@ -70,8 +69,6 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
     if (isInitialized) return;
 
     const initializeSession = async () => {
-      setIsLoading(true);
-
       try {
         // 1. Check localStorage for existing session
         const storageKey = getStorageKey(workspaceId);
@@ -99,7 +96,6 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
         chatWidget.setSessionId(null);
         setMessages([]);
       } finally {
-        setIsLoading(false);
         setIsInitialized(true);
       }
     };
@@ -207,7 +203,6 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
     setViewMode('chat');
 
     try {
-      setIsLoading(true);
       const response = await fetch(`/api/assistant/conversations/${conversationId}/messages?workspaceId=${workspaceId}`, {
         credentials: 'include',
       });
@@ -234,8 +229,6 @@ export function AIAssistantPage({ workspaceId }: AIAssistantPageProps) {
     } catch (error) {
       console.error('Failed to load conversation messages:', error);
       announceToScreenReader('Failed to load conversation', 'assertive');
-    } finally {
-      setIsLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, mapApiMessage]); // Intentionally exclude chatWidget

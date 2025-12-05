@@ -217,7 +217,7 @@ export function ChatInterface({
         console.log('⚠️ Backend suggestions empty, generating fallback suggestions');
         // Extract context from the conversation for better fallback suggestions
         const responseText = data.message.toLowerCase();
-        const userMessageText = messageText.toLowerCase();
+        const userMessageText = messageToSend.toLowerCase();
 
         // Detect frameworks mentioned
         const frameworks: string[] = [];
@@ -234,7 +234,7 @@ export function ChatInterface({
         setSuggestions(
           generateSuggestions({
             currentTopic: data.message.substring(0, 150),
-            recentMessages: [messageText, data.message],
+            recentMessages: [messageToSend, data.message],
             workspaceData: {
               frameworks: frameworks.length > 0 ? frameworks : undefined,
               issueCount: mentionsIssues ? 1 : 0,

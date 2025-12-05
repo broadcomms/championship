@@ -48,14 +48,10 @@ const timeline = [
 const leadership = [
   {
     name: 'Patrick Ejelle-Ndille',
-    role: 'Founder, President of Innovation',
-    bio: 'Technology visionary with deep expertise in AI, machine learning, and enterprise platform architecture.',
+    role: 'Founder & CEO',
+    bio: 'Technology visionary with deep expertise in AI, machine learning, and enterprise platform architecture with a focus Information security and regulatory compliance automation.',
   },
-  {
-    name: 'Joao Amador',
-    role: 'Vice President of Strategy',
-    bio: 'Compliance strategist with a track record of guiding regulated industries through complex frameworks.',
-  },
+
 ];
 
 export default function AboutPage() {
@@ -108,7 +104,7 @@ export default function AboutPage() {
           <div className="text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Our Story</p>
             <p className="mt-4 text-base text-gray-600">
-              Founded in December 2024 by compliance experts and technology innovators, AuditGuardX emerged when traditional
+              Founded in December 2024 by a Patrick Ejelle-Ndille a technology innovator and information security expert, AuditGuardX emerged when traditional
               methods could no longer keep pace with rapidly evolving business and regulatory landscapes.
             </p>
           </div>
@@ -132,9 +128,9 @@ export default function AboutPage() {
         <div className="rounded-3xl border border-gray-100 bg-white p-10 shadow-sm">
           <h2 className="text-center text-3xl font-bold text-gray-900">Leadership</h2>
           <p className="mt-3 text-center text-sm text-gray-600">
-            Meet the experts driving innovation in compliance technology.
+            Meet the expert driving innovation in compliance technology.
           </p>
-          <div className="mt-10 grid gap-6 sm:grid-cols-2">
+          <div className="mt-10 grid gap-6 sm:grid-cols-1">
             {leadership.map((leader) => (
               <div key={leader.name} className="rounded-2xl border border-gray-100 p-6">
                 <p className="text-lg font-semibold text-gray-900">{leader.name}</p>

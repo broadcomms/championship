@@ -28,7 +28,6 @@ export function ComplianceTrendChart({ data, className = '' }: ComplianceTrendCh
   }
 
   // Group data by framework if multiple frameworks exist
-  const frameworks = [...new Set(data.map(d => d.framework || 'Overall'))];
   const chartData = data.map(point => ({
     date: formatDate(point.date, 'MMM d'),
     dateValue: new Date(point.date).getTime(),
