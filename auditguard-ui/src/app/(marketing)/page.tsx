@@ -3,8 +3,6 @@ import { LogoGrid } from '@/components/marketing/sections/LogoGrid';
 import { ValueProps } from '@/components/marketing/sections/ValueProps';
 import { VideoShowcase } from '@/components/marketing/sections/VideoShowcase';
 import { FeatureHighlights } from '@/components/marketing/sections/FeatureHighlights';
-import { StatsShowcase } from '@/components/marketing/sections/StatsShowcase';
-import { TestimonialShowcase } from '@/components/marketing/sections/TestimonialShowcase';
 import { PricingPreview } from '@/components/marketing/sections/PricingPreview';
 import { FinalCTA } from '@/components/marketing/sections/FinalCTA';
 import { buildMarketingMetadata } from '@/lib/seo';

@@ -19,9 +19,7 @@ export function AuthLayout({ children, hero }: AuthLayoutProps) {
     <div className="flex min-h-screen flex-col bg-slate-950 text-white">
       <header className="border-b border-white/10">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-          <Link href="/" aria-label="AuditGuardX home" className="flex items-center gap-3">
-            <BrandLogo variant="light" className="text-white" />
-          </Link>
+          <BrandLogo variant="light" className="text-white" />
           <Link href="/" className="text-sm font-semibold text-white/80 transition hover:text-white">
             ← Back to site
           </Link>

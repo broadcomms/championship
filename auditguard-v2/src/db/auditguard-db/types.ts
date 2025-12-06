@@ -44,6 +44,9 @@ export type users = {
     id: string;
     email: string;
     password_hash: string;
+    name: string | null;
+    password_reset_token: string | null;
+    password_reset_expires: number | null;
     created_at: number;
     updated_at: number;
     workspace_count: number | null;

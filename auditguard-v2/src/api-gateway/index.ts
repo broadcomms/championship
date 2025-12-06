@@ -544,6 +544,111 @@ export default class extends Service<Env> {
         });
       }
 
+      // ====== USER PROFILE ENDPOINTS ======
+      if (path === '/api/user/profile' && request.method === 'PUT') {
+        const user = await this.validateSession(request);
+        const body = await request.json() as { name: string };
+
+        if (!body.name || typeof body.name !== 'string') {
+          return new Response(JSON.stringify({ error: 'Name is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        await this.env.AUTH_SERVICE.updateUserProfile(user.userId, { name: body.name });
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      if (path === '/api/user/change-password' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+        const body = await request.json() as { currentPassword: string; newPassword: string };
+
+        if (!body.currentPassword || !body.newPassword) {
+          return new Response(JSON.stringify({ error: 'Current password and new password are required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        try {
+          await this.env.AUTH_SERVICE.changePassword(user.userId, {
+            currentPassword: body.currentPassword,
+            newPassword: body.newPassword,
+          });
+
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        } catch (error) {
+          const err = error as Error;
+          return new Response(JSON.stringify({ error: err.message }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      if (path === '/api/auth/forgot-password' && request.method === 'POST') {
+        const body = await request.json() as { email: string };
+
+        if (!body.email || typeof body.email !== 'string') {
+          return new Response(JSON.stringify({ error: 'Email is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        try {
+          await this.env.AUTH_SERVICE.requestPasswordReset(body.email);
+
+          // Always return success for security (don't reveal if email exists)
+          return new Response(JSON.stringify({
+            success: true,
+            message: 'If an account exists with this email, a password reset link will be sent.'
+          }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        } catch (error) {
+          const err = error as Error;
+          return new Response(JSON.stringify({ error: err.message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      if (path === '/api/auth/reset-password' && request.method === 'POST') {
+        const body = await request.json() as { token: string; newPassword: string };
+
+        if (!body.token || !body.newPassword) {
+          return new Response(JSON.stringify({ error: 'Token and new password are required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        try {
+          await this.env.AUTH_SERVICE.resetPassword({
+            token: body.token,
+            newPassword: body.newPassword,
+          });
+
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        } catch (error) {
+          const err = error as Error;
+          return new Response(JSON.stringify({ error: err.message }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
       // ====== SSO ENDPOINTS ======
       // SSO TEMPORARILY DISABLED - TODO: Re-enable after document correction is working
       if (path === '/api/auth/sso/authorize' && request.method === 'GET') {

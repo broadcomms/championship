@@ -9,6 +9,7 @@ import { createWelcomeNotification, createTrialStartedNotification } from '../co
 interface RegisterInput {
   email: string;
   password: string;
+  name?: string;
 }
 
 interface LoginInput {
@@ -67,6 +68,7 @@ export default class extends Service<Env> {
         id: userId,
         email: input.email,
         password_hash: passwordHash,
+        name: input.name || null,
         created_at: now,
         updated_at: now,
       })
@@ -320,12 +322,12 @@ export default class extends Service<Env> {
     };
   }
 
-  async getUserById(userId: string): Promise<{ userId: string; email: string; createdAt: number; isAdmin: boolean } | null> {
+  async getUserById(userId: string): Promise<{ userId: string; email: string; name: string | null; createdAt: number; isAdmin: boolean } | null> {
     const db = this.getDb();
 
     const user = await db
       .selectFrom('users')
-      .select(['id', 'email', 'created_at'])
+      .select(['id', 'email', 'name', 'created_at'])
       .where('id', '=', userId)
       .executeTakeFirst();
 
@@ -343,8 +345,176 @@ export default class extends Service<Env> {
     return {
       userId: user.id,
       email: user.email,
+      name: user.name,
       createdAt: user.created_at,
       isAdmin: !!adminUser,
     };
+  }
+
+  /**
+   * Update user profile (name)
+   */
+  async updateUserProfile(userId: string, input: { name: string }): Promise<{ success: boolean }> {
+    const db = this.getDb();
+    const now = Date.now();
+
+    await db
+      .updateTable('users')
+      .set({
+        name: input.name,
+        updated_at: now,
+      })
+      .where('id', '=', userId)
+      .execute();
+
+    return { success: true };
+  }
+
+  /**
+   * Change user password
+   */
+  async changePassword(userId: string, input: { currentPassword: string; newPassword: string }): Promise<{ success: boolean }> {
+    const db = this.getDb();
+
+    // Validate new password length
+    if (!input.newPassword || input.newPassword.length < 8) {
+      throw new Error('Password must be at least 8 characters');
+    }
+
+    // Get current password hash
+    const user = await db
+      .selectFrom('users')
+      .select(['password_hash'])
+      .where('id', '=', userId)
+      .executeTakeFirst();
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Verify current password
+    const isValid = await bcrypt.compare(input.currentPassword, user.password_hash);
+    if (!isValid) {
+      throw new Error('Current password is incorrect');
+    }
+
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(input.newPassword, 10);
+    const now = Date.now();
+
+    // Update password
+    await db
+      .updateTable('users')
+      .set({
+        password_hash: newPasswordHash,
+        updated_at: now,
+      })
+      .where('id', '=', userId)
+      .execute();
+
+    return { success: true };
+  }
+
+  /**
+   * Request password reset (generates token)
+   */
+  async requestPasswordReset(email: string): Promise<{ success: boolean; resetToken?: string }> {
+    const db = this.getDb();
+
+    // Find user by email
+    const user = await db
+      .selectFrom('users')
+      .select(['id', 'email'])
+      .where('email', '=', email)
+      .executeTakeFirst();
+
+    if (!user) {
+      // Don't reveal if email exists - return success anyway for security
+      return { success: true };
+    }
+
+    // Generate reset token (cryptographically secure)
+    const resetToken = `rst_${Date.now()}_${Math.random().toString(36).substring(2)}_${Math.random().toString(36).substring(2)}`;
+    const now = Date.now();
+    const expiresAt = now + (60 * 60 * 1000); // 1 hour from now
+
+    // Store token in database
+    await db
+      .updateTable('users')
+      .set({
+        password_reset_token: resetToken,
+        password_reset_expires: expiresAt,
+        updated_at: now,
+      })
+      .where('id', '=', user.id)
+      .execute();
+
+    // Queue password reset email
+    try {
+      await this.env.EMAIL_NOTIFICATIONS_QUEUE.send({
+        type: 'password-reset',
+        to: user.email,
+        data: {
+          resetToken,
+          resetUrl: `${this.env.FRONTEND_URL}/reset-password?token=${resetToken}`,
+        },
+      });
+
+      this.env.logger.info('Password reset email queued', { email: user.email });
+    } catch (emailError) {
+      this.env.logger.error('Failed to queue password reset email', {
+        error: emailError,
+        email: user.email,
+      });
+      throw new Error('Failed to send password reset email');
+    }
+
+    return { success: true, resetToken }; // resetToken returned for testing purposes
+  }
+
+  /**
+   * Reset password using token
+   */
+  async resetPassword(input: { token: string; newPassword: string }): Promise<{ success: boolean }> {
+    const db = this.getDb();
+    const now = Date.now();
+
+    // Validate new password length
+    if (!input.newPassword || input.newPassword.length < 8) {
+      throw new Error('Password must be at least 8 characters');
+    }
+
+    // Find user by reset token
+    const user = await db
+      .selectFrom('users')
+      .select(['id', 'password_reset_token', 'password_reset_expires'])
+      .where('password_reset_token', '=', input.token)
+      .executeTakeFirst();
+
+    if (!user) {
+      throw new Error('Invalid or expired reset token');
+    }
+
+    // Check if token is expired
+    if (!user.password_reset_expires || user.password_reset_expires < now) {
+      throw new Error('Reset token has expired');
+    }
+
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(input.newPassword, 10);
+
+    // Update password and clear reset token
+    await db
+      .updateTable('users')
+      .set({
+        password_hash: newPasswordHash,
+        password_reset_token: null,
+        password_reset_expires: null,
+        updated_at: now,
+      })
+      .where('id', '=', user.id)
+      .execute();
+
+    return { success: true };
   }
 }

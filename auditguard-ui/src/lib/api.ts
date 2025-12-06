@@ -47,10 +47,8 @@ class ApiClient {
         switch (response.status) {
           case 401:
             // Session expired or not authenticated
-            if (typeof window !== 'undefined') {
-              // Redirect to login page
-              window.location.href = '/login';
-            }
+            // Don't automatically redirect - let AuthContext handle it gracefully
+            console.error('Authentication required:', error.error);
             break;
           case 403:
             console.error('Permission denied:', error.error);

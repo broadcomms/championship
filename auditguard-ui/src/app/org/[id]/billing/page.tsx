@@ -171,59 +171,7 @@ function formatPlanFeatures(plan: PlanWithLimits): string[] {
   } else if (apiLimit > 0) {
     features.push(`${apiLimit.toLocaleString()} API calls/month`);
   }
-  
-  // Map feature codes to readable names
-  const featureMap: Record<string, string> = {
-    'basic_frameworks': 'Basic compliance frameworks',
-    'all_frameworks': 'All compliance frameworks',
-    'community_support': 'Community support',
-    'email_support': 'Email support',
-    'priority_support': 'Priority support',
-    'phone_support': 'Phone support',
-    'dedicated_support': 'Dedicated support',
-    '24_7_support': '24/7 premium support',
-    'pdf_export': 'Export to PDF',
-    'version_control_7days': 'Version control (7 days)',
-    'version_control_30days': 'Version control (30 days)',
-    'unlimited_version_control': 'Unlimited version control',
-    'basic_analytics': 'Basic analytics',
-    'advanced_analytics': 'Advanced analytics & reporting',
-    'team_collaboration': 'Team collaboration',
-    'api_access': 'API access',
-    'slack_integration': 'Slack/Teams integration',
-    'custom_branding': 'Custom branding',
-    'automation': 'Compliance automation',
-    'document_templates': 'Document templates',
-    'sso': 'SSO (SAML/OIDC)',
-    'audit_trails': 'Audit trails & activity logs',
-    'custom_frameworks': 'Custom compliance frameworks',
-    'advanced_permissions': 'Advanced team management & roles',
-    'white_label': 'White-label capabilities',
-    'on_premise': 'On-premise deployment',
-    'dedicated_infrastructure': 'Dedicated infrastructure',
-    'custom_sla': 'Custom SLA',
-    'dedicated_account_manager': 'Dedicated account manager',
-    'training_onboarding': 'Training & onboarding',
-    'custom_development': 'Custom feature development',
-    'volume_discounts': 'Volume discounts',
-    'quarterly_reviews': 'Quarterly business reviews',
-    'sla_99_9': 'SLA guarantees (99.9% uptime)',
-    'sla_99_99': 'SLA guarantees (99.99% uptime)',
-  };
-  
-  // Add feature flags
-  /*
-  if (plan.features && Array.isArray(plan.features)) {
-    plan.features.forEach((feature) => {
-      const readable = featureMap[feature];
-      if (readable) {
-        features.push(readable);
-      }
-    });
-  }
-  
-  return features;
-  */
+
   return features;
 }
 

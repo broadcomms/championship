@@ -13,7 +13,8 @@ export type EmailNotificationType =
   | 'workspace_invitation'
   | 'issue_assignment'
   | 'document_processed'
-  | 'document_processing_failed';
+  | 'document_processing_failed'
+  | 'password-reset';
 
 /**
  * Queue message body for email notifications
@@ -134,6 +135,14 @@ export default class extends Each<Body, Env> {
             documentName: data.documentName,
             workspaceName: data.workspaceName,
             errorMessage: data.errorMessage,
+          });
+          break;
+
+        case 'password-reset':
+          await this.env.EMAIL_SERVICE.sendPasswordReset({
+            to,
+            resetUrl: data.resetUrl,
+            resetToken: data.resetToken,
           });
           break;
 
