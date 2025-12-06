@@ -500,12 +500,18 @@ export default class extends Service<Env> {
    * Get OAuth authorization URL for social login
    */
   async getOAuthAuthorizationURL(provider: 'google' | 'microsoft'): Promise<{ authorizationUrl: string }> {
+    // Map provider names to WorkOS provider identifiers
+    const providerMap: Record<string, string> = {
+      google: 'GoogleOAuth',
+      microsoft: 'MicrosoftOAuth',
+    };
+
     // Build WorkOS authorization URL manually
     const params = new URLSearchParams({
       client_id: this.env.WORKOS_CLIENT_ID,
-      redirect_uri: `${this.env.FRONTEND_URL}/auth/oauth/callback`,
+      redirect_uri: `${this.env.BACKEND_URL}/api/auth/oauth/callback`,
       response_type: 'code',
-      provider,
+      provider: providerMap[provider],
     });
 
     const authorizationUrl = `https://api.workos.com/user_management/authorize?${params.toString()}`;
@@ -520,14 +526,15 @@ export default class extends Service<Env> {
     const db = this.getDb();
 
     // Exchange authorization code for user profile using WorkOS HTTP API
+    // Note: For User Management API, the API key serves as the client_secret
     const tokenResponse = await fetch('https://api.workos.com/user_management/authenticate', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.env.WORKOS_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         client_id: this.env.WORKOS_CLIENT_ID,
+        client_secret: this.env.WORKOS_API_KEY,
         code,
         grant_type: 'authorization_code',
       }),

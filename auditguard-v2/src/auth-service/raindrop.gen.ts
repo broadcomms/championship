@@ -14,6 +14,7 @@ export interface Env {
   ASSISTANT_MEMORY: SmartMemory;
   ASSISTANT_SERVICE: ServiceStub<import('../assistant-service/index.js').default>;
   AUDITGUARD_DB: SqlDatabase;
+  BACKEND_URL: string;
   BILLING_SERVICE: ServiceStub<import('../billing-service/index.js').default>;
   CEREBRAS_API_KEY: string;
   CEREBRAS_DECISION_MODEL: string;

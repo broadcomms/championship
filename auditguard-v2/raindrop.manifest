@@ -94,7 +94,7 @@ application "auditguard-v1" {
   }
 
   env "WORKOS_REDIRECT_URI" {
-    default = "http://localhost:3000/api/auth/sso/callback"
+    default = "https://localhost:3000/api/auth/sso/callback"
   }
   env "ELEVEN_LABS_API_KEY" {
     default = "sk_106f4519c527e91a206f4707b7eb9530c1eb70679deb88c8"
@@ -113,6 +113,9 @@ application "auditguard-v1" {
   }
   env "FRONTEND_URL" {
     default = "https://localhost:3000"
+  }
+  env "BACKEND_URL" {
+    default = "https://svc-01kbh68vfwce07znstf7a55jk3.01k8njsj98qqesz0ppxff2yq4n.lmapp.run"
   }
 
   // ============================================

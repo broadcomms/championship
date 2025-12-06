@@ -15,6 +15,7 @@ export interface Env {
   ASSISTANT_SERVICE: ServiceStub<import('../assistant-service/index.js').default>;
   AUDITGUARD_DB: SqlDatabase;
   AUTH_SERVICE: ServiceStub<import('../auth-service/index.js').default>;
+  BACKEND_URL: string;
   CEREBRAS_API_KEY: string;
   CEREBRAS_DECISION_MODEL: string;
   CEREBRAS_RESPONSE_MODEL: string;

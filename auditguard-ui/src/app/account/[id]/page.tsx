@@ -84,6 +84,23 @@ export default function AccountDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Handle OAuth redirect - capture session token from URL
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionToken = urlParams.get('session');
+
+      if (sessionToken) {
+        // Store session token in cookie
+        document.cookie = `session=${sessionToken}; path=/; max-age=604800; SameSite=Lax`;
+
+        // Clean up URL by removing session parameter
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     fetchAccountData();
   }, [accountId]);

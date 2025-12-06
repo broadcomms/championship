@@ -579,19 +579,20 @@ export default class extends Service<Env> {
 
           const result = await this.env.AUTH_SERVICE.handleOAuthCallback(code);
 
-          // Create session cookie
-          const response = Response.redirect(
-            `${this.env.FRONTEND_URL}/account/${result.userId}`,
-            302
-          );
-          response.headers.set('Set-Cookie', `session=${result.sessionId}; Path=/; HttpOnly; Max-Age=604800`);
-
           this.env.logger.info('OAuth login successful', {
             userId: result.userId,
             isNewUser: result.isNewUser
           });
 
-          return response;
+          // For cross-domain scenarios (frontend on localhost, backend on lmapp.run),
+          // we pass the session token in the URL for the frontend to store
+          // The frontend will then use this token in subsequent API requests
+          return new Response(null, {
+            status: 302,
+            headers: {
+              'Location': `${this.env.FRONTEND_URL}/account/${result.userId}?session=${result.sessionId}`,
+            },
+          });
         } catch (error) {
           this.env.logger.error('OAuth callback failed', { error: String(error) });
           return Response.redirect(`${this.env.FRONTEND_URL}/login?error=oauth_callback_failed`, 302);
