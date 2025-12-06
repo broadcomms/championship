@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface BreadcrumbItem {
   label: string;
@@ -19,6 +20,7 @@ interface BreadcrumbProps {
 
 export function Breadcrumb({ accountId, orgId, workspaceId, customItems }: BreadcrumbProps) {
   const pathname = usePathname();
+  const { user } = useAuth();
 
   const [orgName, setOrgName] = useState<string>('');
   const [workspaceName, setWorkspaceName] = useState<string>('');
@@ -45,8 +47,11 @@ export function Breadcrumb({ accountId, orgId, workspaceId, customItems }: Bread
   // Build breadcrumb items
   const items: BreadcrumbItem[] = [];
 
-  // Home - always links to landing page
-  items.push({ label: '🏠 Home', href: '/' });
+  // Home - context-aware: account dashboard for logged-in users, landing page for guests
+  items.push({
+    label: '🏠 Home',
+    href: user?.userId ? `/account/${user.userId}` : '/'
+  });
 
   // Account level - always show if we have accountId
   if (accountId) {
