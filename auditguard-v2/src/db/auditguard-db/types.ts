@@ -50,6 +50,12 @@ export type users = {
     created_at: number;
     updated_at: number;
     workspace_count: number | null;
+    last_login: number | null;
+    is_active: number | null;
+    workos_user_id: string | null;
+    oauth_provider: string | null;
+    oauth_profile_data: string | null;
+    profile_picture_url: string | null;
 };
 
 export type NotificationType = 

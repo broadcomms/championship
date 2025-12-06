@@ -530,6 +530,74 @@ export default class extends Service<Env> {
         return response;
       }
 
+      // OAuth Social Login - Google
+      if (path === '/api/auth/oauth/google' && request.method === 'GET') {
+        try {
+          const result = await this.env.AUTH_SERVICE.getOAuthAuthorizationURL('google');
+          return Response.redirect(result.authorizationUrl, 302);
+        } catch (error) {
+          this.env.logger.error('Failed to initiate Google OAuth', { error: String(error) });
+          return new Response(JSON.stringify({ error: 'Failed to initiate Google login' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // OAuth Social Login - Microsoft
+      if (path === '/api/auth/oauth/microsoft' && request.method === 'GET') {
+        try {
+          const result = await this.env.AUTH_SERVICE.getOAuthAuthorizationURL('microsoft');
+          return Response.redirect(result.authorizationUrl, 302);
+        } catch (error) {
+          this.env.logger.error('Failed to initiate Microsoft OAuth', { error: String(error) });
+          return new Response(JSON.stringify({ error: 'Failed to initiate Microsoft login' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // OAuth Callback Handler
+      if (path === '/api/auth/oauth/callback' && request.method === 'GET') {
+        try {
+          const url = new URL(request.url);
+          const code = url.searchParams.get('code');
+          const error = url.searchParams.get('error');
+
+          if (error) {
+            this.env.logger.error('OAuth error received', { error });
+            return Response.redirect(`${this.env.FRONTEND_URL}/login?error=oauth_failed`, 302);
+          }
+
+          if (!code) {
+            return new Response(JSON.stringify({ error: 'Missing authorization code' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+
+          const result = await this.env.AUTH_SERVICE.handleOAuthCallback(code);
+
+          // Create session cookie
+          const response = Response.redirect(
+            `${this.env.FRONTEND_URL}/account/${result.userId}`,
+            302
+          );
+          response.headers.set('Set-Cookie', `session=${result.sessionId}; Path=/; HttpOnly; Max-Age=604800`);
+
+          this.env.logger.info('OAuth login successful', {
+            userId: result.userId,
+            isNewUser: result.isNewUser
+          });
+
+          return response;
+        } catch (error) {
+          this.env.logger.error('OAuth callback failed', { error: String(error) });
+          return Response.redirect(`${this.env.FRONTEND_URL}/login?error=oauth_callback_failed`, 302);
+        }
+      }
+
       if (path === '/api/auth/me' && request.method === 'GET') {
         const user = await this.validateSession(request);
         const userData = await this.env.AUTH_SERVICE.getUserById(user.userId);
