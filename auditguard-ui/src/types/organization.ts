@@ -41,3 +41,9 @@ export interface AddOrganizationMemberInput {
   email: string;
   role: 'admin' | 'member' | 'billing';
 }
+
+export interface CreateOrganizationInput {
+  name: string;
+  slug: string;
+  billing_email?: string;
+}

@@ -109,8 +109,12 @@ class ApiClient {
   }
 
   // DELETE request
-  async delete<TResponse = unknown>(endpoint: string): Promise<TResponse> {
-    return this.request<TResponse>(endpoint, { method: 'DELETE' });
+  async delete<TResponse = unknown>(endpoint: string, data?: unknown): Promise<TResponse> {
+    const options: RequestInit = { method: 'DELETE' };
+    if (data) {
+      options.body = JSON.stringify(data);
+    }
+    return this.request<TResponse>(endpoint, options);
   }
 
   // File upload with multipart/form-data

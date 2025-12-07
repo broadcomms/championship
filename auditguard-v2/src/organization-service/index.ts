@@ -1207,4 +1207,220 @@ export default class extends Service<Env> {
       };
     }
   }
+
+  /**
+   * Create a new organization
+   * User becomes the owner automatically
+   */
+  async createOrganization(
+    userId: string,
+    input: {
+      name: string;
+      slug: string;
+      billing_email?: string;
+    }
+  ): Promise<{
+    organization_id: string;
+    name: string;
+    slug: string;
+  }> {
+    const db = this.getDb();
+
+    // Validate input
+    if (!input.name || input.name.length === 0 || input.name.length > 200) {
+      throw new Error('Organization name must be between 1 and 200 characters');
+    }
+
+    if (!input.slug || input.slug.length === 0 || input.slug.length > 100) {
+      throw new Error('Organization slug must be between 1 and 100 characters');
+    }
+
+    // Validate slug format (lowercase alphanumeric and hyphens only)
+    if (!/^[a-z0-9-]+$/.test(input.slug)) {
+      throw new Error('Organization slug can only contain lowercase letters, numbers, and hyphens');
+    }
+
+    // Check if slug is already taken
+    const existingOrg = await db
+      .selectFrom('organizations')
+      .select(['id'])
+      .where('slug', '=', input.slug)
+      .executeTakeFirst();
+
+    if (existingOrg) {
+      throw new Error('Organization slug is already taken');
+    }
+
+    // Validate billing email if provided
+    if (input.billing_email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(input.billing_email)) {
+        throw new Error('Invalid billing email format');
+      }
+    }
+
+    const now = Date.now();
+    const organizationId = `org_${now}_${Math.random().toString(36).substring(7)}`;
+
+    // Create organization
+    await db
+      .insertInto('organizations')
+      .values({
+        id: organizationId,
+        name: input.name,
+        slug: input.slug,
+        owner_user_id: userId,
+        billing_email: input.billing_email || null,
+        stripe_customer_id: null,
+        created_at: now,
+        updated_at: now,
+      })
+      .execute();
+
+    // Add creator as owner
+    const memberId = `om_${now}_${Math.random().toString(36).substring(7)}`;
+    await db
+      .insertInto('organization_members')
+      .values({
+        id: memberId,
+        organization_id: organizationId,
+        user_id: userId,
+        role: 'owner',
+        joined_at: now,
+        invited_by: null,
+      })
+      .execute();
+
+    this.env.logger.info('Organization created', {
+      organizationId,
+      userId,
+      name: input.name,
+      slug: input.slug,
+    });
+
+    return {
+      organization_id: organizationId,
+      name: input.name,
+      slug: input.slug,
+    };
+  }
+
+  /**
+   * Delete an organization and all related data
+   * Only the owner can delete an organization
+   */
+  async deleteOrganization(
+    organizationId: string,
+    userId: string,
+    confirmation: {
+      confirmText: string;
+      cancelSubscription: boolean;
+    }
+  ): Promise<{
+    success: boolean;
+    deleted_workspaces: number;
+    deleted_documents: number;
+    canceled_subscription: boolean;
+  }> {
+    const db = this.getDb();
+
+    // Get organization details
+    const org = await db
+      .selectFrom('organizations')
+      .select(['id', 'name', 'owner_user_id', 'stripe_customer_id'])
+      .where('id', '=', organizationId)
+      .executeTakeFirst();
+
+    if (!org) {
+      throw new Error('Organization not found');
+    }
+
+    // Verify user is owner
+    if (org.owner_user_id !== userId) {
+      throw new Error('Only the organization owner can delete the organization');
+    }
+
+    // Verify confirmation text matches organization name
+    if (confirmation.confirmText !== org.name) {
+      throw new Error('Confirmation text does not match organization name');
+    }
+
+    // Count workspaces and documents before deletion
+    const workspaces = await db
+      .selectFrom('workspaces')
+      .select(['id'])
+      .where('organization_id', '=', organizationId)
+      .execute();
+
+    const workspaceIds = workspaces.map(w => w.id);
+    let documentCount = 0;
+
+    if (workspaceIds.length > 0) {
+      const documentCountResult = await db
+        .selectFrom('documents')
+        .select(db.fn.count('id').as('count'))
+        .where('workspace_id', 'in', workspaceIds)
+        .executeTakeFirst();
+
+      documentCount = Number(documentCountResult?.count || 0);
+    }
+
+    let subscriptionCanceled = false;
+
+    // Cancel active Stripe subscription if exists
+    if (confirmation.cancelSubscription && org.stripe_customer_id) {
+      const subscription = await db
+        .selectFrom('subscriptions')
+        .select(['id', 'stripe_subscription_id', 'status'])
+        .where('organization_id', '=', organizationId)
+        .where('status', 'in', ['active', 'trialing'])
+        .executeTakeFirst();
+
+      if (subscription && subscription.stripe_subscription_id) {
+        try {
+          const stripe = new (await import('stripe')).default(
+            'sk_test_51ISqyeHSX3RgJL1cYATfAtUz2mTheWpXfHE6CarZVJlLAsthLPSkMywCU4R4igxVYYtP2YDNCMq15ACNNewhnudb005xDmDDxm',
+            { apiVersion: '2025-10-29.clover', typescript: true }
+          );
+
+          await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
+          subscriptionCanceled = true;
+
+          this.env.logger.info(`Canceled subscription ${subscription.id} before org deletion`);
+        } catch (error) {
+          this.env.logger.error('Failed to cancel Stripe subscription', { error });
+          // Continue with deletion even if Stripe cancellation fails
+        }
+      }
+    }
+
+    // Delete all workspaces (cascade will handle workspace_members, documents, etc.)
+    if (workspaceIds.length > 0) {
+      await db
+        .deleteFrom('workspaces')
+        .where('organization_id', '=', organizationId)
+        .execute();
+    }
+
+    // Delete organization (cascade will handle organization_members, sso_connections, subscriptions, etc.)
+    await db
+      .deleteFrom('organizations')
+      .where('id', '=', organizationId)
+      .execute();
+
+    this.env.logger.info('Organization deleted', {
+      organizationId,
+      userId,
+      workspacesDeleted: workspaces.length,
+      documentsDeleted: documentCount,
+      subscriptionCanceled,
+    });
+
+    return {
+      success: true,
+      deleted_workspaces: workspaces.length,
+      deleted_documents: documentCount,
+      canceled_subscription: subscriptionCanceled,
+    };
+  }
 }

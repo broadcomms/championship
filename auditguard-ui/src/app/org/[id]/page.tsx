@@ -166,19 +166,32 @@ export default function OrganizationOverviewPage() {
               </div>
             )}
 
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              {organization?.name}
-            </h1>
-            <p className="text-gray-600">
-              Organization Overview · {organization?.subscription_plan ? 
-                organization.subscription_plan.charAt(0).toUpperCase() + organization.subscription_plan.slice(1) : 
-                'Free'} Plan
-              {organization?.subscription_status === 'trialing' && (
-                <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-                  Trial Active
-                </span>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                  {organization?.name}
+                </h1>
+                <p className="text-gray-600">
+                  Organization Overview · {organization?.subscription_plan ?
+                    organization.subscription_plan.charAt(0).toUpperCase() + organization.subscription_plan.slice(1) :
+                    'Free'} Plan
+                  {organization?.subscription_status === 'trialing' && (
+                    <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                      Trial Active
+                    </span>
+                  )}
+                </p>
+              </div>
+              {organization?.owner_user_id === user?.userId && (
+                <Button
+                  variant="outline"
+                  onClick={() => router.push(`/org/${orgId}/settings`)}
+                  size="sm"
+                >
+                  Settings
+                </Button>
               )}
-            </p>
+            </div>
           </div>
 
           {/* Stats Grid */}

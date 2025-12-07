@@ -879,6 +879,34 @@ export default class extends Service<Env> {
         });
       }
 
+      // POST /api/organizations - Create new organization
+      if (path === '/api/organizations' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          name: string;
+          slug: string;
+          billing_email?: string;
+        }>(request, ['name', 'slug']);
+
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.ORGANIZATION_SERVICE.createOrganization(
+          user.userId,
+          parseResult.data
+        );
+
+        return new Response(JSON.stringify(result), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // Match /api/organizations (get all organizations for user) - must come before specific org match
       if (path === '/api/organizations' && request.method === 'GET') {
         const user = await this.validateSession(request);
@@ -914,6 +942,34 @@ export default class extends Service<Env> {
           user.userId
         );
         return new Response(JSON.stringify({ data: result }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
+      // DELETE /api/organizations/:id - Delete organization
+      if (orgMatch && orgMatch[1] && request.method === 'DELETE') {
+        const organizationId = orgMatch[1];
+        const user = await this.validateSession(request);
+
+        const parseResult = await this.safeParseJSON<{
+          confirmText: string;
+          cancelSubscription: boolean;
+        }>(request, ['confirmText', 'cancelSubscription']);
+
+        if (!parseResult.success) {
+          return new Response(JSON.stringify({ error: (parseResult as any).error }), {
+            status: (parseResult as any).status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        const result = await this.env.ORGANIZATION_SERVICE.deleteOrganization(
+          organizationId,
+          user.userId,
+          parseResult.data
+        );
+
+        return new Response(JSON.stringify(result), {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }

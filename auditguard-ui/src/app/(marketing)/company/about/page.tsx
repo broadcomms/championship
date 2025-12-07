@@ -32,12 +32,14 @@ const values = [
 
 const timeline = [
   {
-    year: '2024',
+    month: 'November',
+    year: '2025',
     title: 'Foundation',
     description:
-      'AuditGuardX launched with a vision to revolutionize compliance management through intelligent automation and enterprise architecture design.',
+      'AuditGuardX launched a vision to revolutionize compliance and risk management through intelligent automation and enterprise architecture design.',
   },
   {
+    month: 'December',
     year: '2025',
     title: 'Platform Release',
     description:
