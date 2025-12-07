@@ -15,6 +15,7 @@ const ssoConfigSchema = z.object({
   provider: z.enum(['google', 'okta', 'azure', 'saml', 'generic-saml']),
   workosOrganizationId: z.string().min(1, 'WorkOS Organization ID is required'),
   workosConnectionId: z.string().optional(),
+  allowedDomains: z.string().optional(), // Comma-separated domains
 });
 
 type SSOConfigForm = z.infer<typeof ssoConfigSchema>;
@@ -26,6 +27,7 @@ interface SSOConnection {
   workosOrganizationId: string;
   workosConnectionId: string | null;
   enabled: boolean;
+  allowedDomains?: string[]; // Array of allowed email domains
   createdAt: number;
   updatedAt: number;
 }
@@ -92,6 +94,7 @@ export default function OrganizationSSOPage() {
         provider: data.provider as SSOConfigForm['provider'],
         workosOrganizationId: data.workosOrganizationId,
         workosConnectionId: data.workosConnectionId || '',
+        allowedDomains: data.allowedDomains ? data.allowedDomains.join(', ') : '',
       });
     } catch (err) {
       const status = getErrorStatus(err);
@@ -117,12 +120,21 @@ export default function OrganizationSSOPage() {
     setSuccessMessage('');
 
     try {
+      // Parse comma-separated domains into array
+      const allowedDomains = data.allowedDomains
+        ? data.allowedDomains
+            .split(',')
+            .map((d) => d.trim().toLowerCase())
+            .filter((d) => d.length > 0)
+        : undefined;
+
       const response = await api.post<SSOConnection>(
         `/api/organizations/${organizationId}/sso/config`,
         {
           provider: data.provider,
           workosOrganizationId: data.workosOrganizationId,
           workosConnectionId: data.workosConnectionId || undefined,
+          allowedDomains,
         }
       );
       setSsoConfig(response);
@@ -176,6 +188,7 @@ export default function OrganizationSSOPage() {
         provider: 'google',
         workosOrganizationId: '',
         workosConnectionId: '',
+        allowedDomains: '',
       });
       setSuccessMessage('SSO configuration deleted successfully');
 
@@ -304,6 +317,18 @@ export default function OrganizationSSOPage() {
                 {...register('workosConnectionId')}
               />
 
+              <div>
+                <Input
+                  label="Allowed Email Domains (for auto-detection)"
+                  placeholder="example.com, company.org"
+                  error={errors.allowedDomains?.message}
+                  {...register('allowedDomains')}
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Enter comma-separated email domains. Users with these domains will automatically be redirected to SSO login.
+                </p>
+              </div>
+
               <div className="flex justify-end gap-3">
                 <Button
                   type="button"
@@ -337,6 +362,21 @@ export default function OrganizationSSOPage() {
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-gray-600">WorkOS Connection ID</span>
                   <span className="font-mono text-xs text-gray-900">{ssoConfig.workosConnectionId}</span>
+                </div>
+              )}
+              {ssoConfig.allowedDomains && ssoConfig.allowedDomains.length > 0 && (
+                <div className="border-b pb-2">
+                  <span className="text-gray-600 block mb-1">Allowed Email Domains</span>
+                  <div className="flex flex-wrap gap-1">
+                    {ssoConfig.allowedDomains.map((domain) => (
+                      <span
+                        key={domain}
+                        className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"
+                      >
+                        {domain}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
               <div className="flex justify-between border-b pb-2">

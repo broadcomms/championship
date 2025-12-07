@@ -44,7 +44,6 @@ export interface Env {
   REPORTING_SERVICE: ServiceStub<import('../reporting-service/index.js').default>;
   RESEND_API_KEY: string;
   SESSION_SECRET: string;
-  SSO_SERVICE: ServiceStub<import('../sso-service/index.js').default>;
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
   STRIPE_WEBHOOK_SERVICE: ServiceStub<import('../stripe-webhook-service/index.js').default>;
@@ -52,6 +51,7 @@ export interface Env {
   TRIAL_EXPIRY_SERVICE: ServiceStub<import('../trial-expiry-service/index.js').default>;
   USAGE_SERVICE: ServiceStub<import('../usage-service/index.js').default>;
   USE_CEREBRAS: string;
+  VALUE_METRICS_SERVICE: ServiceStub<import('../value-metrics-service/index.js').default>;
   VULTR_STORAGE_ACCESS_KEY: string;
   VULTR_STORAGE_BUCKET: string;
   VULTR_STORAGE_ENDPOINT: string;

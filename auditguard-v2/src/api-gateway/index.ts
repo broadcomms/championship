@@ -3,6 +3,7 @@ import { Env } from './raindrop.gen';
 import { Kysely, sql } from 'kysely';
 import { D1Dialect } from '../common/kysely-d1';
 import { DB } from '../db/auditguard-db/types';
+import * as SSOHelpers from '../_app/sso-helpers';
 
 export default class extends Service<Env> {
   private getDb(): Kysely<DB> {
@@ -507,6 +508,42 @@ export default class extends Service<Env> {
         }
         const body = parseResult.data;
 
+        // SSO ENFORCEMENT: Check if user's email domain requires SSO
+        try {
+          const ssoDetection = await SSOHelpers.detectSSOFromEmail(this.getDb(), body.email);
+
+          if (ssoDetection.hasSso) {
+            // SSO is configured for this email domain - block password login
+            this.env.logger.warn('Password login blocked - SSO required', {
+              email: body.email,
+              organizationId: ssoDetection.organizationId,
+              provider: ssoDetection.provider,
+            });
+
+            return new Response(
+              JSON.stringify({
+                error: 'SSO authentication required for this organization',
+                code: 'SSO_REQUIRED',
+                ssoRequired: true,
+                organizationId: ssoDetection.organizationId,
+                organizationName: ssoDetection.organizationName,
+                provider: ssoDetection.provider,
+              }),
+              {
+                status: 403,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+        } catch (error) {
+          // If SSO detection fails, log warning but continue with password login
+          this.env.logger.warn('SSO detection failed, allowing password login', {
+            email: body.email,
+            error: String(error),
+          });
+        }
+
+        // No SSO requirement - proceed with password login
         const result = await this.env.AUTH_SERVICE.login(body);
 
         const response = new Response(JSON.stringify(result), {
@@ -719,26 +756,111 @@ export default class extends Service<Env> {
       }
 
       // ====== SSO ENDPOINTS ======
-      // SSO TEMPORARILY DISABLED - TODO: Re-enable after document correction is working
+      // Initiate SSO login for an organization
       if (path === '/api/auth/sso/authorize' && request.method === 'GET') {
-        return new Response(
-          JSON.stringify({ error: 'SSO service temporarily disabled', code: 'SSO_DISABLED' }),
-          {
-            status: 503,
+        const url = new URL(request.url);
+        const organizationId = url.searchParams.get('organizationId');
+
+        if (!organizationId) {
+          return new Response(
+            JSON.stringify({ error: 'Missing organizationId parameter', code: 'MISSING_ORGANIZATION_ID' }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
+
+        try {
+          const result = await SSOHelpers.initiateSSOLogin(this.getDb(), organizationId, this.env);
+          return new Response(JSON.stringify(result), {
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          }
-        );
+          });
+        } catch (error) {
+          this.env.logger.error('SSO authorize failed', { error: String(error), organizationId });
+          return new Response(
+            JSON.stringify({ error: String(error), code: 'SSO_AUTHORIZE_FAILED' }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
       }
 
-      // SSO TEMPORARILY DISABLED - TODO: Re-enable after document correction is working
+      // Handle SSO callback and create session
       if (path === '/api/auth/sso/callback' && request.method === 'POST') {
-        return new Response(
-          JSON.stringify({ error: 'SSO service temporarily disabled', code: 'SSO_DISABLED' }),
-          {
-            status: 503,
+        const url = new URL(request.url);
+        const code = url.searchParams.get('code');
+
+        if (!code) {
+          return new Response(
+            JSON.stringify({ error: 'Missing code parameter', code: 'MISSING_CODE' }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
+
+        try {
+          const result = await SSOHelpers.handleSSOCallback(this.getDb(), code, this.env);
+
+          this.env.logger.info('SSO login successful', {
+            userId: result.userId,
+            isNewUser: result.isNewUser,
+            organizationId: result.organizationId,
+          });
+
+          // Redirect to frontend with session ID (same pattern as OAuth)
+          return new Response(null, {
+            status: 302,
+            headers: {
+              'Location': `${this.env.FRONTEND_URL}/account/${result.userId}?session=${result.sessionId}`,
+            },
+          });
+        } catch (error) {
+          this.env.logger.error('SSO callback failed', { error: String(error) });
+          return new Response(
+            JSON.stringify({ error: String(error), code: 'SSO_CALLBACK_FAILED' }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
+      }
+
+      // Detect SSO from email domain
+      if (path === '/api/auth/sso/detect' && request.method === 'POST') {
+        const body = await request.json();
+        const { email } = body as { email?: string };
+
+        if (!email) {
+          return new Response(
+            JSON.stringify({ error: 'Missing email parameter', code: 'MISSING_EMAIL' }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
+
+        try {
+          const result = await SSOHelpers.detectSSOFromEmail(this.getDb(), email);
+          return new Response(JSON.stringify(result), {
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          }
-        );
+          });
+        } catch (error) {
+          this.env.logger.error('SSO detection failed', { error: String(error), email });
+          return new Response(
+            JSON.stringify({ error: String(error), code: 'SSO_DETECTION_FAILED' }),
+            {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
       }
 
       // ====== ORGANIZATION ENDPOINTS ======
@@ -1273,16 +1395,145 @@ export default class extends Service<Env> {
         });
       }
 
-      // SSO TEMPORARILY DISABLED - TODO: Re-enable after document correction is working
+      // SSO configuration endpoints
       const ssoConfigMatch = path.match(/^\/api\/organizations\/([^\/]+)\/sso\/config$/);
       if (ssoConfigMatch && ssoConfigMatch[1]) {
-        return new Response(
-          JSON.stringify({ error: 'SSO service temporarily disabled', code: 'SSO_DISABLED' }),
-          {
-            status: 503,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        const organizationId = ssoConfigMatch[1];
+        const user = await this.validateSession(request);
+
+        // Verify user is admin of the organization
+        const db = this.getDb();
+        const membership = await db
+          .selectFrom('organization_members')
+          .select('role')
+          .where('organization_id', '=', organizationId)
+          .where('user_id', '=', user.userId)
+          .executeTakeFirst();
+
+        if (!membership || (membership.role !== 'admin' && membership.role !== 'owner')) {
+          return new Response(
+            JSON.stringify({ error: 'Unauthorized: admin access required', code: 'UNAUTHORIZED' }),
+            {
+              status: 403,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            }
+          );
+        }
+
+        // GET: Retrieve SSO configuration
+        if (request.method === 'GET') {
+          try {
+            const result = await SSOHelpers.validateSSOConnection(this.getDb(), organizationId);
+            return new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          } catch (error) {
+            this.env.logger.error('Get SSO config failed', { error: String(error), organizationId });
+            return new Response(
+              JSON.stringify({ error: String(error), code: 'GET_SSO_CONFIG_FAILED' }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
           }
-        );
+        }
+
+        // POST: Create SSO configuration
+        if (request.method === 'POST') {
+          const body = await request.json();
+          const { provider, workosOrganizationId, workosConnectionId, allowedDomains } = body as {
+            provider?: string;
+            workosOrganizationId?: string;
+            workosConnectionId?: string;
+            allowedDomains?: string[];
+          };
+
+          if (!provider || !workosOrganizationId) {
+            return new Response(
+              JSON.stringify({
+                error: 'Missing required fields: provider, workosOrganizationId',
+                code: 'MISSING_REQUIRED_FIELDS',
+              }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+
+          try {
+            const result = await SSOHelpers.configureSSOConnection(this.getDb(), organizationId, {
+              provider,
+              workosOrganizationId,
+              workosConnectionId,
+              allowedDomains,
+            });
+            return new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          } catch (error) {
+            this.env.logger.error('Create SSO config failed', { error: String(error), organizationId });
+            return new Response(
+              JSON.stringify({ error: String(error), code: 'CREATE_SSO_CONFIG_FAILED' }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+        }
+
+        // PATCH: Toggle SSO enabled status
+        if (request.method === 'PATCH') {
+          const body = await request.json();
+          const { enabled } = body as { enabled?: boolean };
+
+          if (enabled === undefined) {
+            return new Response(
+              JSON.stringify({ error: 'Missing required field: enabled', code: 'MISSING_ENABLED_FIELD' }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+
+          try {
+            const result = await SSOHelpers.toggleSSO(this.getDb(), organizationId, enabled);
+            return new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          } catch (error) {
+            this.env.logger.error('Toggle SSO failed', { error: String(error), organizationId });
+            return new Response(
+              JSON.stringify({ error: String(error), code: 'TOGGLE_SSO_FAILED' }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+        }
+
+        // DELETE: Remove SSO configuration
+        if (request.method === 'DELETE') {
+          try {
+            const result = await SSOHelpers.deleteSSOConnection(this.getDb(), organizationId);
+            return new Response(JSON.stringify(result), {
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          } catch (error) {
+            this.env.logger.error('Delete SSO config failed', { error: String(error), organizationId });
+            return new Response(
+              JSON.stringify({ error: String(error), code: 'DELETE_SSO_CONFIG_FAILED' }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders },
+              }
+            );
+          }
+        }
       }
 
       // ====== PUBLIC PRICING ENDPOINTS (No Auth Required) ======

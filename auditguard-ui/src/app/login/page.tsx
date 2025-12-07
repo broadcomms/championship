@@ -20,7 +20,7 @@ const loginSchema = z.object({
 });
 
 const ssoSchema = z.object({
-  organizationId: z.string().min(1, 'Organization ID is required'),
+  email: z.string().email('Please enter a valid email address'),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -65,9 +65,37 @@ export default function LoginPage() {
         router.push('/organizations');
       }
     } catch (err) {
-      const error = err as ErrorResponse;
+      const error = err as ErrorResponse & {
+        code?: string;
+        ssoRequired?: boolean;
+        organizationId?: string;
+        organizationName?: string;
+        provider?: string;
+      };
+
+      // SSO ENFORCEMENT: If SSO is required, automatically redirect to SSO login
+      if (error.code === 'SSO_REQUIRED' && error.ssoRequired && error.organizationId) {
+        setError(
+          `SSO authentication required for ${error.organizationName || 'your organization'}. Redirecting to SSO login...`
+        );
+
+        // Wait 2 seconds to show the message, then redirect to SSO
+        setTimeout(async () => {
+          try {
+            const response = await api.get<{ authorizationUrl: string; state: string }>(
+              `/api/auth/sso/authorize?organizationId=${error.organizationId}`
+            );
+            window.location.href = response.authorizationUrl;
+          } catch (ssoErr) {
+            const ssoError = ssoErr as ErrorResponse;
+            setError(ssoError.error || 'Failed to initiate SSO login.');
+            setLoading(false);
+          }
+        }, 2000);
+        return;
+      }
+
       setError(error.error || 'Login failed. Please check your credentials.');
-    } finally {
       setLoading(false);
     }
   };
@@ -77,16 +105,32 @@ export default function LoginPage() {
     setSsoLoading(true);
 
     try {
+      // First, detect SSO from email domain
+      const detection = await api.post<{
+        hasSso: boolean;
+        organizationId?: string;
+        organizationName?: string;
+        provider?: string;
+      }>('/api/auth/sso/detect', { email: data.email });
+
+      if (!detection.hasSso || !detection.organizationId) {
+        setError(
+          'No SSO configuration found for your email domain. Please use email/password login or contact your administrator.'
+        );
+        setSsoLoading(false);
+        return;
+      }
+
       // Get authorization URL from backend
       const response = await api.get<{ authorizationUrl: string; state: string }>(
-        `/api/auth/sso/authorize?organizationId=${data.organizationId}`
+        `/api/auth/sso/authorize?organizationId=${detection.organizationId}`
       );
 
       // Redirect to WorkOS authorization URL
       window.location.href = response.authorizationUrl;
     } catch (err) {
       const error = err as ErrorResponse;
-      setError(error.error || 'Failed to initiate SSO login. Please check your organization ID.');
+      setError(error.error || 'Failed to initiate SSO login. Please try again.');
       setSsoLoading(false);
     }
   };
@@ -266,16 +310,17 @@ export default function LoginPage() {
               <div className="space-y-4">
                 <div className="rounded-md bg-blue-50 p-4">
                   <p className="text-sm text-blue-800">
-                    Enter your organization ID to sign in with SSO
+                    Enter your work email address. We&rsquo;ll automatically detect your organization&rsquo;s SSO configuration.
                   </p>
                 </div>
 
                 <Input
-                  label="Organization ID"
-                  type="text"
-                  placeholder="org_XXXXXXXXXXXXXXXXXXXXXXXX"
-                  error={ssoErrors.organizationId?.message}
-                  {...registerSso('organizationId')}
+                  label="Work Email Address"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@company.com"
+                  error={ssoErrors.email?.message}
+                  {...registerSso('email')}
                 />
               </div>
 

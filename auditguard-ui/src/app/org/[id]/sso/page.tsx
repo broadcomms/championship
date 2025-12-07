@@ -9,11 +9,10 @@ import { useAuth } from '@/contexts/AuthContext';
 
 interface SSOConfiguration {
   enabled: boolean;
-  provider: 'workos' | 'okta' | 'azure' | 'google' | null;
-  connection_id?: string;
-  domain?: string;
-  created_at?: number;
-  last_used?: number;
+  provider?: string;
+  workosOrganizationId?: string;
+  workosConnectionId?: string;
+  allowedDomains?: string[];
 }
 
 export default function OrganizationSSOPage() {
@@ -28,6 +27,8 @@ export default function OrganizationSSOPage() {
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<'workos' | 'okta' | 'azure' | 'google'>('workos');
   const [domain, setDomain] = useState('');
+  const [workosOrgId, setWorkosOrgId] = useState('');
+  const [workosConnId, setWorkosConnId] = useState('');
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -49,20 +50,22 @@ export default function OrganizationSSOPage() {
   const handleEnableSSO = async () => {
     setSaving(true);
     try {
-      // Note: api.post() returns data directly, not wrapped in .data property
-      const response = await api.post<{ setup_url?: string }>(`/api/organizations/${orgId}/sso/config`, {
+      // Parse comma-separated domains into array
+      const allowedDomains = domain
+        ? domain.split(',').map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0)
+        : undefined;
+
+      // Send SSO configuration with required fields
+      await api.post(`/api/organizations/${orgId}/sso/config`, {
         provider: selectedProvider === 'workos' ? 'saml' : selectedProvider,
-        enabled: true,
-        // Note: The backend expects workosOrganizationId and workosConnectionId
-        // This may require additional setup flow - for now, just enable SSO
+        workosOrganizationId: workosOrgId,
+        workosConnectionId: workosConnId || undefined,
+        allowedDomains,
       });
 
-      if (response?.setup_url) {
-        window.location.href = response.setup_url;
-      } else {
-        setShowSetupModal(false);
-        await fetchConfig();
-      }
+      setShowSetupModal(false);
+      await fetchConfig();
+      alert('SSO configured successfully! You can now enable it.');
     } catch (error) {
       console.error('Failed to enable SSO:', error);
       alert('Failed to configure SSO. Please try again.');
@@ -71,20 +74,27 @@ export default function OrganizationSSOPage() {
     }
   };
 
-  const handleDisableSSO = async () => {
-    if (!confirm('Are you sure you want to disable SSO? Users will need to sign in with email/password.')) {
-      return;
+  const handleToggleSSO = async () => {
+    if (!config) return;
+
+    // If enabling, just enable it
+    // If disabling, confirm first
+    if (config.enabled) {
+      if (!confirm('Are you sure you want to disable SSO? Users will need to sign in with email/password.')) {
+        return;
+      }
     }
 
     setSaving(true);
     try {
-      await api.post(`/api/organizations/${orgId}/sso/config`, {
-        enabled: false,
+      await api.patch(`/api/organizations/${orgId}/sso/config`, {
+        enabled: !config.enabled,
       });
       await fetchConfig();
+      alert(`SSO ${!config.enabled ? 'enabled' : 'disabled'} successfully!`);
     } catch (error) {
-      console.error('Failed to disable SSO:', error);
-      alert('Failed to disable SSO. Please try again.');
+      console.error('Failed to toggle SSO:', error);
+      alert('Failed to toggle SSO. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -137,8 +147,10 @@ export default function OrganizationSSOPage() {
                   SSO Status
                 </h2>
                 <p className="text-sm text-gray-600">
-                  {config?.enabled
-                    ? `Active with ${config.provider?.toUpperCase()}`
+                  {config?.provider
+                    ? config.enabled
+                      ? `Active with ${config.provider?.toUpperCase()}`
+                      : 'Configured but not enabled'
                     : 'Not configured'}
                 </p>
               </div>
@@ -153,32 +165,37 @@ export default function OrganizationSSOPage() {
               </div>
             </div>
 
-            {config?.enabled && config.domain && (
+            {config?.provider && (
               <div className="bg-gray-50 rounded-lg p-4 mb-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <div className="text-gray-600 mb-1">Provider</div>
-                    <div className="font-medium text-gray-900">
-                      {config.provider?.toUpperCase()}
+                    <div className="font-medium text-gray-900 capitalize">
+                      {config.provider}
                     </div>
                   </div>
                   <div>
-                    <div className="text-gray-600 mb-1">Domain</div>
-                    <div className="font-medium text-gray-900">{config.domain}</div>
+                    <div className="text-gray-600 mb-1">WorkOS Organization ID</div>
+                    <div className="font-mono text-xs text-gray-900">{config.workosOrganizationId}</div>
                   </div>
-                  {config.created_at && (
+                  {config.workosConnectionId && (
                     <div>
-                      <div className="text-gray-600 mb-1">Configured</div>
-                      <div className="font-medium text-gray-900">
-                        {new Date(config.created_at).toLocaleDateString()}
-                      </div>
+                      <div className="text-gray-600 mb-1">WorkOS Connection ID</div>
+                      <div className="font-mono text-xs text-gray-900">{config.workosConnectionId}</div>
                     </div>
                   )}
-                  {config.last_used && (
-                    <div>
-                      <div className="text-gray-600 mb-1">Last Used</div>
-                      <div className="font-medium text-gray-900">
-                        {new Date(config.last_used).toLocaleDateString()}
+                  {config.allowedDomains && config.allowedDomains.length > 0 && (
+                    <div className="col-span-2">
+                      <div className="text-gray-600 mb-1">Allowed Domains</div>
+                      <div className="flex flex-wrap gap-1">
+                        {config.allowedDomains.map((domain) => (
+                          <span
+                            key={domain}
+                            className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"
+                          >
+                            {domain}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -186,18 +203,17 @@ export default function OrganizationSSOPage() {
               </div>
             )}
 
-            {config?.enabled ? (
+            {config?.provider ? (
               <div className="flex gap-3">
+                <Button
+                  variant={config.enabled ? 'outline' : 'primary'}
+                  onClick={handleToggleSSO}
+                  disabled={saving}
+                >
+                  {saving ? (config.enabled ? 'Disabling...' : 'Enabling...') : (config.enabled ? 'Disable SSO' : 'Enable SSO')}
+                </Button>
                 <Button variant="outline" onClick={() => setShowSetupModal(true)}>
                   Reconfigure
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleDisableSSO}
-                  disabled={saving}
-                  className="text-red-600 border-red-300 hover:bg-red-50"
-                >
-                  {saving ? 'Disabling...' : 'Disable SSO'}
                 </Button>
               </div>
             ) : (
@@ -316,24 +332,55 @@ export default function OrganizationSSOPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email Domain
+                      WorkOS Organization ID <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={workosOrgId}
+                      onChange={(e) => setWorkosOrgId(e.target.value)}
+                      placeholder="org_XXXXXXXXXXXXXXXXXXXXXXXX"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Required: Your WorkOS organization ID from the WorkOS dashboard
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      WorkOS Connection ID (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={workosConnId}
+                      onChange={(e) => setWorkosConnId(e.target.value)}
+                      placeholder="conn_XXXXXXXXXXXXXXXXXXXXXXXX"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Optional: Specific connection ID for direct routing
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Allowed Email Domains
                     </label>
                     <input
                       type="text"
                       value={domain}
                       onChange={(e) => setDomain(e.target.value)}
-                      placeholder="company.com"
+                      placeholder="company.com, example.org"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Users with this email domain will use SSO to sign in
+                      Users with these email domains will be automatically redirected to SSO (comma-separated)
                     </p>
                   </div>
 
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-sm text-blue-900">
-                      After clicking Continue, you&rsquo;ll be redirected to complete the SSO
-                      configuration with your identity provider.
+                      Make sure you&rsquo;ve set up your WorkOS organization and connection in the WorkOS dashboard first.
                     </p>
                   </div>
 
@@ -346,9 +393,9 @@ export default function OrganizationSSOPage() {
                     </Button>
                     <Button
                       onClick={handleEnableSSO}
-                      disabled={saving || !domain}
+                      disabled={saving || !workosOrgId}
                     >
-                      {saving ? 'Configuring...' : 'Continue'}
+                      {saving ? 'Configuring...' : 'Save Configuration'}
                     </Button>
                   </div>
                 </div>

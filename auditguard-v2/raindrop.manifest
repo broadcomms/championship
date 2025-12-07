@@ -187,8 +187,8 @@ application "auditguard-v1" {
     visibility = "private"
   }
 
-  // DISABLED: Private SSO service for enterprise authentication
-  // TODO: Re-enable after document correction is working
+  // TEMPORARILY DISABLED: Private SSO service for enterprise authentication
+  // SSO functionality moved inline to api-gateway due to deployment issues
   // service "sso-service" {
   //   visibility = "private"
   // }

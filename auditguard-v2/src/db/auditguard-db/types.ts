@@ -177,6 +177,7 @@ export type sso_connections = {
     workos_organization_id: string;
     workos_connection_id: string | null;
     enabled: number;
+    allowed_domains: string | null;
     created_at: number;
     updated_at: number;
 };
