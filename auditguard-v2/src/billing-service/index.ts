@@ -380,18 +380,21 @@ export default class extends Service<Env> {
     const stripeSubscription = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
 
     // Update database with latest status
-    // Note: current_period_start and current_period_end may be null for incomplete subscriptions
+    // For incomplete subscriptions, use default period dates to prevent NULL crashes in UI
     const now = Date.now();
+    const periodStart = (stripeSubscription as any).current_period_start
+      ? (stripeSubscription as any).current_period_start * 1000
+      : now;
+    const periodEnd = (stripeSubscription as any).current_period_end
+      ? (stripeSubscription as any).current_period_end * 1000
+      : now + 30 * 24 * 60 * 60 * 1000; // 30 days from now
+
     await db
       .updateTable('subscriptions')
       .set({
         status: stripeSubscription.status,
-        current_period_start: (stripeSubscription as any).current_period_start 
-          ? (stripeSubscription as any).current_period_start * 1000 
-          : null,
-        current_period_end: (stripeSubscription as any).current_period_end 
-          ? (stripeSubscription as any).current_period_end * 1000 
-          : null,
+        current_period_start: periodStart,
+        current_period_end: periodEnd,
         cancel_at_period_end: stripeSubscription.cancel_at_period_end ? 1 : 0,
         canceled_at: stripeSubscription.canceled_at ? stripeSubscription.canceled_at * 1000 : null,
         updated_at: now,
@@ -597,6 +600,7 @@ export default class extends Service<Env> {
     status?: string;
     clientSecret?: string;
     subscriptionId?: string;
+    requiresAction?: boolean;
   }> {
     const db = this.getDb();
     const stripe = this.getStripeClient();
@@ -699,6 +703,7 @@ export default class extends Service<Env> {
       status: updatedSubscription.status,
       clientSecret: paymentIntent?.client_secret || undefined,
       subscriptionId: updatedSubscription.id,
+      requiresAction: updatedSubscription.status === 'incomplete' && !!paymentIntent?.client_secret,
     };
   }
 
@@ -1213,5 +1218,154 @@ export default class extends Service<Env> {
         createdAt: item.created_at,
       })),
     };
+  }
+
+  /**
+   * Manual sync endpoint to pull subscription data from Stripe and update database
+   * Used as fallback when webhooks are delayed or fail
+   */
+  async syncSubscriptionFromStripe(userId: string, input: { organizationId: string }): Promise<{
+    success: boolean;
+    subscription?: {
+      id: string;
+      planId: string;
+      status: string;
+      currentPeriodEnd: number | null;
+    };
+    error?: string;
+  }> {
+    const db = this.getDb();
+    const stripe = this.getStripeClient();
+
+    try {
+      // Verify organization access
+      const orgMember = await db
+        .selectFrom('organization_members')
+        .select('role')
+        .where('organization_id', '=', input.organizationId)
+        .where('user_id', '=', userId)
+        .executeTakeFirst();
+
+      if (!orgMember) {
+        return { success: false, error: 'Access denied' };
+      }
+
+      // Get organization with stripe_customer_id
+      const org = await db
+        .selectFrom('organizations')
+        .select(['stripe_customer_id'])
+        .where('id', '=', input.organizationId)
+        .executeTakeFirst();
+
+      if (!org?.stripe_customer_id) {
+        return { success: false, error: 'No Stripe customer found for organization' };
+      }
+
+      // Fetch all subscriptions for this customer from Stripe
+      const stripeSubscriptions = await stripe.subscriptions.list({
+        customer: org.stripe_customer_id,
+        status: 'all',
+        limit: 10,
+      });
+
+      if (stripeSubscriptions.data.length === 0) {
+        return { success: false, error: 'No subscriptions found in Stripe' };
+      }
+
+      // Get the most recent active/trialing subscription
+      const activeSub = stripeSubscriptions.data.find(
+        s => s.status === 'active' || s.status === 'trialing'
+      ) || stripeSubscriptions.data[0];
+
+      // Get plan from price ID
+      const priceId = activeSub.items.data[0]?.price.id;
+      const plan = await db
+        .selectFrom('subscription_plans')
+        .select(['id', 'name'])
+        .where('stripe_price_id_monthly', '=', priceId)
+        .executeTakeFirst();
+
+      if (!plan) {
+        return { success: false, error: `No plan found for Stripe price ${priceId}` };
+      }
+
+      const now = Date.now();
+      const periodStart = (activeSub as any).current_period_start ? (activeSub as any).current_period_start * 1000 : now;
+      const periodEnd = (activeSub as any).current_period_end ? (activeSub as any).current_period_end * 1000 : now + 30 * 24 * 60 * 60 * 1000;
+
+      // Check if subscription already exists
+      const existing = await db
+        .selectFrom('subscriptions')
+        .select('id')
+        .where('stripe_subscription_id', '=', activeSub.id)
+        .executeTakeFirst();
+
+      if (existing) {
+        // Update existing subscription
+        await db
+          .updateTable('subscriptions')
+          .set({
+            plan_id: plan.id,
+            status: activeSub.status,
+            current_period_start: periodStart,
+            current_period_end: periodEnd,
+            cancel_at_period_end: activeSub.cancel_at_period_end ? 1 : 0,
+            canceled_at: activeSub.canceled_at ? activeSub.canceled_at * 1000 : null,
+            updated_at: now,
+          })
+          .where('id', '=', existing.id)
+          .execute();
+      } else {
+        // Create new subscription
+        await db
+          .insertInto('subscriptions')
+          .values({
+            id: `sub_${now}_${Math.random().toString(36).substring(7)}`,
+            organization_id: input.organizationId,
+            plan_id: plan.id,
+            stripe_customer_id: org.stripe_customer_id,
+            stripe_subscription_id: activeSub.id,
+            stripe_price_id: priceId,
+            status: activeSub.status,
+            current_period_start: periodStart,
+            current_period_end: periodEnd,
+            cancel_at_period_end: activeSub.cancel_at_period_end ? 1 : 0,
+            trial_start: activeSub.trial_start ? activeSub.trial_start * 1000 : null,
+            trial_end: activeSub.trial_end ? activeSub.trial_end * 1000 : null,
+            created_at: now,
+            updated_at: now,
+          })
+          .execute();
+      }
+
+      // Mark any old trial subscriptions as replaced
+      await db
+        .updateTable('subscriptions')
+        .set({
+          status: 'canceled',
+          canceled_at: now,
+          updated_at: now,
+        })
+        .where('organization_id', '=', input.organizationId)
+        .where('status', '=', 'trialing')
+        .where('stripe_subscription_id', 'is', null)
+        .execute();
+
+      return {
+        success: true,
+        subscription: {
+          id: activeSub.id,
+          planId: plan.id,
+          status: activeSub.status,
+          currentPeriodEnd: periodEnd,
+        },
+      };
+    } catch (error) {
+      console.error('Sync subscription error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to sync subscription',
+      };
+    }
   }
 }

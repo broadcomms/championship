@@ -162,7 +162,7 @@ export function SubscriptionDashboard({ workspaceId }: SubscriptionDashboardProp
                     Renews on {formatDate(subscription.currentPeriodEnd)}
                   </p>
                 )}
-                {subscription.cancel_at_period_end && (
+                {subscription.cancel_at_period_end && subscription.currentPeriodEnd && (
                   <p className="mt-2 text-sm text-yellow-600 font-medium">
                     ⚠️ Scheduled to cancel on {formatDate(subscription.currentPeriodEnd)}
                   </p>

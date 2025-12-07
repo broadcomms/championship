@@ -107,7 +107,7 @@ export function CheckoutForm({
           }
 
           // After payment confirmation, poll for subscription status update
-          await pollSubscriptionStatus(response.subscriptionId, 10, 1000);
+          await pollSubscriptionStatus(response.subscriptionId, 30, 1000);
         }
 
         // Success - upgrade completed
@@ -151,7 +151,7 @@ export function CheckoutForm({
 
         // After payment confirmation, poll for subscription status update
         // This ensures the webhook has processed and status is 'active'
-        await pollSubscriptionStatus(response.subscriptionId, 10, 1000);
+        await pollSubscriptionStatus(response.subscriptionId, 30, 1000);
       }
 
       // Success!

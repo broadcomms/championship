@@ -1,19 +1,9 @@
-import { NextRequest } from 'next/server';
-import { proxyToBackend } from '@/lib/api-proxy';
+import { NextResponse } from 'next/server';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { name: string } }
-) {
-  const cookies = request.headers.get('cookie');
-  const body = await request.json();
+export async function GET() {
+  return NextResponse.json({ error: 'Not implemented' }, { status: 501 });
+}
 
-  return proxyToBackend(`/api/admin/buckets/${params.name}/search`, {
-    method: 'POST',
-    headers: {
-      ...(cookies && { Cookie: cookies }),
-    },
-    body: JSON.stringify(body),
-    credentials: 'include',
-  });
+export async function POST() {
+  return NextResponse.json({ error: 'Not implemented' }, { status: 501 });
 }

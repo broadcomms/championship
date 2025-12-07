@@ -85,12 +85,13 @@ export default class extends Service<Env> {
     workspaceId: string,
     featureId: FeatureId
   ): Promise<FeatureCheckResponse> {
-    // Get workspace subscription
+    // Get workspace subscription via organization
     const subscription = await this.env.AUDITGUARD_DB.prepare(
-      `SELECT plan_id, status, trial_end 
-       FROM subscriptions 
-       WHERE workspace_id = ? 
-       ORDER BY created_at DESC 
+      `SELECT s.plan_id, s.status, s.trial_end
+       FROM subscriptions s
+       INNER JOIN workspaces w ON w.organization_id = s.organization_id
+       WHERE w.id = ?
+       ORDER BY s.created_at DESC
        LIMIT 1`
     )
       .bind(workspaceId)
@@ -132,12 +133,13 @@ export default class extends Service<Env> {
   private async getPlanFeaturesForWorkspace(
     workspaceId: string
   ): Promise<PlanFeaturesResponse> {
-    // Get workspace subscription
+    // Get workspace subscription via organization
     const subscription = await this.env.AUDITGUARD_DB.prepare(
-      `SELECT plan_id, status, trial_end 
-       FROM subscriptions 
-       WHERE workspace_id = ? 
-       ORDER BY created_at DESC 
+      `SELECT s.plan_id, s.status, s.trial_end
+       FROM subscriptions s
+       INNER JOIN workspaces w ON w.organization_id = s.organization_id
+       WHERE w.id = ?
+       ORDER BY s.created_at DESC
        LIMIT 1`
     )
       .bind(workspaceId)

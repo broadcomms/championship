@@ -295,12 +295,26 @@ export default class extends Service<Env> {
     const db = this.getDb();
 
     // Support both organization-based and workspace-based billing
-    const organizationId = subscription.metadata.organization_id;
+    let organizationId = subscription.metadata.organization_id;
     const workspaceId = subscription.metadata.workspace_id;
 
     if (!organizationId && !workspaceId) {
-      this.env.logger.error(`Subscription ${subscription.id} missing organization_id or workspace_id in metadata`);
-      return;
+      // Fallback: Try to find organization by stripe_customer_id
+      this.env.logger.warn(`Subscription ${subscription.id} missing metadata, attempting customer_id lookup`);
+
+      const org = await db
+        .selectFrom('organizations')
+        .select(['id'])
+        .where('stripe_customer_id', '=', subscription.customer as string)
+        .executeTakeFirst();
+
+      if (org) {
+        organizationId = org.id;
+        this.env.logger.info(`Found organization ${organizationId} via stripe_customer_id lookup for subscription ${subscription.id}`);
+      } else {
+        this.env.logger.error(`Subscription ${subscription.id} has no metadata AND no organization found for customer ${subscription.customer}`);
+        return;
+      }
     }
 
     this.env.logger.info(`Processing subscription ${subscription.id} for ${organizationId ? `organization ${organizationId}` : `workspace ${workspaceId}`}`);

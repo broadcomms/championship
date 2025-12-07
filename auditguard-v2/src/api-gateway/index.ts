@@ -223,6 +223,12 @@ export default class extends Service<Env> {
         });
       }
 
+      // Stripe webhook endpoint - NO AUTH REQUIRED (Stripe validates via signature)
+      // Must be before auth checks so Stripe can call it directly
+      if (path === '/api/webhooks/stripe' && request.method === 'POST') {
+        return this.env.STRIPE_WEBHOOK_SERVICE.fetch(request);
+      }
+
       // SECURITY FIX: Protect debug/test endpoints with admin authentication
       if (path.startsWith('/api/debug/') || path.startsWith('/api/test-')) {
         // Validate session
