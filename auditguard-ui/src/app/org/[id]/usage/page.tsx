@@ -420,34 +420,56 @@ export default function OrganizationUsagePage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Upload Trend
               </h3>
-              <div className="space-y-2">
-                {usage.uploads.history.slice(-10).map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    <span className="text-xs text-gray-600 w-20">
-                      {new Date(item.date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </span>
-                    <div className="flex-1">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="h-2 bg-blue-600 rounded-full"
-                          style={{
-                            width: `${
-                              (item.count / Math.max(...usage.uploads.history.map((h) => h.count))) *
-                              100
-                            }%`,
-                          }}
-                        />
+              {usage.uploads.history.length > 0 ? (
+                <div className="space-y-2">
+                  {usage.uploads.history.slice(-10).map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-3">
+                      <span className="text-xs text-gray-600 w-20">
+                        {new Date(item.date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                      <div className="flex-1">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="h-2 bg-blue-600 rounded-full"
+                            style={{
+                              width: `${
+                                (item.count / Math.max(...usage.uploads.history.map((h) => h.count))) *
+                                100
+                              }%`,
+                            }}
+                          />
+                        </div>
                       </div>
+                      <span className="text-xs font-medium text-gray-900 w-8 text-right">
+                        {item.count}
+                      </span>
                     </div>
-                    <span className="text-xs font-medium text-gray-900 w-8 text-right">
-                      {item.count}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <svg
+                    className="w-16 h-16 text-gray-300 mb-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
+                    />
+                  </svg>
+                  <p className="text-gray-500 text-sm mb-1">No trend data available yet</p>
+                  <p className="text-gray-400 text-xs">
+                    Upload more documents to see trends over time
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Checks Trend */}
@@ -455,34 +477,56 @@ export default function OrganizationUsagePage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Compliance Checks Trend
               </h3>
-              <div className="space-y-2">
-                {usage.checks.history.slice(-10).map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    <span className="text-xs text-gray-600 w-20">
-                      {new Date(item.date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </span>
-                    <div className="flex-1">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="h-2 bg-green-600 rounded-full"
-                          style={{
-                            width: `${
-                              (item.count / Math.max(...usage.checks.history.map((h) => h.count))) *
-                              100
-                            }%`,
-                          }}
-                        />
+              {usage.checks.history.length > 0 ? (
+                <div className="space-y-2">
+                  {usage.checks.history.slice(-10).map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-3">
+                      <span className="text-xs text-gray-600 w-20">
+                        {new Date(item.date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                      <div className="flex-1">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="h-2 bg-green-600 rounded-full"
+                            style={{
+                              width: `${
+                                (item.count / Math.max(...usage.checks.history.map((h) => h.count))) *
+                                100
+                              }%`,
+                            }}
+                          />
+                        </div>
                       </div>
+                      <span className="text-xs font-medium text-gray-900 w-8 text-right">
+                        {item.count}
+                      </span>
                     </div>
-                    <span className="text-xs font-medium text-gray-900 w-8 text-right">
-                      {item.count}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <svg
+                    className="w-16 h-16 text-gray-300 mb-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    />
+                  </svg>
+                  <p className="text-gray-500 text-sm mb-1">No trend data available yet</p>
+                  <p className="text-gray-400 text-xs">
+                    Run compliance checks to see trends over time
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
