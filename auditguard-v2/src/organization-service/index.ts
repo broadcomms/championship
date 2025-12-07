@@ -1093,6 +1093,29 @@ export default class extends Service<Env> {
   }
 
   /**
+   * Sync subscription from Stripe
+   * Manually pulls the latest subscription data from Stripe
+   */
+  async syncSubscriptionFromStripe(
+    organizationId: string,
+    userId: string
+  ): Promise<{
+    success: boolean;
+    subscription?: {
+      id: string;
+      planId: string;
+      status: string;
+      currentPeriodEnd: number | null;
+    };
+    error?: string;
+  }> {
+    // Forward to billing service
+    return await this.env.BILLING_SERVICE.syncSubscriptionFromStripe(userId, {
+      organizationId,
+    });
+  }
+
+  /**
    * Cancel organization subscription
    */
   async cancelSubscription(

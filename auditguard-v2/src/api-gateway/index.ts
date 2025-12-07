@@ -1401,6 +1401,21 @@ export default class extends Service<Env> {
         });
       }
 
+      // Match /api/organizations/:id/subscription/sync - POST to manually sync subscription from Stripe
+      const orgSyncMatch = path.match(/^\/api\/organizations\/([^\/]+)\/subscription\/sync$/);
+      if (orgSyncMatch && orgSyncMatch[1] && request.method === 'POST') {
+        const organizationId = orgSyncMatch[1];
+        const user = await this.validateSession(request);
+
+        const result = await this.env.ORGANIZATION_SERVICE.syncSubscriptionFromStripe(
+          organizationId,
+          user.userId
+        );
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // SSO configuration endpoints
       const ssoConfigMatch = path.match(/^\/api\/organizations\/([^\/]+)\/sso\/config$/);
       if (ssoConfigMatch && ssoConfigMatch[1]) {

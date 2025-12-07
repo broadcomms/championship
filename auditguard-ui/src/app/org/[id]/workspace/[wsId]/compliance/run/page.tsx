@@ -107,8 +107,8 @@ export default function RunComplianceCheckPage() {
   const [config, setConfig] = useState<CheckConfig>({
     framework: '',
     document_ids: [],
-    auto_assign_issues: true,
-    notify_on_complete: true,
+    auto_assign_issues: false,
+    notify_on_complete: false,
     severity_threshold: 'all',
   });
   const [checkResult, setCheckResult] = useState<ComplianceCheckResult | null>(null);
