@@ -789,7 +789,7 @@ export default class extends Service<Env> {
       }
 
       // Handle SSO callback and create session
-      if (path === '/api/auth/sso/callback' && request.method === 'POST') {
+      if (path === '/api/auth/sso/callback' && request.method === 'GET') {
         const url = new URL(request.url);
         const code = url.searchParams.get('code');
 

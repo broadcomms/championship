@@ -105,7 +105,7 @@ function ResetPasswordForm() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900">Reset your password</h1>
             <p className="mt-2 text-gray-600">
-              Enter your new password below. Make sure it's at least 8 characters long.
+              Enter your new password below. Make sure it&rsquo;s at least 8 characters long.
             </p>
           </div>
 

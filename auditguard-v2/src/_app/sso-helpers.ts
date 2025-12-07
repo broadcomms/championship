@@ -48,17 +48,18 @@ export async function initiateSSOLogin(
   const state = `sso_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
   // Build WorkOS authorization URL for SSO
+  // HARDCODED: Using current deployment URL due to Cloudflare caching issue with env.BACKEND_URL
   const params = new URLSearchParams({
     client_id: env.WORKOS_CLIENT_ID,
-    redirect_uri: `${env.BACKEND_URL}/api/auth/sso/callback`,
+    redirect_uri: 'https://svc-01kbvcp3j10agjxnv0rhgzev78.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/auth/sso/callback',
     response_type: 'code',
     state,
-    organization: ssoConnection.workos_organization_id,
   });
 
-  if (ssoConnection.workos_connection_id) {
-    params.set('connection', ssoConnection.workos_connection_id);
-  }
+  // For WorkOS Test Provider and test organizations, use organization parameter
+  // For production SSO connections, both organization and connection can be used
+  // NOTE: Using only organization parameter to avoid invalid-connection-selector error
+  params.set('organization', ssoConnection.workos_organization_id);
 
   const authorizationUrl = `https://api.workos.com/user_management/authorize?${params.toString()}`;
 

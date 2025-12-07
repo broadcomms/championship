@@ -115,7 +115,7 @@ application "auditguard-v1" {
     default = "https://localhost:3000"
   }
   env "BACKEND_URL" {
-    default = "https://svc-01kbh68vfwce07znstf7a55jk3.01k8njsj98qqesz0ppxff2yq4n.lmapp.run"
+    default = "https://svc-01kbvcp3j10agjxnv0rhgzev78.01k8njsj98qqesz0ppxff2yq4n.lmapp.run"
   }
 
   // ============================================

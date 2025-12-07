@@ -509,7 +509,9 @@ export default class extends Service<Env> {
     // Build WorkOS authorization URL manually
     const params = new URLSearchParams({
       client_id: this.env.WORKOS_CLIENT_ID,
-      redirect_uri: `${this.env.BACKEND_URL}/api/auth/oauth/callback`,
+
+      // redirect_uri: `${this.env.BACKEND_URL}/api/auth/oauth/callback`,  
+      redirect_uri: `https://svc-01kbvcp3j10agjxnv0rhgzev78.01k8njsj98qqesz0ppxff2yq4n.lmapp.run/api/auth/oauth/callback`,
       response_type: 'code',
       provider: providerMap[provider],
     });

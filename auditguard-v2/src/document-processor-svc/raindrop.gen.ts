@@ -43,7 +43,6 @@ export interface Env {
   REPORTING_SERVICE: ServiceStub<import('../reporting-service/index.js').default>;
   RESEND_API_KEY: string;
   SESSION_SECRET: string;
-  SSO_SERVICE: ServiceStub<import('../sso-service/index.js').default>;
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
   STRIPE_WEBHOOK_SERVICE: ServiceStub<import('../stripe-webhook-service/index.js').default>;

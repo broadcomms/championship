@@ -34,10 +34,10 @@ export default function OrganizationSSOPage() {
     try {
       // Note: api.get() returns data directly, not wrapped in .data property
       const config = await api.get<SSOConfiguration | null>(`/api/organizations/${orgId}/sso/config`);
-      setConfig(config || { enabled: false, provider: null });
+      setConfig(config || { enabled: false });
     } catch (error) {
       console.error('Failed to fetch SSO config:', error);
-      setConfig({ enabled: false, provider: null });
+      setConfig({ enabled: false });
     } finally {
       setLoading(false);
     }
