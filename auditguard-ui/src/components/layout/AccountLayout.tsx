@@ -4,9 +4,15 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { TopNavBar } from '@/components/navigation/TopNavBar';
 import { Breadcrumb } from '@/components/navigation/Breadcrumb';
 
+interface BreadcrumbItem {
+  label: string;
+  href: string;
+}
+
 interface AccountLayoutProps {
   children: React.ReactNode;
   accountId?: string;
+  customBreadcrumbItems?: BreadcrumbItem[];
 }
 
 /**
@@ -18,7 +24,7 @@ interface AccountLayoutProps {
  * - No sidebar (account pages don't need workspace navigation)
  * - Real-time status indicator in top bar
  */
-export function AccountLayout({ children, accountId }: AccountLayoutProps) {
+export function AccountLayout({ children, accountId, customBreadcrumbItems }: AccountLayoutProps) {
   return (
     <ProtectedRoute>
       <div className="flex h-screen flex-col bg-gray-50">
@@ -31,7 +37,7 @@ export function AccountLayout({ children, accountId }: AccountLayoutProps) {
           {accountId && (
             <div className="bg-white border-b border-gray-200">
               <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
-                <Breadcrumb accountId={accountId} />
+                <Breadcrumb accountId={accountId} customItems={customBreadcrumbItems} />
               </div>
             </div>
           )}

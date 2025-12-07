@@ -704,6 +704,157 @@ export default class extends Service<Env> {
         }
       }
 
+      // Upload profile picture
+      if (path === '/api/user/profile-picture' && request.method === 'POST') {
+        const user = await this.validateSession(request);
+
+        try {
+          const formData = await request.formData();
+          const imageFile = formData.get('image') as File | null;
+
+          if (!imageFile) {
+            return new Response(JSON.stringify({ error: 'Image file is required' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+
+          // Validate file type
+          const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+          if (!allowedTypes.includes(imageFile.type)) {
+            return new Response(JSON.stringify({ error: 'Invalid file type. Only JPG, PNG, and GIF are allowed' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+
+          // Validate file size (max 5MB)
+          const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+          if (imageFile.size > maxSize) {
+            return new Response(JSON.stringify({ error: 'File size exceeds 5MB limit' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+
+          // Convert file to ArrayBuffer
+          const imageBuffer = await imageFile.arrayBuffer();
+
+          // Upload to storage
+          const result = await this.env.AUTH_SERVICE.uploadProfilePicture(
+            user.userId,
+            imageBuffer,
+            imageFile.type
+          );
+
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        } catch (error) {
+          const err = error as Error;
+          this.env.logger.error('Failed to upload profile picture', { error: err.message });
+          return new Response(JSON.stringify({ error: err.message || 'Failed to upload profile picture' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // Get profile picture
+      if (path.startsWith('/api/user/profile-picture/') && request.method === 'GET') {
+        const userId = path.split('/').pop();
+
+        if (!userId) {
+          return new Response(JSON.stringify({ error: 'User ID is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+
+        try {
+          const result = await this.env.AUTH_SERVICE.getProfilePicture(userId);
+
+          if (!result) {
+            return new Response(JSON.stringify({ error: 'Profile picture not found' }), {
+              status: 404,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+
+          // Return the image file
+          return new Response(result.imageBuffer, {
+            headers: {
+              'Content-Type': result.contentType,
+              'Cache-Control': 'public, max-age=86400', // Cache for 24 hours
+              ...corsHeaders,
+            },
+          });
+        } catch (error) {
+          const err = error as Error;
+          this.env.logger.error('Failed to get profile picture', { error: err.message, userId });
+          return new Response(JSON.stringify({ error: err.message || 'Failed to get profile picture' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // Delete profile picture
+      if (path === '/api/user/profile-picture' && request.method === 'DELETE') {
+        const user = await this.validateSession(request);
+
+        try {
+          const result = await this.env.AUTH_SERVICE.deleteProfilePicture(user.userId);
+
+          return new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        } catch (error) {
+          const err = error as Error;
+          this.env.logger.error('Failed to delete profile picture', { error: err.message });
+          return new Response(JSON.stringify({ error: err.message || 'Failed to delete profile picture' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
+      // Delete user account
+      if (path === '/api/user/account' && request.method === 'DELETE') {
+        const user = await this.validateSession(request);
+
+        try {
+          const body = await request.json() as { confirmEmail: string; password: string };
+
+          if (!body.confirmEmail || !body.password) {
+            return new Response(JSON.stringify({ error: 'Email and password confirmation required' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+
+          const result = await this.env.AUTH_SERVICE.deleteUserAccount(user.userId, {
+            confirmEmail: body.confirmEmail,
+            password: body.password,
+          });
+
+          // Clear session cookie
+          const response = new Response(JSON.stringify(result), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+          response.headers.set('Set-Cookie', 'session=; Path=/; HttpOnly; Max-Age=0');
+
+          return response;
+        } catch (error) {
+          const err = error as Error;
+          this.env.logger.error('Failed to delete user account', { error: err.message });
+          return new Response(JSON.stringify({ error: err.message || 'Failed to delete account' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+      }
+
       if (path === '/api/auth/forgot-password' && request.method === 'POST') {
         const body = await request.json() as { email: string };
 

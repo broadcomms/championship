@@ -197,13 +197,13 @@ export default class extends Service<Env> {
     };
   }
 
-  async login(input: LoginInput): Promise<{ userId: string; email: string; sessionId: string }> {
+  async login(input: LoginInput): Promise<{ userId: string; email: string; name: string | null; sessionId: string }> {
     const db = this.getDb();
 
     // Find user by email
     const user = await db
       .selectFrom('users')
-      .select(['id', 'email', 'password_hash'])
+      .select(['id', 'email', 'password_hash', 'name'])
       .where('email', '=', input.email)
       .executeTakeFirst();
 
@@ -235,6 +235,7 @@ export default class extends Service<Env> {
     return {
       userId: user.id,
       email: user.email,
+      name: user.name,
       sessionId,
     };
   }
@@ -300,12 +301,12 @@ export default class extends Service<Env> {
     };
   }
 
-  async getUserById(userId: string): Promise<{ userId: string; email: string; name: string | null; createdAt: number; isAdmin: boolean } | null> {
+  async getUserById(userId: string): Promise<{ userId: string; email: string; name: string | null; profilePictureUrl: string | null; createdAt: number; isAdmin: boolean } | null> {
     const db = this.getDb();
 
     const user = await db
       .selectFrom('users')
-      .select(['id', 'email', 'name', 'created_at'])
+      .select(['id', 'email', 'name', 'profile_picture_url', 'created_at'])
       .where('id', '=', userId)
       .executeTakeFirst();
 
@@ -324,6 +325,7 @@ export default class extends Service<Env> {
       userId: user.id,
       email: user.email,
       name: user.name,
+      profilePictureUrl: user.profile_picture_url,
       createdAt: user.created_at,
       isAdmin: !!adminUser,
     };
@@ -494,6 +496,263 @@ export default class extends Service<Env> {
       .execute();
 
     return { success: true };
+  }
+
+  /**
+   * Upload profile picture to storage and update user record
+   */
+  async uploadProfilePicture(
+    userId: string,
+    imageBuffer: ArrayBuffer,
+    contentType: string
+  ): Promise<{ profilePictureUrl: string }> {
+    const db = this.getDb();
+
+    // Generate S3 key for profile picture
+    const fileExtension = contentType.split('/')[1] || 'jpg';
+    const s3Key = `profile-pictures/${userId}/${Date.now()}.${fileExtension}`;
+
+    // Upload to storage (using documents-bucket as it's already configured)
+    const uploadResult = await this.env.DOCUMENTS_BUCKET.put(s3Key, imageBuffer, {
+      httpMetadata: {
+        contentType,
+      },
+    });
+
+    if (!uploadResult) {
+      throw new Error('Failed to upload profile picture');
+    }
+
+    // Store the S3 key as the profile picture URL
+    // The frontend will handle generating the proper URL or fetching via API
+    const profilePictureUrl = s3Key;
+
+    // Update user record
+    const now = Date.now();
+    await db
+      .updateTable('users')
+      .set({
+        profile_picture_url: profilePictureUrl,
+        updated_at: now,
+      })
+      .where('id', '=', userId)
+      .execute();
+
+    return { profilePictureUrl };
+  }
+
+  /**
+   * Get profile picture
+   */
+  async getProfilePicture(userId: string): Promise<{ imageBuffer: ArrayBuffer; contentType: string } | null> {
+    const db = this.getDb();
+
+    // Get user's profile picture URL
+    const user = await db
+      .selectFrom('users')
+      .select(['profile_picture_url'])
+      .where('id', '=', userId)
+      .executeTakeFirst();
+
+    if (!user || !user.profile_picture_url) {
+      return null;
+    }
+
+    try {
+      // The profile_picture_url contains the S3 key
+      const s3Key = user.profile_picture_url;
+
+      // Fetch from S3
+      const file = await this.env.DOCUMENTS_BUCKET.get(s3Key);
+
+      if (!file) {
+        return null;
+      }
+
+      const imageBuffer = await file.arrayBuffer();
+
+      // Determine content type from file extension
+      let contentType = 'image/jpeg'; // default
+      if (s3Key.endsWith('.png')) {
+        contentType = 'image/png';
+      } else if (s3Key.endsWith('.gif')) {
+        contentType = 'image/gif';
+      }
+
+      return { imageBuffer, contentType };
+    } catch (error) {
+      this.env.logger.error('Failed to fetch profile picture from storage', { error });
+      return null;
+    }
+  }
+
+  /**
+   * Delete profile picture from storage and user record
+   */
+  async deleteProfilePicture(userId: string): Promise<{ success: boolean }> {
+    const db = this.getDb();
+
+    // Get current profile picture URL
+    const user = await db
+      .selectFrom('users')
+      .select(['profile_picture_url'])
+      .where('id', '=', userId)
+      .executeTakeFirst();
+
+    if (user?.profile_picture_url) {
+      try {
+        // Extract S3 key from URL (assumes format: https://bucket.endpoint/key)
+        const url = new URL(user.profile_picture_url);
+        const s3Key = url.pathname.substring(1); // Remove leading slash
+
+        // Delete from storage
+        await this.env.DOCUMENTS_BUCKET.delete(s3Key);
+      } catch (error) {
+        this.env.logger.error('Failed to delete profile picture from storage', { error });
+        // Continue to update database even if storage deletion fails
+      }
+    }
+
+    // Clear profile picture URL from database
+    const now = Date.now();
+    await db
+      .updateTable('users')
+      .set({
+        profile_picture_url: null,
+        updated_at: now,
+      })
+      .where('id', '=', userId)
+      .execute();
+
+    return { success: true };
+  }
+
+  /**
+   * Delete user account and all associated data
+   * Cascades to delete all owned organizations, workspaces, and documents
+   */
+  async deleteUserAccount(
+    userId: string,
+    confirmation: {
+      confirmEmail: string;
+      password: string;
+    }
+  ): Promise<{
+    success: boolean;
+    deleted_organizations: number;
+    deleted_workspaces: number;
+    deleted_documents: number;
+  }> {
+    const db = this.getDb();
+
+    // Get user details
+    const user = await db
+      .selectFrom('users')
+      .select(['id', 'email', 'password_hash'])
+      .where('id', '=', userId)
+      .executeTakeFirst();
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Verify confirmation email matches
+    if (confirmation.confirmEmail !== user.email) {
+      throw new Error('Confirmation email does not match');
+    }
+
+    // Verify password for security
+    const isValid = await bcrypt.compare(confirmation.password, user.password_hash);
+    if (!isValid) {
+      throw new Error('Incorrect password');
+    }
+
+    // Get all organizations owned by user
+    const ownedOrgs = await db
+      .selectFrom('organizations')
+      .select(['id', 'stripe_customer_id'])
+      .where('owner_user_id', '=', userId)
+      .execute();
+
+    let totalWorkspaces = 0;
+    let totalDocuments = 0;
+
+    // Delete each organization and its data
+    for (const org of ownedOrgs) {
+      // Get workspaces in this organization
+      const workspaces = await db
+        .selectFrom('workspaces')
+        .select(['id'])
+        .where('organization_id', '=', org.id)
+        .execute();
+
+      const workspaceIds = workspaces.map((w) => w.id);
+      totalWorkspaces += workspaces.length;
+
+      // Count documents before deletion
+      if (workspaceIds.length > 0) {
+        const docCountResult = await db
+          .selectFrom('documents')
+          .select(db.fn.count('id').as('count'))
+          .where('workspace_id', 'in', workspaceIds)
+          .executeTakeFirst();
+
+        totalDocuments += Number(docCountResult?.count || 0);
+
+        // Delete workspaces (cascade will handle documents and related data)
+        await db.deleteFrom('workspaces').where('organization_id', '=', org.id).execute();
+      }
+
+      // Cancel Stripe subscription if exists
+      if (org.stripe_customer_id) {
+        const subscription = await db
+          .selectFrom('subscriptions')
+          .select(['stripe_subscription_id'])
+          .where('organization_id', '=', org.id)
+          .where('status', 'in', ['active', 'trialing'])
+          .executeTakeFirst();
+
+        if (subscription?.stripe_subscription_id) {
+          try {
+            const Stripe = (await import('stripe')).default;
+            const stripe = new Stripe(this.env.STRIPE_SECRET_KEY, {
+              apiVersion: '2025-10-29.clover',
+            });
+            await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
+          } catch (error) {
+            this.env.logger.error('Failed to cancel Stripe subscription during account deletion', {
+              error,
+            });
+          }
+        }
+      }
+
+      // Delete organization (cascade will handle organization_members, sso_connections, etc.)
+      await db.deleteFrom('organizations').where('id', '=', org.id).execute();
+    }
+
+    // Delete all user sessions
+    await db.deleteFrom('sessions').where('user_id', '=', userId).execute();
+
+    // Delete profile picture if exists
+    await this.deleteProfilePicture(userId);
+
+    // Delete user account (cascade will handle remaining references)
+    await db.deleteFrom('users').where('id', '=', userId).execute();
+
+    this.env.logger.info('User account deleted', {
+      userId,
+      organizationsDeleted: ownedOrgs.length,
+      workspacesDeleted: totalWorkspaces,
+      documentsDeleted: totalDocuments,
+    });
+
+    return {
+      success: true,
+      deleted_organizations: ownedOrgs.length,
+      deleted_workspaces: totalWorkspaces,
+      deleted_documents: totalDocuments,
+    };
   }
 
   /**

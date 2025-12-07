@@ -5,7 +5,8 @@
 export interface User {
   userId: string;
   email: string;
-  name?: string; // Optional - not always returned by API
+  name?: string | null; // Optional - not always returned by API
+  profilePictureUrl?: string | null; // S3 key for profile picture
   createdAt: number;
   isAdmin?: boolean; // Platform admin status
 }

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { AccountLayout } from '@/components/layout/AccountLayout';
 import { Button } from '@/components/common/Button';
 import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { Building2, Folder, Bell, Clock, Shield, CheckCircle2 } from 'lucide-react';
 
 interface Organization {
@@ -47,6 +48,7 @@ export default function AccountDashboardPage() {
   const params = useParams();
   const router = useRouter();
   const accountId = params.id as string;
+  const { user } = useAuth();
 
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [stats, setStats] = useState<AccountStats>({
@@ -103,7 +105,7 @@ export default function AccountDashboardPage() {
 
   useEffect(() => {
     fetchAccountData();
-  }, [accountId]);
+  }, [accountId, user]);
 
   const fetchAccountData = async () => {
     setIsLoading(true);
@@ -151,7 +153,14 @@ export default function AccountDashboardPage() {
       // Update getting started checklist
       setGettingStarted(prev => prev.map(item => {
         if (item.id === '1') {
+          // Organization created
           return { ...item, completed: orgsData.length > 0 };
+        }
+        if (item.id === '2') {
+          // Profile completed (both name and profile picture)
+          const hasName = !!user?.name;
+          const hasProfilePicture = !!user?.profilePictureUrl;
+          return { ...item, completed: hasName && hasProfilePicture };
         }
         return item;
       }));

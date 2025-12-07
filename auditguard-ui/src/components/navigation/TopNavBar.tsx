@@ -54,7 +54,17 @@ export function TopNavBar({ currentOrgId, showOrgSwitcher = true }: TopNavBarPro
   };
 
   // Get user initials for avatar
-  const getInitials = (email: string) => {
+  const getInitials = (email: string, name?: string | null) => {
+    // If user has a name, use that for initials
+    if (name) {
+      const parts = name.trim().split(' ');
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      }
+      return name.slice(0, 2).toUpperCase();
+    }
+
+    // Fallback to email
     return email
       .split('@')[0]
       .split('.')
@@ -198,14 +208,24 @@ export function TopNavBar({ currentOrgId, showOrgSwitcher = true }: TopNavBarPro
               <button
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                 className={cn(
-                  'flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-medium text-white transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+                  'flex h-10 w-10 items-center justify-center rounded-full overflow-hidden transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+                  !user?.profilePictureUrl && 'bg-gradient-to-br from-blue-500 to-purple-600 text-sm font-medium text-white hover:from-blue-600 hover:to-purple-700',
                   isUserMenuOpen && 'ring-2 ring-blue-500 ring-offset-2'
                 )}
                 aria-label="User menu"
                 aria-haspopup="true"
                 aria-expanded={isUserMenuOpen}
               >
-                {user?.email && getInitials(user.email)}
+                {user?.profilePictureUrl && user?.userId ? (
+                  <img
+                    src={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/user/profile-picture/${user.userId}?v=${encodeURIComponent(user.profilePictureUrl)}`}
+                    alt="Profile"
+                    className="h-10 w-10 object-cover"
+                    key={user.profilePictureUrl}
+                  />
+                ) : (
+                  user?.email && getInitials(user.email, user.name)
+                )}
               </button>
 
               {/* User Dropdown menu */}
@@ -223,9 +243,18 @@ export function TopNavBar({ currentOrgId, showOrgSwitcher = true }: TopNavBarPro
                     <div className="bg-gray-50 px-4 py-4 border-b border-gray-200">
                       <div className="flex flex-col items-center text-center">
                         {/* Profile Picture */}
-                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-xl font-semibold text-white mb-3">
-                          {user?.email && getInitials(user.email)}
-                        </div>
+                        {user?.profilePictureUrl && user?.userId ? (
+                          <img
+                            src={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/user/profile-picture/${user.userId}?v=${encodeURIComponent(user.profilePictureUrl)}`}
+                            alt="Profile"
+                            className="h-16 w-16 rounded-full object-cover mb-3"
+                            key={user.profilePictureUrl}
+                          />
+                        ) : (
+                          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-xl font-semibold text-white mb-3">
+                            {user?.email && getInitials(user.email, user.name)}
+                          </div>
+                        )}
                         {/* Full Name - fallback to email username if no name */}
                         <p className="text-sm font-semibold text-gray-900">
                           {user?.name || user?.email?.split('@')[0] || 'User'}

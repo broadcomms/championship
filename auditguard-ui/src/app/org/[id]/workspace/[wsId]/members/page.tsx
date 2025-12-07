@@ -12,6 +12,7 @@ type InvitationStatus = 'pending' | 'accepted' | 'expired';
 
 interface WorkspaceMember {
   id: string;
+  user_id: string;
   email: string;
   name: string;
   role: WorkspaceRole;
@@ -271,8 +272,22 @@ export default function WorkspaceMembersPage() {
                 <div key={member.id} className="px-6 py-4 hover:bg-gray-50 transition">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4 flex-1">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-lg font-semibold">
-                        {member.name?.[0]?.toUpperCase() || member.email[0].toUpperCase()}
+                      <div className="relative w-12 h-12">
+                        <img
+                          src={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/user/profile-picture/${member.user_id}`}
+                          alt={member.name || member.email}
+                          className="w-12 h-12 rounded-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                            if (fallback) {
+                              fallback.style.display = 'flex';
+                            }
+                          }}
+                        />
+                        <div className="hidden w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full items-center justify-center text-white text-lg font-semibold">
+                          {member.name?.[0]?.toUpperCase() || member.email[0].toUpperCase()}
+                        </div>
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-3">

@@ -31,6 +31,45 @@ const getApiErrorMessage = (err: unknown, fallback = 'Something went wrong'): st
   return fallback;
 };
 
+// Component for user avatar with proper fallback
+function UserAvatar({ email, userId }: { email: string; userId: string }) {
+  const [imageError, setImageError] = useState(false);
+  const initials = email.substring(0, 2).toUpperCase();
+  
+  // Generate consistent color based on email
+  const getColorFromEmail = (email: string) => {
+    const colors = [
+      'from-blue-500 to-purple-600',
+      'from-green-500 to-teal-600',
+      'from-pink-500 to-rose-600',
+      'from-orange-500 to-red-600',
+      'from-indigo-500 to-blue-600',
+      'from-yellow-500 to-orange-600',
+    ];
+    const index = email.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
+  const gradientColor = getColorFromEmail(email);
+
+  if (imageError) {
+    return (
+      <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br ${gradientColor} text-sm font-semibold text-white`}>
+        {initials}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={`/api/user/profile-picture/${userId}`}
+      alt={email}
+      className="h-10 w-10 rounded-full object-cover"
+      onError={() => setImageError(true)}
+    />
+  );
+}
+
 export default function OrganizationMembersPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -265,9 +304,7 @@ export default function OrganizationMembersPage() {
                 <div key={member.id} className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-4">
                     {/* Avatar */}
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-sm font-medium text-blue-600">
-                      {member.email.substring(0, 2).toUpperCase()}
-                    </div>
+                    <UserAvatar email={member.email} userId={member.user_id} />
 
                     {/* User Info */}
                     <div>
