@@ -127,11 +127,18 @@ export function ConversationSidebar({
         const data = await response.json();
         if (page === 1) {
           setConversations(data.conversations);
+          setHasMore(data.hasMore);
+          // Group all loaded conversations
+          groupConversations(data.conversations);
         } else {
-          setConversations((prev) => [...prev, ...data.conversations]);
+          setConversations((prev) => {
+            const allConversations = [...prev, ...data.conversations];
+            // Group all loaded conversations, not just the new page
+            groupConversations(allConversations);
+            return allConversations;
+          });
+          setHasMore(data.hasMore);
         }
-        setHasMore(data.hasMore);
-        groupConversations(data.conversations);
       }
     } catch (error) {
       console.error('Failed to load conversations:', error);
@@ -214,6 +221,14 @@ export function ConversationSidebar({
 
     // Optimistically remove from UI immediately
     setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+
+    // Also update the groups state to immediately remove from UI
+    setGroups((prev) =>
+      prev.map(group => ({
+        ...group,
+        conversations: group.conversations.filter(c => c.id !== conversationId)
+      })).filter(g => g.conversations.length > 0)
+    );
 
     try {
       const response = await fetch('/api/assistant/conversations/delete', {
