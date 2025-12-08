@@ -144,10 +144,15 @@ export function FeatureHighlights() {
                   {theme.badge}
                 </div>
 
-                {/* Title */}
-                <h3 className="mb-3 text-xl font-bold leading-tight text-gray-900">
-                  {feature.description}
+                {/* Feature Title Heading */}
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-900">
+                  {feature.title}
                 </h3>
+
+                {/* Feature Description */}
+                <p className="mb-4 text-base leading-relaxed text-gray-700">
+                  {feature.description}
+                </p>
 
                 {/* Feature Bullets */}
                 <ul className="mb-6 space-y-3">

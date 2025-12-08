@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { solutionsContent } from '@/config/marketing';
 import { FinalCTA } from '@/components/marketing/sections/FinalCTA';
+import { FrameworkSelector } from '@/components/marketing/interactive/FrameworkSelector';
 import { buildMarketingMetadata } from '@/lib/seo';
 
 const solutionEntries = Object.values(solutionsContent);
@@ -99,6 +100,12 @@ export default function SolutionPage({ params }: { params: { slug: string[] } })
               </ul>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-16">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <FrameworkSelector />
         </div>
       </section>
 

@@ -32,7 +32,7 @@ const values = [
 
 const timeline = [
   {
-    month: 'November',
+    month: 'June',
     year: '2025',
     title: 'Foundation',
     description:
@@ -43,7 +43,7 @@ const timeline = [
     year: '2025',
     title: 'Platform Release',
     description:
-      'AuditGuard released the preview of its core document compliance analysis platform, serving enterprise customers across high-regulation industries.',
+      'AuditGuardX released the preview of its core document compliance analysis platform, serving enterprise customers across high-regulation industries.',
   },
 ];
 

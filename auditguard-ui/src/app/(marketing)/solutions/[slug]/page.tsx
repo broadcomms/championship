@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { solutionsContent } from '@/config/marketing';
 import { FinalCTA } from '@/components/marketing/sections/FinalCTA';
+import { FrameworkSelector } from '@/components/marketing/interactive/FrameworkSelector';
 
 const solutionKeys = Object.keys(solutionsContent) as Array<keyof typeof solutionsContent>;
 
@@ -83,6 +84,12 @@ export default function SolutionPage({ params }: { params: { slug: keyof typeof 
               </ul>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-16">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <FrameworkSelector />
         </div>
       </section>
 
