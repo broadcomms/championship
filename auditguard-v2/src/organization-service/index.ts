@@ -1220,7 +1220,7 @@ export default class extends Service<Env> {
       billing_email?: string;
     }
   ): Promise<{
-    organization_id: string;
+    id: string;
     name: string;
     slug: string;
   }> {
@@ -1299,7 +1299,7 @@ export default class extends Service<Env> {
     });
 
     return {
-      organization_id: organizationId,
+      id: organizationId,
       name: input.name,
       slug: input.slug,
     };

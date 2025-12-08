@@ -749,6 +749,16 @@ export default function OrganizationBillingPage() {
                         <span className="text-gray-600">/month</span>
                       </div>
 
+                      {!isCurrent && (
+                        <Button
+                          onClick={() => handleUpgrade(plan.id)}
+                          variant={plan.name === 'enterprise' ? 'primary' : 'outline'}
+                          className="w-full mb-6"
+                        >
+                          {plan.name === 'free' ? 'Downgrade' : 'Select Plan'}
+                        </Button>
+                      )}
+
                       <ul className="space-y-3 mb-6">
                         {plan.features.map((feature, idx) => (
                           <li key={idx} className="flex items-start gap-2 text-sm">
@@ -757,16 +767,6 @@ export default function OrganizationBillingPage() {
                           </li>
                         ))}
                       </ul>
-
-                      {!isCurrent && (
-                        <Button
-                          onClick={() => handleUpgrade(plan.id)}
-                          variant={plan.name === 'enterprise' ? 'primary' : 'outline'}
-                          className="w-full"
-                        >
-                          {plan.name === 'free' ? 'Downgrade' : 'Upgrade'}
-                        </Button>
-                      )}
 
                       {isCurrent && !subscription?.cancel_at_period_end && plan.name !== 'free' && (
                         <Button
