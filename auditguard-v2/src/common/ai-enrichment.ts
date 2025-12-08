@@ -1,14 +1,18 @@
 /**
  * Shared AI Enrichment Utility
- * 
+ *
  * Provides AI-powered document enrichment capabilities that can be used across services:
  * - Title generation
  * - Description/summary generation
  * - Category classification (policy, procedure, evidence, other)
  * - Compliance framework detection (SOX, GDPR, HIPAA, PCI-DSS, ISO27001, NIST)
- * 
+ *
+ * Uses Cerebras for fast inference with Raindrop AI fallback
+ *
  * @module common/ai-enrichment
  */
+
+import { CerebrasClient } from './cerebras-client';
 
 // ============================================================================
 // Type Definitions
@@ -48,6 +52,7 @@ export interface EnrichmentDependencies {
   AI: any;
   AUDITGUARD_DB: any;
   logger: any;
+  CEREBRAS_API_KEY: string;
 }
 
 // ============================================================================
@@ -70,30 +75,30 @@ export async function enrichDocument(
   try {
     // Get available compliance frameworks
     const frameworks = await getComplianceFrameworks(deps.AUDITGUARD_DB);
-    
+
     // Build comprehensive AI prompt
     const prompt = buildEnrichmentPrompt(input, frameworks);
-    
-    // Call AI model
-    const aiResponse = await callAiModel(prompt, deps.AI, deps.logger);
-    
+
+    // Call AI model (Cerebras with Raindrop AI fallback)
+    const aiResponse = await callAiModel(prompt, deps);
+
     // Parse and validate response
     const result = parseAiResponse(aiResponse, input, frameworks, deps.logger);
-    
+
     deps.logger.info('✅ AI enrichment completed successfully', {
       filename: input.filename,
       category: result.category,
       framework: result.complianceFrameworkId,
     });
-    
+
     return result;
-    
+
   } catch (error) {
     deps.logger.error('❌ AI enrichment failed, using fallback', {
       filename: input.filename,
       error: error instanceof Error ? error.message : String(error),
     });
-    
+
     // Return fallback enrichment
     return getFallbackEnrichment(input, deps.logger);
   }
@@ -178,24 +183,60 @@ ${frameworkList}
 
 /**
  * Calls the AI model with the prompt
+ * Uses Cerebras for fast inference with Raindrop AI fallback
  */
-async function callAiModel(prompt: string, AI: any, logger: any): Promise<any> {
-  logger.info('📤 Calling AI model for enrichment', {
-    model: 'llama-3.1-8b-instruct-fast',
+async function callAiModel(prompt: string, deps: EnrichmentDependencies): Promise<any> {
+  const modelName = 'llama-3.3-70b';
+
+  deps.logger.info('📤 Attempting Cerebras fast inference for enrichment', {
+    model: modelName,
     promptLength: prompt.length,
   });
 
-  const aiResponse = await AI.run('llama-3.1-8b-instruct-fast', {
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.2, // Lower temperature for more consistent structured output
-    max_tokens: 400, // Increased for framework detection
-  });
+  // Try Cerebras first for fast inference
+  try {
+    const cerebras = new CerebrasClient(deps.CEREBRAS_API_KEY);
 
-  logger.info('📥 AI response received', {
-    responseType: typeof aiResponse,
-  });
+    const response = await cerebras.chatCompletion({
+      model: modelName,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.2, // Lower temperature for consistent structured output
+      max_tokens: 400,
+      timeout: 120000, // 120 second timeout
+    });
 
-  return aiResponse;
+    if (response?.choices?.[0]?.message?.content) {
+      deps.logger.info('✅ Cerebras enrichment successful', {
+        model: modelName,
+        responseLength: response.choices[0].message.content.length,
+      });
+      return response.choices[0].message.content;
+    }
+
+    throw new Error('Invalid Cerebras response format');
+  } catch (cerebrasError) {
+    deps.logger.warn('⚠️ Cerebras enrichment failed, falling back to Raindrop AI', {
+      error: cerebrasError instanceof Error ? cerebrasError.message : String(cerebrasError),
+    });
+
+    // Fallback to Raindrop AI
+    deps.logger.info('📤 Calling Raindrop AI for enrichment (fallback)', {
+      model: 'llama-3.1-8b-instruct-fast',
+      promptLength: prompt.length,
+    });
+
+    const aiResponse = await deps.AI.run('llama-3.1-8b-instruct-fast', {
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.2,
+      max_tokens: 400,
+    });
+
+    deps.logger.info('📥 Raindrop AI response received', {
+      responseType: typeof aiResponse,
+    });
+
+    return aiResponse;
+  }
 }
 
 /**

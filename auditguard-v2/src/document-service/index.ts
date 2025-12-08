@@ -1494,6 +1494,7 @@ Respond with ONLY a JSON object in this exact format:
       AI: this.env.AI,
       AUDITGUARD_DB: this.env.AUDITGUARD_DB,
       logger: this.env.logger,
+      CEREBRAS_API_KEY: this.env.CEREBRAS_API_KEY,
     });
 
     // Update database with enriched metadata

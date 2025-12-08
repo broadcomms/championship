@@ -493,11 +493,12 @@ export default class extends Each<Body, Env> {
           pageCount: pageCount || undefined,
         };
 
-        // Call AI enrichment utility
+        // Call AI enrichment utility (uses Cerebras for fast inference)
         const enrichmentResult = await enrichDocument(enrichmentInput, {
           AI: this.env.AI,
           AUDITGUARD_DB: this.env.AUDITGUARD_DB,
           logger: this.env.logger,
+          CEREBRAS_API_KEY: this.env.CEREBRAS_API_KEY,
         });
 
         this.env.logger.info('✅ AI enrichment successful', {
