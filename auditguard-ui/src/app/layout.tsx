@@ -8,6 +8,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "AuditGuardX - Compliance Management Platform",
   description: "AI-powered compliance management and document analysis platform",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://auditguardx.com'),
 };
 
 export default function RootLayout({

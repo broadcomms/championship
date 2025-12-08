@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AccountLayout } from '@/components/layout/AccountLayout';
 import { Button } from '@/components/common/Button';
@@ -103,11 +103,7 @@ export default function AccountDashboardPage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchAccountData();
-  }, [accountId, user]);
-
-  const fetchAccountData = async () => {
+  const fetchAccountData = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
@@ -179,7 +175,11 @@ export default function AccountDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchAccountData();
+  }, [accountId, fetchAccountData]);
 
   if (isLoading) {
     return (

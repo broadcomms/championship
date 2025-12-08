@@ -106,19 +106,26 @@ export default function AboutPage() {
           <div className="text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Our Story</p>
             <p className="mt-4 text-base text-gray-600">
-              AuditGuardX was founded in December 2024 by Patrick Ejelle-Ndille, a technology innovator and seasoned information security professional with deep expertise in GRC and cybersecurity. 
+              AuditGuardX was founded in June 2025 by Patrick Ejelle-Ndille, a technology innovator and seasoned Information security professional with deep expertise in GRC and cybersecurity. 
               AuditGuardX emerged from firsthand experience, watching organizations struggle as traditional compliance evaluation methods failed to keep pace with the rapidly evolving complexities of the regulatory landscape.
             </p>
           </div>
           <div className="mt-10 space-y-6">
             {timeline.map((item) => (
-              <div key={item.year} className="flex flex-col gap-4 rounded-2x2 border border-gray-100 p-6 sm:flex-row sm:items-center">
-                <div className="flex h-16 w-20 items-center justify-center rounded-full bg-blue-600 text-xl font-bold text-white">
-                  {item.year}
+              <div key={`${item.month}-${item.year}`} className="flex flex-col gap-4 rounded-2xl border border-gray-100 p-6 sm:flex-row sm:items-start">
+                <div className="flex-shrink-0">
+                  <div className="flex h-20 w-20 flex-col items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 shadow-lg shadow-blue-500/30">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-blue-100">
+                      {item.month}
+                    </span>
+                    <span className="text-2xl font-bold text-white">
+                      {item.year}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-base font-semibold text-gray-900">{item.title}</p>
-                  <p className="mt-1 text-sm text-gray-600">{item.description}</p>
+                <div className="flex-1">
+                  <p className="text-lg font-bold text-gray-900">{item.title}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-600">{item.description}</p>
                 </div>
               </div>
             ))}
