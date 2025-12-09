@@ -4,7 +4,7 @@ export const heroContent = {
   description:
     'Reduce compliance costs by 70% and compress audit timelines from weeks to hours. Automate SOC 2, GDPR, HIPAA, and 17+ more frameworks with AI-powered document intelligence.',
   primaryCta: { label: 'Start Free Trial', href: '/register' },
-  secondaryCta: { label: 'Watch Demo (2 min)', href: '/demo' },
+  secondaryCta: { label: 'Watch Demo (3 min)', href: '/demo/video' },
   trustBadge: '14-day Professional trial • No credit card required',
 };
 
