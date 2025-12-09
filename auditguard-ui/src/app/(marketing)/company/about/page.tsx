@@ -43,7 +43,7 @@ const timeline = [
     year: '2025',
     title: 'Platform Release',
     description:
-      'AuditGuardX released the preview of its core document compliance analysis platform, serving enterprise customers across high-regulation industries.',
+      'AuditGuardX released the preview of its core compliance analysis platform, serving enterprise customers across highly regulated industries.',
   },
 ];
 

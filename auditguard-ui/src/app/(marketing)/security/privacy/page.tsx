@@ -11,7 +11,7 @@ export default function PrivacyPolicyPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">Privacy</p>
           <h1 className="mt-4 text-4xl font-bold text-gray-900">Privacy Policy</h1>
           <p className="mt-4 text-sm text-gray-600">
-            Last updated: January 5, 2025. This living document summarizes how we process personal data across the AuditGuardX
+            Last updated: November 11, 2025. This living document summarizes how we process personal data across the AuditGuardX
             platform. For data processing agreements, email privacy@auditguardx.com.
           </p>
           <div className="mt-8 space-y-4 text-sm text-gray-600">

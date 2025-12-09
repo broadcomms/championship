@@ -30,7 +30,7 @@ export default function DemoVideoPage() {
             <div className="aspect-video w-full">
               <iframe
                 className="h-full w-full"
-                src="https://www.youtube.com/embed/T2caZzwCNrM"
+                src="https://www.youtube.com/embed/SllNrBds3M4"
                 title="AuditGuardX Full Demo - GDPR Compliance in 3 Minutes"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
