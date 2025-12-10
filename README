@@ -1,28 +1,467 @@
-### Solution Overview
+# AuditGuardX Codebase Documentation
 
-AuditGuardX is an AI powered compliance and risk management platform that transforms the way organizagtions review and manage their most important documentation, including contracts, policy manuals, regulatory guidance by instantly flagging non-compliant sections and riskly language. It provides actionalable, plain-engilsh recommendations and guidance on every step to resolve or correct the identified compliance gaps or issues.
+## 🎯 Project Overview
 
-### How it works
-- User uploads a document (PDF, Word or text)
-- User selects a compliance framework (SOC2, HIPPA, GDPR, PCI-DSS, ISO27001, SOX)
-- AuditGuardX processes the full document, identifies the violations
-- AuditGuardX generagtes details about each identified issues, regulatory references and remediation steps
+**AuditGuardX** is an AI-powered compliance automation platform that transforms how organizations review and manage critical documentation including contracts, policies, and regulatory guidance. It instantly flags non-compliant sections, provides actionable plain-English recommendations, and generates remediation steps for identified compliance gaps.
 
-### Target Users
-- Compliance teams
-- legal departments
-- HR professionals
-- Auditors
-- business managers
-- anyone responsible with document compliance and risk management
+**Tech Stack**: Next.js 14, TypeScript, Raindrop Platform, Cloudflare Workers, D1 SQLite, Vector Search, Cerebras AI, ElevenLabs Voice, WorkOS SSO, Stripe
 
-### How users interact with the application
-- No technical training or previous compliance knowlege required.
-- Simply create a policy document for example "Data Retention Policy Manual"
-- Choose a compliance frame and run the check on the document to get results in seconds.
-- Designg for both technial and non-technical users
+---
+
+## 📁 Repository Structure
+
+```
+championship/
+├── auditguard-ui/          # Next.js 14 frontend application
+├── auditguard-v2/          # Raindrop microservices backend
+├── embedding-service/      # Python FastAPI embedding service
+└── docs/                   # Documentation files
+```
+
+---
+
+## 🎨 Frontend (`auditguard-ui/`)
+
+### Technology Stack
+- **Framework**: Next.js 14.2.33 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **UI Components**: Radix UI, Framer Motion, Lucide Icons
+- **State Management**: React Query (@tanstack/react-query)
+- **Forms**: React Hook Form with Zod validation
+- **Authentication**: WorkOS AuthKit
+- **Payments**: Stripe React SDK
+- **Deployment**: Netlify
+
+### Directory Structure
+```
+src/
+├── app/                    # Next.js App Router pages
+│   ├── (marketing)/        # Public marketing pages
+│   ├── account/            # User account management
+│   ├── admin/              # Admin dashboard
+│   ├── documents/          # Document management
+│   ├── notifications/      # Notification center
+│   ├── org/                # Organization management
+│   ├── organizations/      # Organization settings
+│   ├── settings/           # User settings
+│   └── workspaces/         # Workspace management
+├── components/             # React components
+│   ├── admin/              # Admin-specific components
+│   ├── common/             # Reusable UI components
+│   ├── compliance/         # Compliance-related components
+│   ├── layout/             # Layout components
+│   ├── marketing/          # Marketing page components
+│   └── navigation/         # Navigation components
+├── config/                 # Configuration files
+├── contexts/               # React contexts
+├── hooks/                  # Custom React hooks
+├── lib/                    # Utility libraries
+│   ├── api.ts              # API client
+│   └── seo.ts              # SEO utilities
+├── types/                  # TypeScript type definitions
+└── utils/                  # Utility functions
+```
+
+### Key Features
+- **Marketing Pages**: Landing page, pricing, features, trial signup
+- **Authentication**: Login, register, password reset, WorkOS SSO
+- **Document Management**: Upload, analyze, view compliance checks
+- **Workspace Management**: Multi-workspace support, member management
+- **Organization Management**: Teams, billing, SSO configuration
+- **AI Assistant**: Voice-enabled compliance assistant with chat interface
+- **Admin Dashboard**: System health, database queries, vector search management
+- **Analytics**: Compliance dashboards, reports, trends
+- **Notifications**: Real-time alerts, email preferences
+
+### API Integration
+- Uses Next.js rewrites to proxy `/api/*` requests to backend
+- API client in `lib/api.ts` handles authentication via cookies
+- Environment variable: `NEXT_PUBLIC_API_URL`
+
+### Development Commands
+```bash
+npm run dev          # Start HTTPS dev server (localhost:3000)
+npm run build        # Production build
+npm run lint         # ESLint check
+npm run test         # Jest tests
+```
+
+---
+
+## ⚙️ Backend (`auditguard-v2/`)
+
+### Technology Stack
+- **Platform**: Raindrop Framework (Cloudflare Workers)
+- **Language**: TypeScript
+- **Database**: Cloudflare D1 (SQLite)
+- **ORM**: Kysely
+- **Vector Database**: Cloudflare Vector Index (384 dimensions)
+- **Storage**: Cloudflare R2 Buckets
+- **Queue**: Cloudflare Queues
+- **AI**: Cloudflare AI, Cerebras, OpenAI
+- **Voice**: ElevenLabs
+- **Authentication**: Custom session-based
+- **Payments**: Stripe
+
+### Microservices Architecture
+
+The backend consists of **27+ microservices** deployed on Raindrop Platform:
+
+#### Core Services
+1. **api-gateway** - Main HTTP router and request handler
+2. **auth-service** - Authentication, sessions, password management
+3. **user-service** - User profile and preferences
+
+#### Business Logic Services
+4. **workspace-service** - Workspace CRUD operations
+5. **organization-service** - Organization and team management
+6. **document-service** - Document upload, metadata, storage
+7. **document-processor-svc** - Async document processing orchestration
+8. **compliance-service** - Compliance framework checks and analysis
+9. **analytics-service** - Analytics data aggregation and queries
+10. **reporting-service** - Report generation (PDF, Excel, JSON)
+
+#### AI & Intelligence Services
+11. **assistant-service** - AI compliance assistant with context memory
+12. **compliance-agent** - AI-powered compliance analysis worker
+13. **embedding-service** - Document chunking and vector embeddings
+
+#### Feature Services
+14. **issue-management-service** - Compliance issue tracking
+15. **issue-assignment-service** - Issue assignment and notifications
+16. **issue-comment-service** - Issue comments and discussions
+17. **notification-service** - In-app notification management
+18. **email-service** - Email notification orchestration
+19. **sso-service** - WorkOS SSO integration
+20. **billing-service** - Stripe subscription management
+21. **usage-service** - Feature usage tracking and limits
+22. **value-metrics-service** - Business metrics calculation
+23. **feature-gate-service** - Feature flag management
+
+#### Admin & Infrastructure
+24. **admin-service** - Admin operations, system health, database queries
+25. **trial-expiry-service** - Trial expiration monitoring
+26. **realtime-service** - WebSocket real-time updates
+
+#### Workers (Queue Consumers)
+27. **document-processor** - Queue consumer for document processing
+28. **email-sender** - Queue consumer for sending emails
+29. **compliance-agent** - Queue consumer for compliance analysis
+
+#### Public Services
+30. **stripe-webhook-service** - Public Stripe webhook endpoint
+
+### Service Communication
+- Services communicate via **Service Stubs** (typed RPC)
+- No direct HTTP calls between services
+- Type-safe interfaces generated by Raindrop
+
+### Database Schema
+**D1 SQLite** with the following key tables:
+- `users` - User accounts
+- `sessions` - Authentication sessions
+- `organizations` - Organizations/teams
+- `organization_members` - Organization membership
+- `workspaces` - Compliance workspaces
+- `workspace_members` - Workspace access control
+- `documents` - Document metadata
+- `document_chunks` - Text chunks for vector search
+- `compliance_checks` - Compliance check results
+- `compliance_issues` - Identified compliance gaps
+- `frameworks` - Compliance frameworks (SOC 2, GDPR, etc.)
+- `controls` - Framework control requirements
+- `subscriptions` - Stripe subscription data
+- `billing_history` - Payment history
+- `analytics_events` - Usage tracking events
+- `notifications` - User notifications
+- `assistant_conversations` - AI assistant chat history
+
+### Vector Search
+- **Dimensions**: 384 (using all-MiniLM-L6-v2 model)
+- **Metric**: Cosine similarity
+- **Indexes**: 
+  - `document-embeddings` - Document semantic search
+  - `knowledge-embeddings` - Compliance knowledge base
+
+### Storage
+- **documents-bucket** - R2 bucket for PDF/Word files
+- Maximum file size: 50MB per document
+
+### Queues
+- **document-processing-queue** - Async document analysis
+- **email-notifications-queue** - Email delivery
+
+### Environment Variables
+```bash
+# Core
+SESSION_SECRET=<secret>
+BACKEND_URL=<backend-url>
+FRONTEND_URL=<frontend-url>
+
+# Stripe
+STRIPE_SECRET_KEY=<sk_test_...>
+STRIPE_WEBHOOK_SECRET=<whsec_...>
+
+# WorkOS
+WORKOS_API_KEY=<workos-key>
+WORKOS_CLIENT_ID=<client-id>
+WORKOS_REDIRECT_URI=<redirect-url>
+
+# AI Services
+CEREBRAS_API_KEY=<cerebras-key>
+CEREBRAS_DECISION_MODEL=llama3.1-70b
+CEREBRAS_RESPONSE_MODEL=llama3.1-8b
+ELEVEN_LABS_API_KEY=<elevenlabs-key>
+
+# Email
+EMAIL_FROM=noreply@auditguardx.com
+
+# External Services
+EMBEDDING_SERVICE_URL=<embedding-service-url>
+EMBEDDING_SERVICE_API_KEY=<api-key>
+```
+
+### Development Commands
+```bash
+raindrop build          # Build TypeScript services
+raindrop build deploy   # Deploy to Raindrop platform
+raindrop logs tail      # View real-time logs
+raindrop build status   # Check deployment status
+raindrop build find     # List all deployed routes
+```
+
+### Deployment
+Services are deployed to Raindrop Platform (Cloudflare Workers):
+- **API Gateway**: `https://svc-<id>.lmapp.run`
+- **Stripe Webhook**: `https://svc-<id>.lmapp.run`
+- Auto-scaling, global edge network
+- Zero cold starts with Raindrop's smart routing
+
+---
+
+## 🔬 Embedding Service (`embedding-service/`)
+
+### Technology Stack
+- **Framework**: FastAPI
+- **Language**: Python 3.11+
+- **Model**: sentence-transformers/all-MiniLM-L6-v2
+- **Output Dimensions**: 384
+- **Deployment**: Self-hosted or cloud
+
+### Key Features
+- Text embedding generation for semantic search
+- Document chunking (overlap strategy)
+- Health checks and metrics
+- Authentication via API key
+- Batch processing support
+
+### API Endpoints
+```
+POST /embed           # Generate embeddings
+POST /embed/single    # Single text embedding
+GET  /health          # Health check
+GET  /info            # Model information
+GET  /metrics         # Prometheus metrics
+```
+
+### Development Commands
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8001
+```
+
+---
+
+## 🔐 Authentication Flow
+
+### Session-Based Authentication
+1. User logs in via `/api/auth/login`
+2. Backend creates session record in D1
+3. Returns secure cookie: `session=ses_<timestamp>_<random>`
+4. Frontend sends cookie with every request
+5. API Gateway validates session via `auth-service`
+
+### WorkOS SSO (Enterprise)
+1. User clicks "Sign in with SSO"
+2. Redirects to WorkOS OAuth flow
+3. WorkOS callback to `/api/sso/callback`
+4. Backend creates/updates user and session
+5. Returns session cookie
+
+---
+
+## 💳 Billing & Subscriptions
+
+### Stripe Integration
+- **Plans**: Free, Starter ($49/mo), Professional ($249/mo), Enterprise ($999/mo)
+- **Features**: Document limits, workspace limits, AI assistant access
+- **Flow**:
+  1. User selects plan on `/pricing`
+  2. Creates Stripe Checkout session
+  3. Redirects to Stripe hosted page
+  4. Webhook updates subscription in D1
+  5. `billing-service` enforces feature limits
+
+### Feature Gating
+- `billing-service.checkLimit(workspace, feature)`
+- Checks subscription tier and usage
+- Returns `{ allowed: boolean, reason?: string }`
+
+---
+
+## 📊 Key User Flows
+
+### Document Analysis Flow
+1. User uploads document (PDF/Word) via frontend
+2. `document-service` stores in R2 bucket
+3. Document sent to `document-processing-queue`
+4. `document-processor` worker:
+   - Extracts text
+   - Chunks text (1500 chars, 300 overlap)
+   - Sends to embedding service
+   - Stores vectors in vector index
+5. User selects compliance framework (GDPR, SOC 2, etc.)
+6. User runs compliance check
+7. `compliance-service` or `compliance-agent`:
+   - Retrieves relevant document chunks via vector search
+   - Analyzes against framework controls
+   - Identifies compliance gaps
+   - Generates remediation steps
+8. Results displayed in frontend with issue details
+
+### AI Assistant Flow
+1. User types question or speaks (ElevenLabs voice input)
+2. Frontend sends to `/api/assistant/chat`
+3. `assistant-service`:
+   - Retrieves conversation context from `ASSISTANT_MEMORY`
+   - Performs vector search on relevant documents
+   - Calls Cerebras LLM for response
+   - Stores conversation turn
+4. Response streamed back to frontend
+5. Optional: TTS with ElevenLabs for voice output
+
+---
+
+## 🧪 Testing
+
+### Frontend Tests
+- Jest for unit tests
+- Playwright for E2E tests
+- Test files in `auditguard-ui/__tests__/`
+
+### Backend Tests
+- Vitest for unit tests
+- Integration tests in `auditguard-v2/tests/`
+- Test scripts: `test-phase*.sh`
+
+### Manual Testing
+- Admin credentials in `ADMIN_CREDENTIALS.md`
+- Test user: `demo@auditguardx.com`
+- Stripe test cards for payment testing
+
+---
+
+## 🚀 Deployment
+
+### Frontend (Netlify)
+```bash
+cd auditguard-ui
+npm run build
+netlify deploy --prod
+```
+- Builds to `.next/`
+- Auto-deploys on Git push
+- Environment variables in Netlify dashboard
+
+### Backend (Raindrop Platform)
+```bash
+cd auditguard-v2
+raindrop build deploy
+```
+- Compiles TypeScript to `dist/`
+- Uploads to Raindrop edge network
+- Runs database migrations automatically
+- Environment variables in `.dev.vars` (local) or Raindrop dashboard (prod)
+
+---
+
+## 📚 Additional Documentation
+
+- `AI_ASSISTANT_COMPLETE_SUMMARY.md` - AI assistant implementation
+- `ANALYTICS_IMPLEMENTATION_COMPLETE.md` - Analytics system
+- `BACKEND_ARCHITECTURE.md` - Detailed backend architecture
+- `AUDITGUARD_UI_UX_BLUEPRINT.md` - Frontend design patterns
+
+---
+
+## 🛠️ Development Setup
+
+### Prerequisites
+- Node.js 18+
+- pnpm (for Raindrop CLI)
+- Python 3.11+ (for embedding service)
+- Git
+
+### Quick Start
+
+1. **Clone repository**
+```bash
+git clone <repo-url>
+cd championship
+```
+
+2. **Setup frontend**
+```bash
+cd auditguard-ui
+npm install
+cp .env.example .env.local
+# Configure NEXT_PUBLIC_API_URL
+npm run dev
+```
+
+3. **Setup backend**
+```bash
+cd ../auditguard-v2
+npm install
+# Authenticate with Raindrop
+raindrop auth login
+# Deploy backend
+raindrop build deploy
+```
 
 
 
-### AI Impact
-By directly automating tedious manual document reviews to reduces human errors, AuditGuardX enable organizations to rapidly identify, understand and remediate compliance risk before they become a costly problem. It dramatically accelerates compliance workflows, scales to any document size and reduces reliance on external compliance consultant or expensive legal reviews. The solution can be immediately customize or extended to include new regulations, languages and risk types.
+5. **Access application**
+- Frontend: https://localhost:3000
+- Backend API: https://<your-deployment>.lmapp.run
+- Admin Panel: https://localhost:3000/admin
+
+#### Seeded Admin Credentials
+
+Email: `admin@auditguardx.com`
+Password: `AdminBootstrap2025!` (Change after deployement)
+
+---
+
+
+---
+
+## 🏆 AI Championship 2025
+
+This codebase is part of the AI Champion Ship 2025 hackathon submission, showcasing:
+- ✅ Original AI-powered compliance automation
+- ✅ Raindrop Platform Smart Components (SmartMemory, SmartSQL, Vector Search)
+- ✅ Vultr infrastructure integration
+- ✅ WorkOS SSO authentication
+- ✅ Stripe payment processing
+- ✅ ElevenLabs voice integration
+- ✅ Cerebras ultra-low latency AI inference
+- ✅ Launch-ready with enterprise features
+
+---
+
+**Built with Claude Code AI (Sonnet 4.5) + Raindrop MCP**
+s
