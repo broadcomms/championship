@@ -296,7 +296,7 @@ uvicorn app.main:app --reload --port 8001
 ## 💳 Billing & Subscriptions
 
 ### Stripe Integration
-- **Plans**: Free, Starter ($49/mo), Professional ($249/mo), Enterprise ($999/mo)
+- **Plans**: Free ($0/mo), Starter ($49/mo), Professional ($149/mo), Business ($399/mo)
 - **Features**: Document limits, workspace limits, AI assistant access
 - **Flow**:
   1. User selects plan on `/pricing`
